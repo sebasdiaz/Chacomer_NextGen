@@ -20,12 +20,6 @@
       "messageHandlerOptions": {
         "maxConcurrentCalls": 1,
         "autoComplete": false
-      },
-      "sessionHandlerOptions": {
-        "maxConcurrentSessions": 8,
-        "messageWaitTimeout": "00:00:30",
-        "maxConcurrentCallsPerSession": 1,
-        "autoComplete": false
       }
     }
   }

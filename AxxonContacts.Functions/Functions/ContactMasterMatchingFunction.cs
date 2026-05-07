@@ -10,12 +10,10 @@ namespace AxxonContacts.Functions.Functions
     /// <summary>
     /// Azure Function disparada por mensajes en la queue de Service Bus.
     ///
-    /// Sessions habilitadas (IsSessionsEnabled = true):
-    ///   - El SessionId es el msdyn_identificationnumber del Contact.
-    ///   - Mensajes del mismo cliente se procesan secuencialmente dentro de la session.
-    ///   - Race conditions eliminadas a nivel de infraestructura.
-    ///   - maxConcurrentCallsPerSession = 1 (configurado en host.json).
-    ///   - maxConcurrentSessions = 8 (8 clientes distintos en paralelo maximo).
+    /// Sessions deshabilitadas (IsSessionsEnabled = false):
+    ///   - La queue actual no tiene sessions habilitadas.
+    ///   - Para habilitar ordering por msdyn_identificationnumber, recrear la queue
+    ///     con "Enable sessions: true" y cambiar IsSessionsEnabled a true.
     ///
     /// Retry policy:
     ///   - Dataverse gestiona los reintentos del System Job (plugin).
@@ -48,9 +46,9 @@ namespace AxxonContacts.Functions.Functions
         [Function(nameof(ContactMasterMatchingFunction))]
         public async Task Run(
             [ServiceBusTrigger(
-                "%ServiceBusQueueName%",           // Nombre de la queue desde app settings
+                "%ServiceBusQueueName%",
                 Connection = "ServiceBusConnection",
-                IsSessionsEnabled = true)]
+                IsSessionsEnabled = false)]
             ServiceBusReceivedMessage message,
             ServiceBusMessageActions messageActions)
         {
