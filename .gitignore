@@ -1,0 +1,15 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.snk
+packages/
+*.nupkg
+.nuget/
+TestResults/
+*.coveragexml
+local.settings.json
+*.log
+.DS_Store
+Thumbs.db
