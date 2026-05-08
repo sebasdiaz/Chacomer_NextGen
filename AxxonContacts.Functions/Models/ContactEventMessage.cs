@@ -4,11 +4,8 @@ using System.Text.Json.Serialization;
 namespace AxxonContacts.Functions.Models
 {
     /// <summary>
-    /// Payload JSON que llega desde el plugin via Azure Service Bus.
-    /// Snapshot completo del Contact Raw en el momento del evento.
-    ///
-    /// Sincronizar con AxxonContacts.Plugins.Models.ContactEventMessage ante cualquier cambio.
-    /// JsonPropertyName mapea los nombres camelCase del JSON a las propiedades PascalCase de C#.
+    /// Modelo interno que representa el estado de un Contact Raw en el momento del evento.
+    /// Populado por ExecutionContextParser a partir del RemoteExecutionContext nativo de Dataverse.
     /// </summary>
     public class ContactEventMessage
     {

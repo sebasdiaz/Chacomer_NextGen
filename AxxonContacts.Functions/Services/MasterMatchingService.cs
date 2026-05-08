@@ -227,7 +227,7 @@ namespace AxxonContacts.Functions.Services
             if (m.MsdynIsProspect.HasValue) e["msdyn_isprospect"] = m.MsdynIsProspect.Value;
 
             // Dual Write / F&O — Lookups
-            SetRef(e, "msdyn_company",          "cdm_company",            m.MsdynCompany);
+            // msdyn_company nunca se propaga al master (debe quedar null)
             SetRef(e, "msdyn_partyid",          "msdyn_party",            m.MsdynPartyId);        // VERIFICAR logical name
             SetRef(e, "msdyn_customergroupid",  "msdyn_customergroup",    m.MsdynCustomerGroupId);
             SetRef(e, "transactioncurrencyid",  "transactioncurrency",    m.TransactionCurrencyId);
