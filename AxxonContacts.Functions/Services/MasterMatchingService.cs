@@ -33,7 +33,7 @@ namespace AxxonContacts.Functions.Services
                 "[MasterMatchingService] Procesando Contact {ContactId} | Identification={Identification} | Trigger={Trigger}",
                 message.ContactId, message.MsdynIdentificationNumber, message.TriggerMessage);
 
-            if (message.IsMaster)
+            if (message.IsMaster == true)
             {
                 _logger.LogInformation("[MasterMatchingService] Contact es Master. Skip.");
                 return;
@@ -55,7 +55,7 @@ namespace AxxonContacts.Functions.Services
                 return;
             }
 
-            if (currentContact.GetAttributeValue<bool>(IsMaster))
+            if (currentContact.GetAttributeValue<bool?>(IsMaster) == true)
             {
                 _logger.LogInformation(
                     "[MasterMatchingService] Contact {ContactId} es Master en Dataverse actual. Skip.",

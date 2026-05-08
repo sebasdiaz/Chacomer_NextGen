@@ -376,9 +376,9 @@ namespace AxxonContacts.Plugins
                     if (!hydrated.Contains(a.Key)) hydrated[a.Key] = a.Value;
             }
 
-            // Retrieve defensivo si faltan los campos de control
-            var needsRetrieve = !hydrated.Contains(ContactConstants.IsMaster) ||
-                                !hydrated.Contains(ContactConstants.MsdynIdentificationNumber);
+            // Retrieve defensivo si falta el numero de identificacion.
+            // IsMaster null se trata como false — no necesita Retrieve.
+            var needsRetrieve = !hydrated.Contains(ContactConstants.MsdynIdentificationNumber);
 
             if (needsRetrieve)
             {
