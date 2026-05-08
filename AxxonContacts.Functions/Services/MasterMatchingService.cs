@@ -9,12 +9,11 @@ namespace AxxonContacts.Functions.Services
 {
     public class MasterMatchingService
     {
-        // ── Nombres logicos de entidad y campos de control ───────────
-        private const string EntityLogicalName      = "contact";
-        private const string IsMaster               = "axx_ismaster";
-        private const string MasterContactId        = "axx_mastercontactid";
-        private const string IdentificationNumber   = "msdyn_identificationnumber";
-        private const int    BulkBatchSize          = 1000;
+        private const string EntityLogicalName    = "contact";
+        private const string IsMaster             = "axx_ismaster";
+        private const string MasterContactId      = "axx_mastercontactid";
+        private const string IdentificationNumber = "msdyn_identificationnumber";
+        private const int    BulkBatchSize        = 1000;
 
         private readonly IOrganizationService _service;
         private readonly ILogger _logger;
@@ -25,6 +24,11 @@ namespace AxxonContacts.Functions.Services
             _logger  = logger  ?? throw new ArgumentNullException(nameof(logger));
         }
 
+        /// <summary>
+        /// Solo procesa eventos Create.
+        /// Si ya existe un master para el msdyn_identificationnumber → skip.
+        /// Si no existe → crea el master y linkea todos los raws con ese numero.
+        /// </summary>
         public async Task ProcessAsync(ContactEventMessage message)
         {
             ArgumentNullException.ThrowIfNull(message);
@@ -33,24 +37,35 @@ namespace AxxonContacts.Functions.Services
                 "[MasterMatchingService] Procesando Contact {ContactId} | Identification={Identification} | Trigger={Trigger}",
                 message.ContactId, message.MsdynIdentificationNumber, message.TriggerMessage);
 
+            // Solo Create
+            if (!string.Equals(message.TriggerMessage, "Create", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation(
+                    "[MasterMatchingService] Evento '{Trigger}' ignorado. Solo se procesa Create.",
+                    message.TriggerMessage);
+                return;
+            }
+
+            // El contacto mismo no debe ser master
             if (message.IsMaster == true)
             {
                 _logger.LogInformation("[MasterMatchingService] Contact es Master. Skip.");
                 return;
             }
 
+            // Identificacion requerida
             if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber))
             {
                 _logger.LogWarning("[MasterMatchingService] IdentificationNumber vacio. Skip.");
                 return;
             }
 
-            // Re-verificar estado actual en Dataverse (el mensaje puede tener delay)
+            // Verificar que el contacto todavia existe en Dataverse (puede haber delay)
             var currentContact = await RetrieveCurrentStateAsync(message.ContactId);
             if (currentContact == null)
             {
                 _logger.LogWarning(
-                    "[MasterMatchingService] Contact {ContactId} no encontrado (puede haber sido eliminado).",
+                    "[MasterMatchingService] Contact {ContactId} no encontrado (eliminado).",
                     message.ContactId);
                 return;
             }
@@ -58,32 +73,28 @@ namespace AxxonContacts.Functions.Services
             if (currentContact.GetAttributeValue<bool?>(IsMaster) == true)
             {
                 _logger.LogInformation(
-                    "[MasterMatchingService] Contact {ContactId} es Master en Dataverse actual. Skip.",
+                    "[MasterMatchingService] Contact {ContactId} ya es Master en Dataverse. Skip.",
                     message.ContactId);
                 return;
             }
 
+            // Si ya existe un master → no hacer nada
             var existingMaster = await FindMasterByIdentificationAsync(message.MsdynIdentificationNumber);
-
             if (existingMaster != null)
             {
                 _logger.LogInformation(
-                    "[MasterMatchingService] Master existente {MasterId}. Asociando y propagando campos.",
-                    existingMaster.Id);
-
-                var masterRef = existingMaster.ToEntityReference();
-                await AssociateRawToMasterAsync(currentContact, masterRef);
-                await PropagateFieldsToMasterAsync(message, masterRef);
+                    "[MasterMatchingService] Master {MasterId} ya existe para '{Identification}'. Skip.",
+                    existingMaster.Id, message.MsdynIdentificationNumber);
+                return;
             }
-            else
-            {
-                _logger.LogInformation(
-                    "[MasterMatchingService] Sin Master para '{Identification}'. Creando.",
-                    message.MsdynIdentificationNumber);
 
-                var newMasterRef = await CreateMasterAsync(message);
-                await BulkAssociateRawsToMasterAsync(message.MsdynIdentificationNumber, newMasterRef);
-            }
+            // No existe master → crear y linkear todos los raws
+            _logger.LogInformation(
+                "[MasterMatchingService] Sin Master para '{Identification}'. Creando.",
+                message.MsdynIdentificationNumber);
+
+            var newMasterRef = await CreateMasterAsync(message);
+            await BulkAssociateRawsToMasterAsync(message.MsdynIdentificationNumber, newMasterRef);
 
             _logger.LogInformation(
                 "[MasterMatchingService] Completado. Contact={ContactId}", message.ContactId);
@@ -104,8 +115,7 @@ namespace AxxonContacts.Functions.Services
             catch (FaultException<Microsoft.Xrm.Sdk.OrganizationServiceFault> ex)
                 when (ex.Detail?.ErrorCode == unchecked((int)0x80040217))
             {
-                // 0x80040217 = ObjectDoesNotExist — el contacto fue eliminado entre el evento y el procesamiento
-                return null;
+                return null; // ObjectDoesNotExist — contacto eliminado
             }
         }
 
@@ -145,8 +155,7 @@ namespace AxxonContacts.Functions.Services
 
         private async Task<EntityReference> CreateMasterAsync(ContactEventMessage message)
         {
-            var master = BuildContactEntity(Guid.Empty, message);
-            master[IsMaster] = true;
+            var master = BuildMasterEntity(message);
 
             try
             {
@@ -160,7 +169,6 @@ namespace AxxonContacts.Functions.Services
                     "[MasterMatchingService] Create fallo: {Error}. Re-buscando (posible race condition).",
                     ex.Message);
 
-                // Las sessions de Service Bus hacen esto casi imposible pero lo manejamos igual
                 var existing = await FindMasterByIdentificationAsync(message.MsdynIdentificationNumber!);
                 if (existing != null)
                 {
@@ -172,87 +180,49 @@ namespace AxxonContacts.Functions.Services
         }
 
         // ────────────────────────────────────────────────────────────
-        // PropagateFieldsToMaster
+        // BuildMasterEntity
+        // Construye la entidad del master a partir del mensaje Create.
+        // msdyn_company y msdyn_sellable siempre quedan en null/false en el master.
         // ────────────────────────────────────────────────────────────
 
-        private async Task PropagateFieldsToMasterAsync(ContactEventMessage message, EntityReference masterRef)
+        private static Entity BuildMasterEntity(ContactEventMessage m)
         {
-            var update = BuildContactEntity(masterRef.Id, message);
+            var e = new Entity(EntityLogicalName);
 
-            if (update.Attributes.Count == 0)
-            {
-                _logger.LogDebug("[PropagateFields] Ningun campo a propagar al Master {Id}.", masterRef.Id);
-                return;
-            }
-
-            await Task.Run(() => _service.Update(update));
-
-            _logger.LogInformation(
-                "[PropagateFields] {Count} campo(s) propagados al Master {Id}: [{Fields}]",
-                update.Attributes.Count, masterRef.Id, string.Join(", ", update.Attributes.Keys));
-        }
-
-        // ────────────────────────────────────────────────────────────
-        // BuildContactEntity
-        // Mapea ContactEventMessage → Entity de Dataverse
-        // Reutilizado por CreateMaster y PropagateFieldsToMaster
-        // ────────────────────────────────────────────────────────────
-
-        /// <summary>
-        /// Construye un Entity de Dataverse a partir del mensaje.
-        /// Si id == Guid.Empty se usa para Create; si tiene valor, para Update.
-        ///
-        /// NOTAS DE IMPLEMENTACION:
-        ///   - Solo se setean campos con valor (null se omite para no borrar datos en Update).
-        ///   - Para campos Lookup, los logical names de las entidades relacionadas estan en
-        ///     RelatedEntities (ContactConstants.cs del plugin). VERIFICAR contra metadata del env.
-        ///   - msdyn_paymentday puede ser Lookup o OptionSet segun el environment.
-        ///     Implementado como Lookup (EntityReference). Si es OptionSet, cambiar a OptionSetValue.
-        ///   - Los campos de auditoria (modifiedby, modifiedon) NO se incluyen (Dataverse los gestiona).
-        /// </summary>
-        private static Entity BuildContactEntity(Guid id, ContactEventMessage m)
-        {
-            var e = id == Guid.Empty
-                ? new Entity(EntityLogicalName)
-                : new Entity(EntityLogicalName, id);
+            e[IsMaster]      = true;
+            e["msdyn_sellable"] = false;
 
             // Datos de persona
-            SetString(e, "firstname",      m.FirstName);
-            SetString(e, "middlename",     m.MiddleName);
-            SetString(e, "lastname",       m.LastName);
-            SetString(e, "mobilephone",    m.MobilePhone);
-            SetString(e, "description",    m.Description);
-            SetString(e, "emailaddress1",  m.EmailAddress1);
-            SetString(e, "emailaddress2",  m.EmailAddress2);
+            SetString(e, "firstname",     m.FirstName);
+            SetString(e, "middlename",    m.MiddleName);
+            SetString(e, "lastname",      m.LastName);
+            SetString(e, "mobilephone",   m.MobilePhone);
+            SetString(e, "description",   m.Description);
+            SetString(e, "emailaddress1", m.EmailAddress1);
+            SetString(e, "emailaddress2", m.EmailAddress2);
             if (m.MsdynIsProspect.HasValue) e["msdyn_isprospect"] = m.MsdynIsProspect.Value;
 
             // Dual Write / F&O — Lookups
-            // msdyn_company nunca se propaga al master (debe quedar null)
-            SetRef(e, "msdyn_partyid",          "msdyn_party",            m.MsdynPartyId);        // VERIFICAR logical name
-            SetRef(e, "msdyn_customergroupid",  "msdyn_customergroup",    m.MsdynCustomerGroupId);
-            SetRef(e, "transactioncurrencyid",  "transactioncurrency",    m.TransactionCurrencyId);
-            SetRef(e, "msdyn_paymentschedule",  "msdyn_paymentschedule",  m.MsdynPaymentSchedule);
-            SetRef(e, "msdyn_salestaxgroup",    "msdyn_taxgroup",         m.MsdynSalesTaxGroup);
-            SetRef(e, "msdyn_paymentterms",     "msdyn_paymentterms",     m.MsdynPaymentTerms);
-            SetRef(e, "msdyn_primarycontact",   "contact",                m.MsdynPrimaryContact);
+            // msdyn_company NO se copia al master (siempre null)
+            SetRef(e, "msdyn_partyid",         "msdyn_party",         m.MsdynPartyId);
+            SetRef(e, "msdyn_customergroupid", "msdyn_customergroup", m.MsdynCustomerGroupId);
+            SetRef(e, "transactioncurrencyid", "transactioncurrency", m.TransactionCurrencyId);
+            SetRef(e, "msdyn_paymentschedule", "msdyn_paymentschedule", m.MsdynPaymentSchedule);
+            SetRef(e, "msdyn_salestaxgroup",   "msdyn_taxgroup",      m.MsdynSalesTaxGroup);
+            SetRef(e, "msdyn_paymentterms",    "msdyn_paymentterms",  m.MsdynPaymentTerms);
+            SetRef(e, "msdyn_primarycontact",  "contact",             m.MsdynPrimaryContact);
 
-            // msdyn_paymentday: VERIFICAR si es Lookup o OptionSet en tu environment
-            // Si es Lookup:
+            // msdyn_paymentday: Lookup o OptionSet segun el environment
             if (!string.IsNullOrEmpty(m.MsdynPaymentDay) && Guid.TryParse(m.MsdynPaymentDay, out var payDayGuid))
                 e["msdyn_paymentday"] = new EntityReference("msdyn_paymentday", payDayGuid);
-            // Si es OptionSet, descomentar y eliminar el bloque de arriba:
-            // if (!string.IsNullOrEmpty(m.MsdynPaymentDay) && int.TryParse(m.MsdynPaymentDay, out var payDayInt))
-            //     e["msdyn_paymentday"] = new OptionSetValue(payDayInt);
 
-            // Dual Write / F&O — Booleanos y strings
-            e["msdyn_sellable"] = false; // master nunca es vendible
             SetString(e, "msdyn_identificationnumber", m.MsdynIdentificationNumber);
             SetString(e, "msdyn_partycountry",         m.MsdynPartyCountry);
             SetString(e, "msdyn_partystateprovince",   m.MsdynPartyStateProvince);
 
             // A365
-            if (m.A365CreditRating.HasValue)  e["a365_creditrating"]  = new OptionSetValue(m.A365CreditRating.Value);
-            if (m.A365OnHoldStatus.HasValue)   e["a365_onholdstatus"]  = m.A365OnHoldStatus.Value;
+            if (m.A365CreditRating.HasValue) e["a365_creditrating"] = new OptionSetValue(m.A365CreditRating.Value);
+            if (m.A365OnHoldStatus.HasValue)  e["a365_onholdstatus"] = m.A365OnHoldStatus.Value;
             SetString(e, "a365_notes", m.A365Notes);
 
             return e;
@@ -270,38 +240,11 @@ namespace AxxonContacts.Functions.Services
         }
 
         // ────────────────────────────────────────────────────────────
-        // AssociateRawToMaster
-        // ────────────────────────────────────────────────────────────
-
-        private async Task AssociateRawToMasterAsync(Entity rawContact, EntityReference masterRef)
-        {
-            var current = rawContact.GetAttributeValue<EntityReference>(MasterContactId);
-
-            if (current?.Id == masterRef.Id)
-            {
-                _logger.LogDebug(
-                    "[MasterMatchingService] Raw {Id} ya asociado al Master {MasterId}. Skip.",
-                    rawContact.Id, masterRef.Id);
-                return;
-            }
-
-            var update = new Entity(EntityLogicalName, rawContact.Id);
-            update[MasterContactId] = masterRef;
-            await Task.Run(() => _service.Update(update));
-
-            _logger.LogInformation(
-                "[MasterMatchingService] Raw {Id} asociado al Master {MasterId}.",
-                rawContact.Id, masterRef.Id);
-        }
-
-        // ────────────────────────────────────────────────────────────
         // BulkAssociateRawsToMaster
         // ────────────────────────────────────────────────────────────
 
         private async Task BulkAssociateRawsToMasterAsync(string identificationNumber, EntityReference masterRef)
         {
-            // Los contactos de Dual Write llegan con axx_ismaster = null (campo no seteado).
-            // ConditionOperator.Equal, false no matchea nulos — usamos NotEqual, true + Null en OR.
             var notMasterFilter = new FilterExpression(LogicalOperator.Or);
             notMasterFilter.AddCondition(IsMaster, ConditionOperator.Equal, false);
             notMasterFilter.AddCondition(IsMaster, ConditionOperator.Null);
@@ -313,8 +256,8 @@ namespace AxxonContacts.Functions.Services
             var query = new QueryExpression(EntityLogicalName)
             {
                 ColumnSet = new ColumnSet(MasterContactId),
-                Criteria = criteria,
-                PageInfo = new PagingInfo { PageNumber = 1, Count = BulkBatchSize }
+                Criteria  = criteria,
+                PageInfo  = new PagingInfo { PageNumber = 1, Count = BulkBatchSize }
             };
 
             var raws = (await Task.Run(() => _service.RetrieveMultiple(query))).Entities;
@@ -334,20 +277,12 @@ namespace AxxonContacts.Functions.Services
                 Settings = new ExecuteMultipleSettings { ContinueOnError = true, ReturnResponses = true }
             };
 
-            int skip = 0, reassigned = 0;
+            int skip = 0;
 
             foreach (var raw in raws)
             {
                 var current = raw.GetAttributeValue<EntityReference>(MasterContactId);
                 if (current?.Id == masterRef.Id) { skip++; continue; }
-
-                if (current != null)
-                {
-                    _logger.LogWarning(
-                        "[BulkAssociate] Raw {Id}: reasignando de Master {Old} → {New}.",
-                        raw.Id, current.Id, masterRef.Id);
-                    reassigned++;
-                }
 
                 var upd = new Entity(EntityLogicalName, raw.Id);
                 upd[MasterContactId] = masterRef;
@@ -366,8 +301,8 @@ namespace AxxonContacts.Functions.Services
             int success = execMultiple.Requests.Count - errors;
 
             _logger.LogInformation(
-                "[BulkAssociate] Resultado: {Success} OK ({Reassigned} reasignados), {Skip} skip, {Errors} errores.",
-                success, reassigned, skip, errors);
+                "[BulkAssociate] Resultado: {Success} OK, {Skip} skip, {Errors} errores.",
+                success, skip, errors);
 
             foreach (var item in resp.Responses.Where(r => r.Fault != null))
                 _logger.LogError("[BulkAssociate] Error index {Idx}: {Fault}", item.RequestIndex, item.Fault.Message);
