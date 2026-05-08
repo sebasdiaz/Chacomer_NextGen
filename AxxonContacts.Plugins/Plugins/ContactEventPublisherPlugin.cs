@@ -37,7 +37,7 @@ namespace AxxonContacts.Plugins
     ///       transactioncurrencyid, msdyn_paymentday, msdyn_paymentschedule,
     ///       msdyn_salestaxgroup, msdyn_paymentterms, msdyn_primarycontact,
     ///       a365_creditrating, a365_onholdstatus, a365_notes
-    ///     Pre-Image (alias "PreImage"): todos los campos de RequiredColumns
+    ///     Pre-Image (alias "preImage"): todos los campos de RequiredColumns
     ///     Secure Configuration: {connectionString}|{queueName}
     ///
     /// CRITICO: NO incluir axx_mastercontactid en Filtering Attributes.
@@ -370,9 +370,9 @@ namespace AxxonContacts.Plugins
             foreach (var a in target.Attributes) hydrated[a.Key] = a.Value;
 
             if (context.MessageName == PluginMessages.Update &&
-                context.PreEntityImages.Contains("PreImage"))
+                context.PreEntityImages.Contains("preImage"))
             {
-                foreach (var a in context.PreEntityImages["PreImage"].Attributes)
+                foreach (var a in context.PreEntityImages["preImage"].Attributes)
                     if (!hydrated.Contains(a.Key)) hydrated[a.Key] = a.Value;
             }
 
