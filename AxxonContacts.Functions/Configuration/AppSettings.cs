@@ -28,6 +28,20 @@ namespace AxxonContacts.Functions.Configuration
         public string? DataverseClientSecret { get; set; }
 
         /// <summary>
+        /// Connection string de Service Bus (local / SAS).
+        /// Ejemplo: Endpoint=sb://xxx.servicebus.windows.net;SharedAccessKeyName=xxx;SharedAccessKey=xxx
+        /// En produccion con Managed Identity dejar vacio y usar ServiceBusConnection__fullyQualifiedNamespace.
+        /// </summary>
+        public string? ServiceBusConnection { get; set; }
+
+        /// <summary>
+        /// Fully qualified namespace para Managed Identity (produccion).
+        /// Ejemplo: dataverseinte.servicebus.windows.net
+        /// Leido desde ServiceBusConnection__fullyQualifiedNamespace.
+        /// </summary>
+        public string? ServiceBusNamespace { get; set; }
+
+        /// <summary>
         /// True si se deben usar credenciales de Service Principal en lugar de Managed Identity.
         /// Se activa automaticamente si DataverseClientId y DataverseClientSecret estan presentes.
         /// </summary>

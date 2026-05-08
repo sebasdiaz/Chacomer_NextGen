@@ -1,3 +1,4 @@
+using AxxonContacts.Functions.Configuration;
 using AxxonContacts.Functions.Models;
 using AxxonContacts.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
@@ -25,14 +26,20 @@ namespace AxxonContacts.Functions.Functions
     public class ContactMasterMatchingFunction
     {
         private readonly MasterMatchingService _matchingService;
+        private readonly ServiceBusClient _sbClient;
+        private readonly AppSettings _settings;
         private readonly ILogger<ContactMasterMatchingFunction> _logger;
 
         public ContactMasterMatchingFunction(
             MasterMatchingService matchingService,
+            ServiceBusClient sbClient,
+            AppSettings settings,
             ILogger<ContactMasterMatchingFunction> logger)
         {
             _matchingService = matchingService;
-            _logger = logger;
+            _sbClient        = sbClient;
+            _settings        = settings;
+            _logger          = logger;
         }
 
         [Function(nameof(ContactMasterMatchingFunction))]
@@ -74,9 +81,14 @@ namespace AxxonContacts.Functions.Functions
                     return;
                 }
 
-                // 2. Renovar el lock periodicamente mientras se procesa para evitar MessageLockLost
+                // 2. Renovar el lock periodicamente mientras se procesa para evitar MessageLockLost.
+                // Se usa ServiceBusReceiver directamente (SDK) en lugar de messageActions para
+                // evitar el error gRPC "Unimplemented" del host de Functions.
+                await using var receiver = _sbClient.CreateReceiver(
+                    _settings.ServiceBusQueueName,
+                    new ServiceBusReceiverOptions { PrefetchCount = 0 });
                 using var cts = new CancellationTokenSource();
-                var renewTask = RenewLockPeriodicallyAsync(message, messageActions, cts.Token);
+                var renewTask = RenewLockPeriodicallyAsync(message, receiver, cts.Token);
 
                 try
                 {
@@ -114,9 +126,14 @@ namespace AxxonContacts.Functions.Functions
             }
         }
 
+        /// <summary>
+        /// Renueva el lock cada 30s usando el SDK de Azure.Messaging.ServiceBus directamente.
+        /// Evita el error gRPC "Unimplemented" que ocurre al usar ServiceBusMessageActions.RenewMessageLockAsync.
+        /// PrefetchCount=0 garantiza que el receiver auxiliar no consuma mensajes de la queue.
+        /// </summary>
         private async Task RenewLockPeriodicallyAsync(
             ServiceBusReceivedMessage message,
-            ServiceBusMessageActions messageActions,
+            ServiceBusReceiver receiver,
             CancellationToken cancellationToken)
         {
             try
@@ -126,7 +143,7 @@ namespace AxxonContacts.Functions.Functions
                     await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
                     if (cancellationToken.IsCancellationRequested) break;
 
-                    await messageActions.RenewMessageLockAsync(message, cancellationToken);
+                    await receiver.RenewMessageLockAsync(message, cancellationToken);
                     _logger.LogDebug(
                         "[ContactMasterMatchingFunction] Lock renovado para mensaje {MessageId}.",
                         message.MessageId);
