@@ -76,7 +76,8 @@ namespace AxxonContacts.Plugins
 
                 var target = (Entity)context.InputParameters["Target"];
 
-                // Hidratar: Target + PreImage + Retrieve fallback
+                // HydrateContact fusiona Target + PreImage para tener el estado completo.
+                // Se usa SOLO para los guard checks (IsMaster, IdentificationNumber).
                 var fullContact = HydrateContact(target, context, service, tracing);
 
                 // Early exit: Masters no generan eventos
@@ -95,8 +96,15 @@ namespace AxxonContacts.Plugins
                     return;
                 }
 
-                // Construir snapshot completo del Contact y publicar
-                var message = BuildMessage(fullContact, context.MessageName);
+                // Para Update: el mensaje lleva SOLO los campos que cambiaron (Target delta)
+                // mas los campos de identidad. Evita sobreescribir el master con datos
+                // sin cambios de la PreImage que podrian pisar valores de otra fuente.
+                // Para Create: se usa el contacto completo hidratado.
+                var messageSource = context.MessageName == PluginMessages.Update
+                    ? BuildUpdateDelta(target, fullContact)
+                    : fullContact;
+
+                var message = BuildMessage(messageSource, context.MessageName);
                 var json    = SerializeToJson(message);
 
                 var publisher = new ServiceBusPublisher(_secureConfig, tracing);
@@ -298,6 +306,36 @@ namespace AxxonContacts.Plugins
             sb.Append('"').Append(key).Append("\":");
             if (value == null) sb.Append("null");
             else sb.Append(value.Value);
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // BuildUpdateDelta
+        // Construye una Entity con SOLO los campos del Target (los que cambiaron)
+        // mas los campos de identidad tomados del fullContact hidratado.
+        // Esto evita que la PreImage sobreescriba valores del master con datos
+        // que no fueron parte del Update.
+        // ────────────────────────────────────────────────────────────
+
+        private static Entity BuildUpdateDelta(Entity target, Entity fullContact)
+        {
+            var delta = new Entity(target.LogicalName, target.Id);
+
+            // Campos que realmente cambiaron en este Update
+            foreach (var a in target.Attributes)
+                delta[a.Key] = a.Value;
+
+            // Campos de identidad: siempre necesarios aunque no hayan cambiado
+            CopyIfMissing(delta, fullContact, ContactConstants.MsdynIdentificationNumber);
+            CopyIfMissing(delta, fullContact, ContactConstants.IsMaster);
+            CopyIfMissing(delta, fullContact, ContactConstants.MasterContactId);
+
+            return delta;
+        }
+
+        private static void CopyIfMissing(Entity target, Entity source, string field)
+        {
+            if (!target.Contains(field) && source.Contains(field))
+                target[field] = source[field];
         }
 
         // ────────────────────────────────────────────────────────────
