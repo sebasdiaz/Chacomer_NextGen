@@ -1,4 +1,3 @@
-using System.Text.Json;
 using AxxonContacts.Functions.Models;
 using AxxonContacts.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
@@ -8,7 +7,8 @@ using Microsoft.Extensions.Logging;
 namespace AxxonContacts.Functions.Functions
 {
     /// <summary>
-    /// Azure Function disparada por mensajes en la queue de Service Bus.
+    /// Azure Function disparada por el Service Endpoint de Dataverse via Service Bus.
+    /// Recibe el RemoteExecutionContext nativo (JSON) y aplica la logica master/raw.
     ///
     /// Sessions deshabilitadas (IsSessionsEnabled = false):
     ///   - La queue actual no tiene sessions habilitadas.
@@ -16,24 +16,16 @@ namespace AxxonContacts.Functions.Functions
     ///     con "Enable sessions: true" y cambiar IsSessionsEnabled a true.
     ///
     /// Retry policy:
-    ///   - Dataverse gestiona los reintentos del System Job (plugin).
-    ///   - Service Bus gestiona los reintentos del mensaje (Lock Duration + Max Delivery Count).
-    ///   - Si la Function falla despues de Max Delivery Count (3), el mensaje va al DLQ.
-    ///   - El mensaje del DLQ debe procesarse manualmente o con una Function separada de DLQ handler.
+    ///   - Service Bus gestiona los reintentos (Lock Duration + Max Delivery Count).
+    ///   - Si la Function falla despues de Max Delivery Count, el mensaje va al DLQ.
     ///
     /// autoComplete = false (configurado en host.json):
     ///   - El mensaje se completa manualmente via messageActions.CompleteMessageAsync().
-    ///   - Esto garantiza que el mensaje no se pierde si la Function falla antes de completar.
     /// </summary>
     public class ContactMasterMatchingFunction
     {
         private readonly MasterMatchingService _matchingService;
         private readonly ILogger<ContactMasterMatchingFunction> _logger;
-
-        private static readonly JsonSerializerOptions _jsonOptions = new()
-        {
-            PropertyNameCaseInsensitive = true
-        };
 
         public ContactMasterMatchingFunction(
             MasterMatchingService matchingService,
@@ -71,14 +63,14 @@ namespace AxxonContacts.Functions.Functions
                 if (payload == null)
                 {
                     _logger.LogError(
-                        "[ContactMasterMatchingFunction] No se pudo deserializar el mensaje {MessageId}. " +
+                        "[ContactMasterMatchingFunction] No se pudo parsear el RemoteExecutionContext {MessageId}. " +
                         "Enviando a DLQ.",
                         messageId);
 
                     await messageActions.DeadLetterMessageAsync(
                         message,
-                        deadLetterReason: "DeserializationFailed",
-                        deadLetterErrorDescription: "El cuerpo del mensaje no es un ContactEventMessage valido.");
+                        deadLetterReason: "ParseFailed",
+                        deadLetterErrorDescription: "El cuerpo del mensaje no es un RemoteExecutionContext valido.");
                     return;
                 }
 
@@ -115,13 +107,12 @@ namespace AxxonContacts.Functions.Functions
         {
             try
             {
-                var body = message.Body.ToString();
-                return JsonSerializer.Deserialize<ContactEventMessage>(body, _jsonOptions);
+                return ExecutionContextParser.Parse(message.Body.ToString());
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
                 throw new InvalidOperationException(
-                    $"Error deserializando ContactEventMessage: {ex.Message}", ex);
+                    $"Error procesando RemoteExecutionContext: {ex.Message}", ex);
             }
         }
     }
