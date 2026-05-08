@@ -245,7 +245,7 @@ namespace AxxonContacts.Functions.Services
             //     e["msdyn_paymentday"] = new OptionSetValue(payDayInt);
 
             // Dual Write / F&O — Booleanos y strings
-            if (m.MsdynSellable.HasValue)     e["msdyn_sellable"]           = m.MsdynSellable.Value;
+            e["msdyn_sellable"] = false; // master nunca es vendible
             SetString(e, "msdyn_identificationnumber", m.MsdynIdentificationNumber);
             SetString(e, "msdyn_partycountry",         m.MsdynPartyCountry);
             SetString(e, "msdyn_partystateprovince",   m.MsdynPartyStateProvince);
