@@ -60,24 +60,6 @@ namespace AxxonContacts.Functions.Services
                 return;
             }
 
-            // Verificar que el contacto todavia existe en Dataverse (puede haber delay)
-            var currentContact = await RetrieveCurrentStateAsync(message.ContactId);
-            if (currentContact == null)
-            {
-                _logger.LogWarning(
-                    "[MasterMatchingService] Contact {ContactId} no encontrado (eliminado).",
-                    message.ContactId);
-                return;
-            }
-
-            if (currentContact.GetAttributeValue<bool?>(IsMaster) == true)
-            {
-                _logger.LogInformation(
-                    "[MasterMatchingService] Contact {ContactId} ya es Master en Dataverse. Skip.",
-                    message.ContactId);
-                return;
-            }
-
             // Si ya existe un master → no hacer nada
             var existingMaster = await FindMasterByIdentificationAsync(message.MsdynIdentificationNumber);
             if (existingMaster != null)
