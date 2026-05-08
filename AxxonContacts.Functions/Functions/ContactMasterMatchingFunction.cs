@@ -74,8 +74,19 @@ namespace AxxonContacts.Functions.Functions
                     return;
                 }
 
-                // 2. Procesar
-                await _matchingService.ProcessAsync(payload);
+                // 2. Renovar el lock periodicamente mientras se procesa para evitar MessageLockLost
+                using var cts = new CancellationTokenSource();
+                var renewTask = RenewLockPeriodicallyAsync(message, messageActions, cts.Token);
+
+                try
+                {
+                    await _matchingService.ProcessAsync(payload);
+                }
+                finally
+                {
+                    cts.Cancel();
+                    await renewTask;
+                }
 
                 // 3. Completar el mensaje (autoComplete = false)
                 await messageActions.CompleteMessageAsync(message);
@@ -100,6 +111,33 @@ namespace AxxonContacts.Functions.Functions
 
                 // Re-lanzar para que Application Insights registre la excepcion
                 throw;
+            }
+        }
+
+        private async Task RenewLockPeriodicallyAsync(
+            ServiceBusReceivedMessage message,
+            ServiceBusMessageActions messageActions,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+                    if (cancellationToken.IsCancellationRequested) break;
+
+                    await messageActions.RenewMessageLockAsync(message, cancellationToken);
+                    _logger.LogDebug(
+                        "[ContactMasterMatchingFunction] Lock renovado para mensaje {MessageId}.",
+                        message.MessageId);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "[ContactMasterMatchingFunction] Error renovando lock del mensaje {MessageId}.",
+                    message.MessageId);
             }
         }
 
