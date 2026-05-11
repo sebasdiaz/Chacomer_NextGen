@@ -15,6 +15,7 @@ var host = new HostBuilder()
         {
             DataverseUrl          = context.Configuration["DataverseUrl"] ?? string.Empty,
             ServiceBusQueueName   = context.Configuration["ServiceBusQueueName"] ?? string.Empty,
+            RucValidationQueueName = context.Configuration["RucValidationQueueName"] ?? string.Empty,
             DataverseClientId     = context.Configuration["DataverseClientId"],
             DataverseClientSecret = context.Configuration["DataverseClientSecret"],
             ServiceBusConnection  = context.Configuration["ServiceBusConnection"],
@@ -47,6 +48,24 @@ var host = new HostBuilder()
             var orgService = factory.CreateOrganizationService();
             var logger     = sp.GetRequiredService<ILogger<MasterMatchingService>>();
             return new MasterMatchingService(orgService, logger);
+        });
+
+        // HttpClient para la API de TURUC (RUC validation)
+        services.AddHttpClient("RucApi", client =>
+        {
+            client.BaseAddress = new Uri("https://turuc.com.py/api/contribuyente/");
+            client.Timeout     = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        });
+
+        services.AddTransient<RucValidationService>(sp =>
+        {
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient        = httpClientFactory.CreateClient("RucApi");
+            var factory           = sp.GetRequiredService<DataverseClientFactory>();
+            var orgService        = factory.CreateOrganizationService();
+            var logger            = sp.GetRequiredService<ILogger<RucValidationService>>();
+            return new RucValidationService(httpClient, orgService, logger);
         });
 
         services.AddLogging(b => b.AddConsole());
