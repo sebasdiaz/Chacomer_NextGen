@@ -26,20 +26,23 @@ namespace AxxonContacts.Functions.Functions
     public class ContactMasterMatchingFunction
     {
         private readonly MasterMatchingService _matchingService;
-        private readonly ServiceBusClient _sbClient;
-        private readonly AppSettings _settings;
+        private readonly RucValidationService  _rucValidationService;
+        private readonly ServiceBusClient      _sbClient;
+        private readonly AppSettings           _settings;
         private readonly ILogger<ContactMasterMatchingFunction> _logger;
 
         public ContactMasterMatchingFunction(
             MasterMatchingService matchingService,
-            ServiceBusClient sbClient,
-            AppSettings settings,
+            RucValidationService  rucValidationService,
+            ServiceBusClient      sbClient,
+            AppSettings           settings,
             ILogger<ContactMasterMatchingFunction> logger)
         {
-            _matchingService = matchingService;
-            _sbClient        = sbClient;
-            _settings        = settings;
-            _logger          = logger;
+            _matchingService      = matchingService;
+            _rucValidationService = rucValidationService;
+            _sbClient             = sbClient;
+            _settings             = settings;
+            _logger               = logger;
         }
 
         [Function(nameof(ContactMasterMatchingFunction))]
@@ -92,7 +95,14 @@ namespace AxxonContacts.Functions.Functions
 
                 try
                 {
-                    await _matchingService.ProcessAsync(payload);
+                    // 1. Crear (o localizar) el master y linkear raws
+                    var masterRef = await _matchingService.ProcessAsync(payload);
+
+                    // 2. Validar RUC contra API de TURUC y actualizar el master
+                    if (masterRef != null)
+                        await _rucValidationService.ValidateAndUpdateAsync(
+                            masterRef.Id,
+                            payload.MsdynIdentificationNumber!);
                 }
                 finally
                 {

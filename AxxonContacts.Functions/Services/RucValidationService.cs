@@ -7,10 +7,10 @@ using System.Text.Json;
 namespace AxxonContacts.Functions.Services
 {
     /// <summary>
-    /// Valida el msdyn_identificationnumber contra la API de TURUC
-    /// (https://turuc.com.py/api/contribuyente/{id}) y actualiza el contacto con:
-    ///   - governmentid  = ruc validado
-    ///   - description   = respuesta completa de la API (JSON)
+    /// Valida un msdyn_identificationnumber contra la API de TURUC
+    /// (https://turuc.com.py/api/contribuyente/{id}) y actualiza el contacto master con:
+    ///   - governmentid    = ruc validado (ej: "80012345-0")
+    ///   - description     = respuesta completa de la API (JSON)
     ///   - axx_fiscalstate = estado mapeado a OptionSet
     /// </summary>
     public class RucValidationService
@@ -33,15 +33,9 @@ namespace AxxonContacts.Functions.Services
             PropertyNameCaseInsensitive = true
         };
 
-        private static readonly JsonSerializerOptions JsonWriteOptions = new()
-        {
-            WriteIndented        = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
-
-        private readonly HttpClient          _httpClient;
+        private readonly HttpClient           _httpClient;
         private readonly IOrganizationService _service;
-        private readonly ILogger             _logger;
+        private readonly ILogger              _logger;
 
         public RucValidationService(
             HttpClient httpClient,
@@ -54,60 +48,41 @@ namespace AxxonContacts.Functions.Services
         }
 
         // ────────────────────────────────────────────────────────────
-        // ProcessAsync
+        // ValidateAndUpdateAsync
         // ────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Solo procesa eventos Create sobre contactos raw (no master).
-        /// Llama a la API de TURUC y actualiza el contacto si la respuesta es válida.
+        /// Llama a la API de TURUC para el <paramref name="identificationNumber"/> dado
+        /// y actualiza el contacto master (<paramref name="masterId"/>) con los datos validados.
+        /// No lanza excepciones por errores de la API; los registra como Warning y retorna.
         /// </summary>
-        public async Task ProcessAsync(ContactEventMessage message)
+        public async Task ValidateAndUpdateAsync(Guid masterId, string identificationNumber)
         {
-            ArgumentNullException.ThrowIfNull(message);
-
-            _logger.LogInformation(
-                "[RucValidationService] Contact={ContactId} | Identification={Identification} | Trigger={Trigger}",
-                message.ContactId, message.MsdynIdentificationNumber, message.TriggerMessage);
-
-            // Solo Create
-            if (!string.Equals(message.TriggerMessage, "Create", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogInformation(
-                    "[RucValidationService] Evento '{Trigger}' ignorado. Solo se procesa Create.",
-                    message.TriggerMessage);
-                return;
-            }
-
-            // El master no necesita validación de RUC (es creado por MasterMatchingService)
-            if (message.IsMaster == true)
-            {
-                _logger.LogInformation("[RucValidationService] Contact es Master. Skip.");
-                return;
-            }
-
-            // Identificación requerida
-            if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber))
+            if (string.IsNullOrWhiteSpace(identificationNumber))
             {
                 _logger.LogWarning("[RucValidationService] IdentificationNumber vacio. Skip.");
                 return;
             }
 
-            // Llamar a la API de TURUC
-            var (rucData, rawJson) = await CallRucApiAsync(message.MsdynIdentificationNumber);
+            _logger.LogInformation(
+                "[RucValidationService] Validando RUC '{Identification}' → Master {MasterId}",
+                identificationNumber, masterId);
+
+            var (rucData, rawJson) = await CallRucApiAsync(identificationNumber);
+
             if (rucData == null)
             {
                 _logger.LogWarning(
                     "[RucValidationService] API no retorno datos validos para '{Identification}'. Skip.",
-                    message.MsdynIdentificationNumber);
+                    identificationNumber);
                 return;
             }
 
-            // Actualizar el contacto con los datos validados
-            await UpdateContactAsync(message.ContactId, rucData, rawJson);
+            await UpdateContactAsync(masterId, rucData, rawJson);
 
             _logger.LogInformation(
-                "[RucValidationService] Completado. Contact={ContactId} | RUC={Ruc} | Estado={Estado}",
-                message.ContactId, rucData.Ruc, rucData.Estado);
+                "[RucValidationService] Master {MasterId} actualizado. RUC={Ruc} | Estado={Estado}",
+                masterId, rucData.Ruc, rucData.Estado);
         }
 
         // ────────────────────────────────────────────────────────────
@@ -116,20 +91,19 @@ namespace AxxonContacts.Functions.Services
 
         private async Task<(RucData? data, string? rawJson)> CallRucApiAsync(string identificationNumber)
         {
-            var url = Uri.EscapeDataString(identificationNumber);
-            _logger.LogInformation("[RucValidationService] Llamando API TURUC: {Path}", url);
+            var path = Uri.EscapeDataString(identificationNumber);
+            _logger.LogInformation("[RucValidationService] GET {Path}", path);
 
             try
             {
-                var response = await _httpClient.GetAsync(url);
-
-                var rawJson = await response.Content.ReadAsStringAsync();
+                var response = await _httpClient.GetAsync(path);
+                var rawJson  = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning(
-                        "[RucValidationService] API retorno HTTP {Status} para '{Id}'.",
-                        (int)response.StatusCode, identificationNumber);
+                        "[RucValidationService] API retorno HTTP {Status} para '{Id}'. Body={Body}",
+                        (int)response.StatusCode, identificationNumber, rawJson);
                     return (null, null);
                 }
 
@@ -139,7 +113,7 @@ namespace AxxonContacts.Functions.Services
                     !string.Equals(apiResponse.Message, "OK", StringComparison.OrdinalIgnoreCase))
                 {
                     _logger.LogWarning(
-                        "[RucValidationService] Respuesta invalida de la API. Message='{Msg}'",
+                        "[RucValidationService] Respuesta invalida. Message='{Msg}'",
                         apiResponse?.Message);
                     return (null, null);
                 }
@@ -185,20 +159,7 @@ namespace AxxonContacts.Functions.Services
                         rucData.Estado);
             }
 
-            try
-            {
-                await Task.Run(() => _service.Update(upd));
-                _logger.LogInformation(
-                    "[RucValidationService] Contact {ContactId} actualizado. governmentid={Ruc} axx_fiscalstate={Estado}",
-                    contactId, rucData.Ruc, rucData.Estado);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "[RucValidationService] Error actualizando Contact {ContactId}.",
-                    contactId);
-                throw;
-            }
+            await Task.Run(() => _service.Update(upd));
         }
     }
 }

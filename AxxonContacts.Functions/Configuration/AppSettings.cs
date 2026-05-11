@@ -19,12 +19,6 @@ namespace AxxonContacts.Functions.Configuration
         /// </summary>
         public string ServiceBusQueueName { get; set; } = string.Empty;
 
-        /// <summary>
-        /// Nombre de la queue de Service Bus para ContactRucValidationFunction.
-        /// En desarrollo puede apuntar a la misma queue que ServiceBusQueueName.
-        /// En produccion usar un Topic con dos Subscriptions independientes para fan-out.
-        /// </summary>
-        public string RucValidationQueueName { get; set; } = string.Empty;
 
         // ---- Solo para DESA / fallback cuando Managed Identity no esta disponible ----
 

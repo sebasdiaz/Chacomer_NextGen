@@ -25,11 +25,12 @@ namespace AxxonContacts.Functions.Services
         }
 
         /// <summary>
-        /// Solo procesa eventos Create.
-        /// Si ya existe un master para el msdyn_identificationnumber → skip.
-        /// Si no existe → crea el master y linkea todos los raws con ese numero.
+        /// Solo procesa eventos Create de contactos raw (no master).
+        /// Si ya existe un master para el msdyn_identificationnumber → retorna su referencia (sin crear uno nuevo).
+        /// Si no existe → crea el master, linkea todos los raws y retorna la referencia del nuevo master.
+        /// Retorna null si el evento se ignora (trigger distinto a Create, es master, o sin identification).
         /// </summary>
-        public async Task ProcessAsync(ContactEventMessage message)
+        public async Task<EntityReference?> ProcessAsync(ContactEventMessage message)
         {
             ArgumentNullException.ThrowIfNull(message);
 
@@ -43,31 +44,31 @@ namespace AxxonContacts.Functions.Services
                 _logger.LogInformation(
                     "[MasterMatchingService] Evento '{Trigger}' ignorado. Solo se procesa Create.",
                     message.TriggerMessage);
-                return;
+                return null;
             }
 
             // El contacto mismo no debe ser master
             if (message.IsMaster == true)
             {
                 _logger.LogInformation("[MasterMatchingService] Contact es Master. Skip.");
-                return;
+                return null;
             }
 
             // Identificacion requerida
             if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber))
             {
                 _logger.LogWarning("[MasterMatchingService] IdentificationNumber vacio. Skip.");
-                return;
+                return null;
             }
 
-            // Si ya existe un master → no hacer nada
+            // Si ya existe un master → retornar su referencia (la validacion de RUC se sigue ejecutando)
             var existingMaster = await FindMasterByIdentificationAsync(message.MsdynIdentificationNumber);
             if (existingMaster != null)
             {
                 _logger.LogInformation(
-                    "[MasterMatchingService] Master {MasterId} ya existe para '{Identification}'. Skip.",
+                    "[MasterMatchingService] Master {MasterId} ya existe para '{Identification}'.",
                     existingMaster.Id, message.MsdynIdentificationNumber);
-                return;
+                return existingMaster.ToEntityReference();
             }
 
             // No existe master → crear y linkear todos los raws
@@ -79,7 +80,10 @@ namespace AxxonContacts.Functions.Services
             await BulkAssociateRawsToMasterAsync(message.MsdynIdentificationNumber, newMasterRef);
 
             _logger.LogInformation(
-                "[MasterMatchingService] Completado. Contact={ContactId}", message.ContactId);
+                "[MasterMatchingService] Completado. Contact={ContactId} | Master={MasterId}",
+                message.ContactId, newMasterRef.Id);
+
+            return newMasterRef;
         }
 
         // ────────────────────────────────────────────────────────────

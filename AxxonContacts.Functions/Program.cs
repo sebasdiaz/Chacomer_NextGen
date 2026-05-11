@@ -15,8 +15,7 @@ var host = new HostBuilder()
         {
             DataverseUrl          = context.Configuration["DataverseUrl"] ?? string.Empty,
             ServiceBusQueueName   = context.Configuration["ServiceBusQueueName"] ?? string.Empty,
-            RucValidationQueueName = context.Configuration["RucValidationQueueName"] ?? string.Empty,
-            DataverseClientId     = context.Configuration["DataverseClientId"],
+DataverseClientId     = context.Configuration["DataverseClientId"],
             DataverseClientSecret = context.Configuration["DataverseClientSecret"],
             ServiceBusConnection  = context.Configuration["ServiceBusConnection"],
             ServiceBusNamespace   = context.Configuration["ServiceBusConnection__fullyQualifiedNamespace"]
