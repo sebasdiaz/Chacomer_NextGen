@@ -195,7 +195,7 @@ namespace AxxonContacts.Functions.Services
             SetRef(e, "transactioncurrencyid", "transactioncurrency", m.TransactionCurrencyId);
             SetRef(e, "msdyn_paymentschedule", "msdyn_paymentschedule", m.MsdynPaymentSchedule);
             SetRef(e, "msdyn_salestaxgroup",   "msdyn_taxgroup",      m.MsdynSalesTaxGroup);
-            SetRef(e, "msdyn_paymentterms",    "msdyn_paymentterms",  m.MsdynPaymentTerms);
+            SetRef(e, "msdyn_paymentterms",    "msdyn_paymentterm",   m.MsdynPaymentTerms);
             SetRef(e, "msdyn_primarycontact",  "contact",             m.MsdynPrimaryContact);
 
             // msdyn_paymentday: Lookup o OptionSet segun el environment
