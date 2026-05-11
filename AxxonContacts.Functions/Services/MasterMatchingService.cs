@@ -38,12 +38,18 @@ namespace AxxonContacts.Functions.Services
                 "[MasterMatchingService] Procesando Contact {ContactId} | Identification={Identification} | Trigger={Trigger}",
                 message.ContactId, message.MsdynIdentificationNumber, message.TriggerMessage);
 
-            // Solo Create
-            if (!string.Equals(message.TriggerMessage, "Create", StringComparison.OrdinalIgnoreCase))
+            // Procesar Create, o Update cuando msdyn_identificationnumber fue establecido en esta operacion.
+            // En Dual Write el contacto se crea primero sin RUC y se actualiza despues con el campo,
+            // por lo que el evento relevante para crear el master puede ser un Update.
+            bool isCreate = string.Equals(message.TriggerMessage, "Create", StringComparison.OrdinalIgnoreCase);
+            bool isUpdateWithNewIdentification = string.Equals(message.TriggerMessage, "Update", StringComparison.OrdinalIgnoreCase)
+                                                 && message.IdentificationNumberChanged;
+
+            if (!isCreate && !isUpdateWithNewIdentification)
             {
                 _logger.LogInformation(
-                    "[MasterMatchingService] Evento '{Trigger}' ignorado. Solo se procesa Create.",
-                    message.TriggerMessage);
+                    "[MasterMatchingService] Evento '{Trigger}' ignorado (IdentificationChanged={Changed}).",
+                    message.TriggerMessage, message.IdentificationNumberChanged);
                 return null;
             }
 

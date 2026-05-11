@@ -23,6 +23,10 @@ namespace AxxonContacts.Functions.Services
             var targetAttrs   = ExtractAttributes(root, "InputParameters", "Target");
             var preImageAttrs = ExtractAttributes(root, "PreEntityImages",  "preImage");
 
+            // true cuando msdyn_identificationnumber esta entre los campos que cambiaron (Target).
+            // Para eventos Update esto indica que el RUC fue establecido en esta operacion.
+            bool identificationChanged = targetAttrs.ContainsKey("msdyn_identificationnumber");
+
             // PreImage provee la base; Target sobreescribe con los campos que cambiaron
             var merged = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
             foreach (var (k, v) in preImageAttrs) merged[k] = v;
@@ -30,9 +34,10 @@ namespace AxxonContacts.Functions.Services
 
             return new ContactEventMessage
             {
-                ContactId               = contactId,
-                TriggerMessage          = messageName,
-                PublishedAt             = DateTimeOffset.UtcNow,
+                ContactId                  = contactId,
+                TriggerMessage             = messageName,
+                PublishedAt                = DateTimeOffset.UtcNow,
+                IdentificationNumberChanged = identificationChanged,
 
                 MsdynIdentificationNumber = Str(merged, "msdyn_identificationnumber"),
                 IsMaster                = Bool(merged, "axx_ismaster") ?? false,
