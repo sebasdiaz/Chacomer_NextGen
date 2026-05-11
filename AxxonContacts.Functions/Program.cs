@@ -67,6 +67,14 @@ DataverseClientId     = context.Configuration["DataverseClientId"],
             return new RucValidationService(httpClient, orgService, logger);
         });
 
+        services.AddTransient<ContactProcessingService>(sp =>
+        {
+            var masterMatchingService = sp.GetRequiredService<MasterMatchingService>();
+            var rucValidationService  = sp.GetRequiredService<RucValidationService>();
+            var logger                = sp.GetRequiredService<ILogger<ContactProcessingService>>();
+            return new ContactProcessingService(masterMatchingService, rucValidationService, logger);
+        });
+
         services.AddLogging(b => b.AddConsole());
     })
     .Build();
