@@ -181,8 +181,9 @@ namespace AxxonContacts.Functions.Services
         {
             var e = new Entity(EntityLogicalName);
 
-            e[IsMaster]      = true;
-            e["msdyn_sellable"] = false;
+            e[IsMaster]              = true;
+            e["msdyn_sellable"]      = false;
+            e["a365_contacttype"]    = new OptionSetValue(727000001);
 
             // Datos de persona
             SetString(e, "firstname",     m.FirstName);
