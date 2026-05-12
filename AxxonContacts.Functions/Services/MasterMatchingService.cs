@@ -183,7 +183,7 @@ namespace AxxonContacts.Functions.Services
 
             e[IsMaster]              = true;
             e["msdyn_sellable"]      = false;
-            e["a365_contacttype"]    = new OptionSetValue(727000001);
+            e["a365_contacttype"]    = 727000001;
 
             // Datos de persona
             SetString(e, "firstname",     m.FirstName);
