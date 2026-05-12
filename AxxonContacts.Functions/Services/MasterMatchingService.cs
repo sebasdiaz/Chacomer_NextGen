@@ -183,7 +183,7 @@ namespace AxxonContacts.Functions.Services
 
             e[IsMaster]              = true;
             e["msdyn_sellable"]      = false;
-            e["a365_contacttype"]    = new OptionSetValueCollection(new[] { new OptionSetValue(727000001) });
+            e["a365_contacttype"]    = new OptionSetValue(727000001);
 
             // Datos de persona
             SetString(e, "firstname",     m.FirstName);
@@ -197,7 +197,8 @@ namespace AxxonContacts.Functions.Services
 
             // Dual Write / F&O — Lookups
             // msdyn_company NO se copia al master (siempre null)
-            SetRef(e, "msdyn_partyid",         "msdyn_party",         m.MsdynPartyId);
+            // msdyn_partyid NO se copia: la clave unica (partyid + company=null) ya la tiene el raw;
+            // copiarla al master violaría la constraint "Party Key With No Company".
             SetRef(e, "msdyn_customergroupid", "msdyn_customergroup", m.MsdynCustomerGroupId);
             SetRef(e, "transactioncurrencyid", "transactioncurrency", m.TransactionCurrencyId);
             SetRef(e, "msdyn_paymentschedule", "msdyn_paymentschedule", m.MsdynPaymentSchedule);
