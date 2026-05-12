@@ -25,11 +25,12 @@ namespace AxxonContacts.Functions.Services
         }
 
         /// <summary>
-        /// Solo procesa eventos Create.
-        /// Si ya existe un master para el msdyn_identificationnumber → skip.
-        /// Si no existe → crea el master y linkea todos los raws con ese numero.
+        /// Solo procesa eventos Create de contactos raw (no master).
+        /// Si ya existe un master para el msdyn_identificationnumber → retorna su referencia (sin crear uno nuevo).
+        /// Si no existe → crea el master, linkea todos los raws y retorna la referencia del nuevo master.
+        /// Retorna null si el evento se ignora (trigger distinto a Create, es master, o sin identification).
         /// </summary>
-        public async Task ProcessAsync(ContactEventMessage message)
+        public async Task<EntityReference?> ProcessAsync(ContactEventMessage message)
         {
             ArgumentNullException.ThrowIfNull(message);
 
@@ -37,55 +38,43 @@ namespace AxxonContacts.Functions.Services
                 "[MasterMatchingService] Procesando Contact {ContactId} | Identification={Identification} | Trigger={Trigger}",
                 message.ContactId, message.MsdynIdentificationNumber, message.TriggerMessage);
 
-            // Solo Create
-            if (!string.Equals(message.TriggerMessage, "Create", StringComparison.OrdinalIgnoreCase))
+            // Procesar Create, o Update cuando msdyn_identificationnumber fue establecido en esta operacion.
+            // En Dual Write el contacto se crea primero sin RUC y se actualiza despues con el campo,
+            // por lo que el evento relevante para crear el master puede ser un Update.
+            bool isCreate = string.Equals(message.TriggerMessage, "Create", StringComparison.OrdinalIgnoreCase);
+            bool isUpdateWithNewIdentification = string.Equals(message.TriggerMessage, "Update", StringComparison.OrdinalIgnoreCase)
+                                                 && message.IdentificationNumberChanged;
+
+            if (!isCreate && !isUpdateWithNewIdentification)
             {
                 _logger.LogInformation(
-                    "[MasterMatchingService] Evento '{Trigger}' ignorado. Solo se procesa Create.",
-                    message.TriggerMessage);
-                return;
+                    "[MasterMatchingService] Evento '{Trigger}' ignorado (IdentificationChanged={Changed}).",
+                    message.TriggerMessage, message.IdentificationNumberChanged);
+                return null;
             }
 
             // El contacto mismo no debe ser master
             if (message.IsMaster == true)
             {
                 _logger.LogInformation("[MasterMatchingService] Contact es Master. Skip.");
-                return;
+                return null;
             }
 
             // Identificacion requerida
             if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber))
             {
                 _logger.LogWarning("[MasterMatchingService] IdentificationNumber vacio. Skip.");
-                return;
+                return null;
             }
 
-            // Verificar que el contacto todavia existe en Dataverse (puede haber delay)
-            var currentContact = await RetrieveCurrentStateAsync(message.ContactId);
-            if (currentContact == null)
-            {
-                _logger.LogWarning(
-                    "[MasterMatchingService] Contact {ContactId} no encontrado (eliminado).",
-                    message.ContactId);
-                return;
-            }
-
-            if (currentContact.GetAttributeValue<bool?>(IsMaster) == true)
-            {
-                _logger.LogInformation(
-                    "[MasterMatchingService] Contact {ContactId} ya es Master en Dataverse. Skip.",
-                    message.ContactId);
-                return;
-            }
-
-            // Si ya existe un master → no hacer nada
+            // Si ya existe un master → retornar su referencia (la validacion de RUC se sigue ejecutando)
             var existingMaster = await FindMasterByIdentificationAsync(message.MsdynIdentificationNumber);
             if (existingMaster != null)
             {
                 _logger.LogInformation(
-                    "[MasterMatchingService] Master {MasterId} ya existe para '{Identification}'. Skip.",
+                    "[MasterMatchingService] Master {MasterId} ya existe para '{Identification}'.",
                     existingMaster.Id, message.MsdynIdentificationNumber);
-                return;
+                return existingMaster.ToEntityReference();
             }
 
             // No existe master → crear y linkear todos los raws
@@ -97,7 +86,10 @@ namespace AxxonContacts.Functions.Services
             await BulkAssociateRawsToMasterAsync(message.MsdynIdentificationNumber, newMasterRef);
 
             _logger.LogInformation(
-                "[MasterMatchingService] Completado. Contact={ContactId}", message.ContactId);
+                "[MasterMatchingService] Completado. Contact={ContactId} | Master={MasterId}",
+                message.ContactId, newMasterRef.Id);
+
+            return newMasterRef;
         }
 
         // ────────────────────────────────────────────────────────────
@@ -189,8 +181,9 @@ namespace AxxonContacts.Functions.Services
         {
             var e = new Entity(EntityLogicalName);
 
-            e[IsMaster]      = true;
-            e["msdyn_sellable"] = false;
+            e[IsMaster]              = true;
+            e["msdyn_sellable"]      = false;
+            e["a365_contacttype"]    = new OptionSetValue(727000001);
 
             // Datos de persona
             SetString(e, "firstname",     m.FirstName);
@@ -204,12 +197,13 @@ namespace AxxonContacts.Functions.Services
 
             // Dual Write / F&O — Lookups
             // msdyn_company NO se copia al master (siempre null)
-            SetRef(e, "msdyn_partyid",         "msdyn_party",         m.MsdynPartyId);
+            // msdyn_partyid NO se copia: la clave unica (partyid + company=null) ya la tiene el raw;
+            // copiarla al master violaría la constraint "Party Key With No Company".
             SetRef(e, "msdyn_customergroupid", "msdyn_customergroup", m.MsdynCustomerGroupId);
             SetRef(e, "transactioncurrencyid", "transactioncurrency", m.TransactionCurrencyId);
             SetRef(e, "msdyn_paymentschedule", "msdyn_paymentschedule", m.MsdynPaymentSchedule);
             SetRef(e, "msdyn_salestaxgroup",   "msdyn_taxgroup",      m.MsdynSalesTaxGroup);
-            SetRef(e, "msdyn_paymentterms",    "msdyn_paymentterms",  m.MsdynPaymentTerms);
+            SetRef(e, "msdyn_paymentterms",    "msdyn_paymentterm",   m.MsdynPaymentTerms);
             SetRef(e, "msdyn_primarycontact",  "contact",             m.MsdynPrimaryContact);
 
             // msdyn_paymentday: Lookup o OptionSet segun el environment

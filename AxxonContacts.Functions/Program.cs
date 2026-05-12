@@ -15,7 +15,7 @@ var host = new HostBuilder()
         {
             DataverseUrl          = context.Configuration["DataverseUrl"] ?? string.Empty,
             ServiceBusQueueName   = context.Configuration["ServiceBusQueueName"] ?? string.Empty,
-            DataverseClientId     = context.Configuration["DataverseClientId"],
+DataverseClientId     = context.Configuration["DataverseClientId"],
             DataverseClientSecret = context.Configuration["DataverseClientSecret"],
             ServiceBusConnection  = context.Configuration["ServiceBusConnection"],
             ServiceBusNamespace   = context.Configuration["ServiceBusConnection__fullyQualifiedNamespace"]
@@ -47,6 +47,32 @@ var host = new HostBuilder()
             var orgService = factory.CreateOrganizationService();
             var logger     = sp.GetRequiredService<ILogger<MasterMatchingService>>();
             return new MasterMatchingService(orgService, logger);
+        });
+
+        // HttpClient para la API de TURUC (RUC validation)
+        services.AddHttpClient("RucApi", client =>
+        {
+            client.BaseAddress = new Uri("https://turuc.com.py/api/contribuyente/");
+            client.Timeout     = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        });
+
+        services.AddTransient<RucValidationService>(sp =>
+        {
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient        = httpClientFactory.CreateClient("RucApi");
+            var factory           = sp.GetRequiredService<DataverseClientFactory>();
+            var orgService        = factory.CreateOrganizationService();
+            var logger            = sp.GetRequiredService<ILogger<RucValidationService>>();
+            return new RucValidationService(httpClient, orgService, logger);
+        });
+
+        services.AddTransient<ContactProcessingService>(sp =>
+        {
+            var masterMatchingService = sp.GetRequiredService<MasterMatchingService>();
+            var rucValidationService  = sp.GetRequiredService<RucValidationService>();
+            var logger                = sp.GetRequiredService<ILogger<ContactProcessingService>>();
+            return new ContactProcessingService(masterMatchingService, rucValidationService, logger);
         });
 
         services.AddLogging(b => b.AddConsole());

@@ -20,6 +20,14 @@ namespace AxxonContacts.Functions.Models
         [JsonPropertyName("publishedAt")]
         public DateTimeOffset PublishedAt { get; set; }
 
+        /// <summary>
+        /// true cuando msdyn_identificationnumber estaba en el Target del evento (campos que cambiaron).
+        /// En eventos Update indica que el RUC fue establecido o modificado en esta operacion,
+        /// lo que dispara la logica de creacion de master aunque el trigger no sea Create.
+        /// </summary>
+        [JsonPropertyName("identificationNumberChanged")]
+        public bool IdentificationNumberChanged { get; set; }
+
         // ── Datos de persona ─────────────────────────────────────────
         [JsonPropertyName("firstName")]
         public string? FirstName { get; set; }

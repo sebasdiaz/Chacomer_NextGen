@@ -9,7 +9,7 @@ namespace AxxonContacts.Functions.Functions
 {
     /// <summary>
     /// Azure Function disparada por el Service Endpoint de Dataverse via Service Bus.
-    /// Recibe el RemoteExecutionContext nativo (JSON) y aplica la logica master/raw.
+    /// Deserializa el RemoteExecutionContext y delega el procesamiento a ContactProcessingService.
     ///
     /// Sessions deshabilitadas (IsSessionsEnabled = false):
     ///   - La queue actual no tiene sessions habilitadas.
@@ -25,34 +25,34 @@ namespace AxxonContacts.Functions.Functions
     /// </summary>
     public class ContactMasterMatchingFunction
     {
-        private readonly MasterMatchingService _matchingService;
-        private readonly ServiceBusClient _sbClient;
-        private readonly AppSettings _settings;
+        private readonly ContactProcessingService _processingService;
+        private readonly ServiceBusClient         _sbClient;
+        private readonly AppSettings              _settings;
         private readonly ILogger<ContactMasterMatchingFunction> _logger;
 
         public ContactMasterMatchingFunction(
-            MasterMatchingService matchingService,
-            ServiceBusClient sbClient,
-            AppSettings settings,
+            ContactProcessingService processingService,
+            ServiceBusClient         sbClient,
+            AppSettings              settings,
             ILogger<ContactMasterMatchingFunction> logger)
         {
-            _matchingService = matchingService;
-            _sbClient        = sbClient;
-            _settings        = settings;
-            _logger          = logger;
+            _processingService = processingService;
+            _sbClient          = sbClient;
+            _settings          = settings;
+            _logger            = logger;
         }
 
         [Function(nameof(ContactMasterMatchingFunction))]
         public async Task Run(
             [ServiceBusTrigger(
                 "%ServiceBusQueueName%",
-                Connection = "ServiceBusConnection",
+                Connection        = "ServiceBusConnection",
                 IsSessionsEnabled = false)]
             ServiceBusReceivedMessage message,
-            ServiceBusMessageActions messageActions)
+            ServiceBusMessageActions  messageActions)
         {
-            var messageId = message.MessageId;
-            var sessionId = message.SessionId;
+            var messageId     = message.MessageId;
+            var sessionId     = message.SessionId;
             var deliveryCount = message.DeliveryCount;
 
             _logger.LogInformation(
@@ -64,7 +64,7 @@ namespace AxxonContacts.Functions.Functions
 
             try
             {
-                // 1. Deserializar el payload
+                // 1. Deserializar el RemoteExecutionContext
                 payload = DeserializeMessage(message);
 
                 if (payload == null)
@@ -81,18 +81,19 @@ namespace AxxonContacts.Functions.Functions
                     return;
                 }
 
-                // 2. Renovar el lock periodicamente mientras se procesa para evitar MessageLockLost.
+                // 2. Renovar el lock periodicamente mientras se procesa.
                 // Se usa ServiceBusReceiver directamente (SDK) en lugar de messageActions para
                 // evitar el error gRPC "Unimplemented" del host de Functions.
-                await using var receiver = _sbClient.CreateReceiver(
+                await using var receiver  = _sbClient.CreateReceiver(
                     _settings.ServiceBusQueueName,
                     new ServiceBusReceiverOptions { PrefetchCount = 0 });
-                using var cts = new CancellationTokenSource();
-                var renewTask = RenewLockPeriodicallyAsync(message, receiver, cts.Token);
+                using var cts       = new CancellationTokenSource();
+                var       renewTask = RenewLockPeriodicallyAsync(message, receiver, cts.Token);
 
                 try
                 {
-                    await _matchingService.ProcessAsync(payload);
+                    // 3. Orquestar master matching + validacion RUC
+                    await _processingService.ProcessAsync(payload);
                 }
                 finally
                 {
@@ -100,7 +101,7 @@ namespace AxxonContacts.Functions.Functions
                     await renewTask;
                 }
 
-                // 3. Completar el mensaje (autoComplete = false)
+                // 4. Completar el mensaje (autoComplete = false)
                 await messageActions.CompleteMessageAsync(message);
 
                 _logger.LogInformation(
@@ -114,11 +115,7 @@ namespace AxxonContacts.Functions.Functions
                     "(SessionId={SessionId}, DeliveryCount={DeliveryCount}): {Error}",
                     messageId, sessionId, deliveryCount, ex.Message);
 
-                // No completamos el mensaje: Service Bus lo reencola automaticamente
-                // hasta alcanzar Max Delivery Count (configurado en la queue), luego va al DLQ.
-
-                // Abandonar el mensaje para que Service Bus lo reintente inmediatamente
-                // (en lugar de esperar que expire el Lock Duration)
+                // Abandonar para que Service Bus reintente inmediatamente
                 await messageActions.AbandonMessageAsync(message);
 
                 // Re-lanzar para que Application Insights registre la excepcion
@@ -133,8 +130,8 @@ namespace AxxonContacts.Functions.Functions
         /// </summary>
         private async Task RenewLockPeriodicallyAsync(
             ServiceBusReceivedMessage message,
-            ServiceBusReceiver receiver,
-            CancellationToken cancellationToken)
+            ServiceBusReceiver        receiver,
+            CancellationToken         cancellationToken)
         {
             try
             {

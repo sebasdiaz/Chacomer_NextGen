@@ -14,10 +14,11 @@ namespace AxxonContacts.Functions.Configuration
         public string DataverseUrl { get; set; } = string.Empty;
 
         /// <summary>
-        /// Nombre de la queue de Service Bus.
-        /// Ejemplo: contact-master-matching
+        /// Nombre de la queue de Service Bus para ContactMasterMatchingFunction.
+        /// Ejemplo: contacts
         /// </summary>
         public string ServiceBusQueueName { get; set; } = string.Empty;
+
 
         // ---- Solo para DESA / fallback cuando Managed Identity no esta disponible ----
 
