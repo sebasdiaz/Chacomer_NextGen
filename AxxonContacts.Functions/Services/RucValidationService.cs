@@ -152,7 +152,7 @@ namespace AxxonContacts.Functions.Services
             if (!string.IsNullOrEmpty(rucData.Estado))
             {
                 if (EstadoMap.TryGetValue(rucData.Estado, out var estadoValue))
-                    upd["axx_fiscalstate"] = new OptionSetValue(estadoValue);
+                    upd["axx_fiscalstate"] = new OptionSetValueCollection(new List<OptionSetValue> { new OptionSetValue(estadoValue) });
                 else
                     _logger.LogWarning(
                         "[RucValidationService] Estado '{Estado}' no reconocido. axx_fiscalstate no actualizado.",
