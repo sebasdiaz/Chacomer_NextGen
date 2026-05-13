@@ -75,6 +75,16 @@ DataverseClientId     = context.Configuration["DataverseClientId"],
             return new ContactProcessingService(masterMatchingService, rucValidationService, logger);
         });
 
+        // TurucApiService: proxy HTTP a la API publica de TURUC.
+        // Reutiliza el mismo HttpClient "RucApi" (mismo base address).
+        services.AddTransient<TurucApiService>(sp =>
+        {
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient        = httpClientFactory.CreateClient("RucApi");
+            var logger            = sp.GetRequiredService<ILogger<TurucApiService>>();
+            return new TurucApiService(httpClient, logger);
+        });
+
         services.AddLogging(b => b.AddConsole());
     })
     .Build();
