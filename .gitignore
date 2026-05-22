@@ -14,3 +14,9 @@ local.settings.json
 .DS_Store
 Thumbs.db
 /.claude/settings.local.json
+
+# Deploy artifacts
+deploy.zip
+publish/
+*.pubxml.user
+
