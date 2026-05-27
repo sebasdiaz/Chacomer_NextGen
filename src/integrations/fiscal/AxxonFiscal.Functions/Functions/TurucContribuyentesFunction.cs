@@ -138,6 +138,18 @@ namespace AxxonFiscal.Functions.Functions
             return await BuildResponse(req, json, status);
         }
 
+        // ── OPTIONS preflight (CORS) ─────────────────────────────────
+
+        [Function("Turuc_Options")]
+        public async Task<HttpResponseData> Options(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "options", Route = "turuc/{*any}")]
+            HttpRequestData req)
+        {
+            var resp = req.CreateResponse(HttpStatusCode.OK);
+            AddCorsHeaders(resp);
+            return await Task.FromResult(resp);
+        }
+
         // ── Helpers ──────────────────────────────────────────────────
 
         private static async Task<HttpResponseData> BuildResponse(
@@ -146,13 +158,15 @@ namespace AxxonFiscal.Functions.Functions
             if (json == null)
             {
                 var errResp = req.CreateResponse((HttpStatusCode)statusCode);
-                await errResp.WriteStringAsync("{\"error\":\"Error al conectar con la API de TURUC.\"}");
                 errResp.Headers.Add("Content-Type", "application/json; charset=utf-8");
+                AddCorsHeaders(errResp);
+                await errResp.WriteStringAsync("{\"error\":\"Error al conectar con la API de TURUC.\"}");
                 return errResp;
             }
 
             var resp = req.CreateResponse((HttpStatusCode)statusCode);
             resp.Headers.Add("Content-Type", "application/json; charset=utf-8");
+            AddCorsHeaders(resp);
             await resp.WriteStringAsync(json);
             return resp;
         }
@@ -161,8 +175,16 @@ namespace AxxonFiscal.Functions.Functions
         {
             var resp = req.CreateResponse(HttpStatusCode.BadRequest);
             resp.Headers.Add("Content-Type", "application/json; charset=utf-8");
+            AddCorsHeaders(resp);
             await resp.WriteStringAsync($"{{\"error\":\"{message}\"}}");
             return resp;
+        }
+
+        private static void AddCorsHeaders(HttpResponseData resp)
+        {
+            resp.Headers.Add("Access-Control-Allow-Origin",  "*");
+            resp.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
+            resp.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Accept");
         }
     }
 }
