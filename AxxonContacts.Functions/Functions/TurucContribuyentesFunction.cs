@@ -1,7 +1,11 @@
+using AxxonContacts.Functions.Models;
 using AxxonContacts.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Attributes;
+using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Enums;
 using Microsoft.Extensions.Logging;
+using Microsoft.OpenApi.Models;
 using System.Net;
 
 namespace AxxonContacts.Functions.Functions
@@ -34,9 +38,19 @@ namespace AxxonContacts.Functions.Functions
         // ── GET /api/turuc/contribuyente/{ruc} ───────────────────────
 
         [Function("Turuc_GetContribuyente")]
+        [OpenApiOperation(operationId: "GetContribuyente", tags: ["Contribuyentes"],
+            Summary = "Obtiene un contribuyente por RUC",
+            Description = "Consulta la API de TURUC y retorna los datos del contribuyente asociado al RUC indicado.")]
+        [OpenApiSecurity("function_key", SecuritySchemeType.ApiKey, Name = "code", In = OpenApiSecurityLocationType.Query)]
+        [OpenApiParameter(name: "ruc", In = ParameterLocation.Path, Required = true, Type = typeof(string),
+            Description = "RUC del contribuyente (ej: 80012345-0).")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json",
+            bodyType: typeof(ContribuyenteResponse), Description = "Datos del contribuyente.")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.NotFound, contentType: "application/json",
+            bodyType: typeof(ContribuyenteResponse), Description = "RUC no encontrado.")]
         public async Task<HttpResponseData> GetContribuyente(
             [HttpTrigger(AuthorizationLevel.Function, "get",
-                Route = "turuc/contribuyente/{ruc}")]
+                Route = "turuc/contribuyente/{ruc:regex(^\\d.*$)}")]
             HttpRequestData req,
             string ruc)
         {
@@ -52,6 +66,18 @@ namespace AxxonContacts.Functions.Functions
         // ── GET /api/turuc/contribuyente/search ──────────────────────
 
         [Function("Turuc_SearchContribuyentes")]
+        [OpenApiOperation(operationId: "SearchContribuyentes", tags: ["Contribuyentes"],
+            Summary = "Busca contribuyentes por nombre, RUC o documento",
+            Description = "Retorna una lista paginada de contribuyentes que coinciden con el texto de búsqueda.")]
+        [OpenApiSecurity("function_key", SecuritySchemeType.ApiKey, Name = "code", In = OpenApiSecurityLocationType.Query)]
+        [OpenApiParameter(name: "search", In = ParameterLocation.Query, Required = true, Type = typeof(string),
+            Description = "Nombre, RUC o documento. Mínimo 3 caracteres.")]
+        [OpenApiParameter(name: "page", In = ParameterLocation.Query, Required = false, Type = typeof(int),
+            Description = "Número de página (base 0). Por defecto: 0.")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json",
+            bodyType: typeof(SearchContribuyentesResponse), Description = "Lista paginada de contribuyentes.")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.BadRequest, contentType: "application/json",
+            bodyType: typeof(SearchContribuyentesResponse), Description = "Parámetro 'search' inválido.")]
         public async Task<HttpResponseData> SearchContribuyentes(
             [HttpTrigger(AuthorizationLevel.Function, "get",
                 Route = "turuc/contribuyente/search")]
@@ -76,6 +102,22 @@ namespace AxxonContacts.Functions.Functions
         // ── GET /api/turuc/contribuyente/table ───────────────────────
 
         [Function("Turuc_GetContribuyenteTable")]
+        [OpenApiOperation(operationId: "GetContribuyenteTable", tags: ["Contribuyentes"],
+            Summary = "Obtiene contribuyentes en formato DataTables",
+            Description = "Endpoint compatible con el protocolo server-side de DataTables. Máximo 20 registros por página.")]
+        [OpenApiSecurity("function_key", SecuritySchemeType.ApiKey, Name = "code", In = OpenApiSecurityLocationType.Query)]
+        [OpenApiParameter(name: "draw", In = ParameterLocation.Query, Required = true, Type = typeof(int),
+            Description = "Contador de la petición DataTables. Se retorna el mismo valor recibido.")]
+        [OpenApiParameter(name: "start", In = ParameterLocation.Query, Required = true, Type = typeof(int),
+            Description = "Índice del primer registro (offset).")]
+        [OpenApiParameter(name: "length", In = ParameterLocation.Query, Required = true, Type = typeof(int),
+            Description = "Cantidad de registros a retornar (máximo 20).")]
+        [OpenApiParameter(name: "search", In = ParameterLocation.Query, Required = true, Type = typeof(string),
+            Description = "Nombre, RUC o documento. Mínimo 3 caracteres.")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json",
+            bodyType: typeof(DataTableResponse), Description = "Respuesta DataTables con registros y totales.")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.BadRequest, contentType: "application/json",
+            bodyType: typeof(DataTableResponse), Description = "Parámetro 'search' inválido.")]
         public async Task<HttpResponseData> GetContribuyenteTable(
             [HttpTrigger(AuthorizationLevel.Function, "get",
                 Route = "turuc/contribuyente/table")]
@@ -103,6 +145,16 @@ namespace AxxonContacts.Functions.Functions
         // ── GET /api/turuc/persona-juridica ──────────────────────────
 
         [Function("Turuc_GetPersonaJuridica")]
+        [OpenApiOperation(operationId: "GetPersonaJuridica", tags: ["Personas Jurídicas"],
+            Summary = "Obtiene datos de persona jurídica por RUC",
+            Description = "Retorna información detallada de una persona jurídica registrada en la SET.")]
+        [OpenApiSecurity("function_key", SecuritySchemeType.ApiKey, Name = "code", In = OpenApiSecurityLocationType.Query)]
+        [OpenApiParameter(name: "ruc", In = ParameterLocation.Query, Required = true, Type = typeof(string),
+            Description = "RUC de la persona jurídica (ej: 80012345-0).")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json",
+            bodyType: typeof(PersonaJuridicaResponse), Description = "Datos de la persona jurídica.")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.NotFound, contentType: "application/json",
+            bodyType: typeof(PersonaJuridicaResponse), Description = "RUC no encontrado.")]
         public async Task<HttpResponseData> GetPersonaJuridica(
             [HttpTrigger(AuthorizationLevel.Function, "get",
                 Route = "turuc/persona-juridica")]
@@ -122,6 +174,16 @@ namespace AxxonContacts.Functions.Functions
         // ── GET /api/turuc/entidad-publica ───────────────────────────
 
         [Function("Turuc_GetEntidadPublica")]
+        [OpenApiOperation(operationId: "GetEntidadPublica", tags: ["Entidades Públicas"],
+            Summary = "Obtiene datos de entidad pública por RUC",
+            Description = "Retorna información detallada de una entidad pública registrada en la SET, incluyendo nivel, dirección y datos de contacto.")]
+        [OpenApiSecurity("function_key", SecuritySchemeType.ApiKey, Name = "code", In = OpenApiSecurityLocationType.Query)]
+        [OpenApiParameter(name: "ruc", In = ParameterLocation.Query, Required = true, Type = typeof(string),
+            Description = "RUC de la entidad pública (ej: 80000001-1).")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json",
+            bodyType: typeof(EntidadPublicaResponse), Description = "Datos de la entidad pública.")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.NotFound, contentType: "application/json",
+            bodyType: typeof(EntidadPublicaResponse), Description = "RUC no encontrado.")]
         public async Task<HttpResponseData> GetEntidadPublica(
             [HttpTrigger(AuthorizationLevel.Function, "get",
                 Route = "turuc/entidad-publica")]
