@@ -49,5 +49,14 @@ namespace AxxonContacts.Functions.Configuration
         public bool UseClientSecretAuth =>
             !string.IsNullOrEmpty(DataverseClientId) &&
             !string.IsNullOrEmpty(DataverseClientSecret);
+
+        // ---- API Oficial de la SET (Subsecretaria de Estado de Tributacion) ----
+
+        /// <summary>
+        /// API Key para el servicio oficial de consulta de RUC de la SET Paraguay.
+        /// Endpoint: https://servicios.set.gov.py/EsetApiWS/ApiWS/consultaRuc
+        /// Configurar en Function App → Configuration → Application Settings como "SetApiKey".
+        /// </summary>
+        public string? SetApiKey { get; set; }
     }
 }
