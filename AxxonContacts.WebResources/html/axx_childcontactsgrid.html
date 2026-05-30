@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Child Contacts</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", sans-serif;
+      font-size: 13px;
+      color: #242424;
+      background: transparent;
+      padding: 8px;
+    }
+
+    #status {
+      padding: 8px 0;
+      color: #605e5c;
+      font-style: italic;
+    }
+
+    #error {
+      display: none;
+      padding: 8px 12px;
+      background: #fde7e9;
+      border-left: 4px solid #d13438;
+      color: #a4262c;
+      border-radius: 2px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      display: none;
+    }
+
+    thead tr {
+      background: #f3f2f1;
+    }
+
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      font-weight: 600;
+      color: #323130;
+      border-bottom: 2px solid #edebe9;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 7px 12px;
+      border-bottom: 1px solid #edebe9;
+      color: #323130;
+    }
+
+    tbody tr:hover {
+      background: #f3f2f1;
+    }
+
+    .empty {
+      padding: 8px 0;
+      color: #605e5c;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Loading child contacts...</div>
+  <div id="error"></div>
+  <table id="grid">
+    <thead>
+      <tr>
+        <th>Contact Name</th>
+        <th>Legal Entity</th>
+        <th>Customer Group</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <script>
+    (function () {
+      var SELECT = "contactid,fullname,_msdyn_company_value,_msdyn_customergroupid_value";
+      var EXPAND = "msdyn_company($select=cdm_name),msdyn_customergroupid($select=msdyn_description)";
+
+      function showError(msg) {
+        var el = document.getElementById("error");
+        el.textContent = msg;
+        el.style.display = "block";
+        document.getElementById("status").style.display = "none";
+      }
+
+      function renderTable(contacts) {
+        var status = document.getElementById("status");
+        var grid = document.getElementById("grid");
+        var tbody = document.getElementById("tbody");
+
+        status.style.display = "none";
+
+        if (contacts.length === 0) {
+          status.textContent = "No child contacts found.";
+          status.style.display = "block";
+          return;
+        }
+
+        contacts.forEach(function (c) {
+          var tr = document.createElement("tr");
+
+          var tdName = document.createElement("td");
+          tdName.textContent = c.fullname || "—";
+
+          var tdCompany = document.createElement("td");
+          tdCompany.textContent = (c.msdyn_company && c.msdyn_company.cdm_name) || "—";
+
+          var tdGroup = document.createElement("td");
+          tdGroup.textContent = (c.msdyn_customergroupid && c.msdyn_customergroupid.msdyn_description) || "—";
+
+          tr.appendChild(tdName);
+          tr.appendChild(tdCompany);
+          tr.appendChild(tdGroup);
+          tbody.appendChild(tr);
+        });
+
+        grid.style.display = "table";
+      }
+
+      function loadContacts(masterContactId) {
+        var xrm = window.parent && window.parent.Xrm;
+        if (!xrm || !xrm.WebApi) {
+          showError("Xrm.WebApi not available.");
+          return;
+        }
+
+        var options = "?$select=" + SELECT + "&$expand=" + EXPAND +
+          "&$filter=_axx_mastercontactid_value eq '" + masterContactId + "'";
+
+        xrm.WebApi.retrieveMultipleRecords("contact", options).then(
+          function (result) { renderTable(result.entities); },
+          function (err) { showError("Error loading contacts: " + (err.message || JSON.stringify(err))); }
+        );
+      }
+
+      function init() {
+        var xrm = window.parent && window.parent.Xrm;
+        if (!xrm) {
+          showError("Could not access parent form context.");
+          return;
+        }
+
+        var formContext = xrm.Page;
+        if (!formContext || !formContext.data) {
+          showError("Form context not available.");
+          return;
+        }
+
+        var masterContactId = formContext.data.entity.getId();
+        if (!masterContactId) {
+          document.getElementById("status").textContent = "No record loaded.";
+          return;
+        }
+
+        // Strip curly braces if present
+        masterContactId = masterContactId.replace(/[{}]/g, "");
+        loadContacts(masterContactId);
+      }
+
+      // Wait for parent form to be ready
+      if (document.readyState === "complete") {
+        init();
+      } else {
+        window.addEventListener("load", init);
+      }
+    })();
+  </script>
+</body>
+</html>

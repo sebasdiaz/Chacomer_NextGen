@@ -2,15 +2,15 @@ import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { ChildContactsGrid, IChildContact } from "./ChildContactsGrid";
 import * as React from "react";
 
-const CONTACT_ENTITY = "contacts";
+const CONTACT_ENTITY = "contact";
 const SELECT_FIELDS = "contactid,fullname,_msdyn_company_value,_msdyn_customergroupid_value";
-const EXPAND_FIELDS = "msdyn_company($select=msdyn_name),msdyn_customergroupid($select=msdyn_name)";
+const EXPAND_FIELDS = "msdyn_company($select=cdm_name),msdyn_customergroupid($select=msdyn_description)";
 
 interface IContactEntity {
     contactid: string;
     fullname: string;
-    msdyn_company?: { msdyn_name?: string };
-    msdyn_customergroupid?: { msdyn_name?: string };
+    msdyn_company?: { cdm_name?: string };
+    msdyn_customergroupid?: { msdyn_description?: string };
 }
 
 export class MasterContactChildrenGrid implements ComponentFramework.ReactControl<IInputs, IOutputs> {
@@ -37,7 +37,7 @@ export class MasterContactChildrenGrid implements ComponentFramework.ReactContro
     public updateView(context: ComponentFramework.Context<IInputs>): React.ReactElement {
         this.context = context;
 
-        const masterContactId = context.parameters.masterContactId?.raw ?? null;
+        const masterContactId = ((context as unknown as { page?: { entityId?: string } }).page?.entityId) ?? null;
 
         if (masterContactId && masterContactId !== this.lastMasterContactId) {
             this.lastMasterContactId = masterContactId;
@@ -59,15 +59,15 @@ export class MasterContactChildrenGrid implements ComponentFramework.ReactContro
         this.errorMessage = null;
         this.notifyOutputChanged();
 
-        const options = `?$select=${SELECT_FIELDS}&$expand=${EXPAND_FIELDS}&$filter=_axx_mastercontactid_value eq ${masterContactId}`;
+        const options = `?$select=${SELECT_FIELDS}&$expand=${EXPAND_FIELDS}&$filter=_axx_mastercontactid_value eq '${masterContactId}'`;
 
         try {
             const result = await this.context.webAPI.retrieveMultipleRecords(CONTACT_ENTITY, options);
             this.contacts = (result.entities as unknown as IContactEntity[]).map((e) => ({
                 contactid: e.contactid,
                 fullname: e.fullname ?? "",
-                legalEntityName: e.msdyn_company?.msdyn_name ?? "",
-                customerGroupName: e.msdyn_customergroupid?.msdyn_name ?? "",
+                legalEntityName: e.msdyn_company?.cdm_name ?? "",
+                customerGroupName: e.msdyn_customergroupid?.msdyn_description ?? "",
             }));
             this.isLoading = false;
             this.notifyOutputChanged();
