@@ -67,13 +67,14 @@ namespace AxxonContacts.Functions.Services
                 return null;
             }
 
-            // Si ya existe un master → retornar su referencia (la validacion de RUC se sigue ejecutando)
+            // Si ya existe un master → linkear los raws que aún no estén asociados y retornar su referencia
             var existingMaster = await FindMasterByIdentificationAsync(message.MsdynIdentificationNumber);
             if (existingMaster != null)
             {
                 _logger.LogInformation(
-                    "[MasterMatchingService] Master {MasterId} ya existe para '{Identification}'.",
+                    "[MasterMatchingService] Master {MasterId} ya existe para '{Identification}'. Linkeando raws pendientes.",
                     existingMaster.Id, message.MsdynIdentificationNumber);
+                await BulkAssociateRawsToMasterAsync(message.MsdynIdentificationNumber, existingMaster.ToEntityReference());
                 return existingMaster.ToEntityReference();
             }
 

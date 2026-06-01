@@ -7,6 +7,7 @@ import {
     DataGridHeaderCell,
     DataGridRow,
     TableColumnDefinition,
+    TableColumnSizingOptions,
     createTableColumn,
     Spinner,
     MessageBar,
@@ -15,7 +16,17 @@ import {
     makeStyles,
 } from '@fluentui/react-components';
 
-export interface IChildContact {
+const SELECT_FIELDS = "contactid,fullname,_msdyn_company_value,_msdyn_customergroupid_value";
+const EXPAND_FIELDS = "msdyn_company($select=cdm_name),msdyn_customergroupid($select=msdyn_description)";
+
+interface IContactEntity {
+    contactid: string;
+    fullname: string;
+    msdyn_company?: { cdm_name?: string };
+    msdyn_customergroupid?: { msdyn_description?: string };
+}
+
+interface IChildContact {
     contactid: string;
     fullname: string;
     legalEntityName: string;
@@ -23,9 +34,8 @@ export interface IChildContact {
 }
 
 export interface IChildContactsGridProps {
-    contacts: IChildContact[];
-    isLoading: boolean;
-    errorMessage: string | null;
+    masterContactId: string | null;
+    webAPI: ComponentFramework.WebApi;
 }
 
 const useStyles = makeStyles({
@@ -45,6 +55,12 @@ const useStyles = makeStyles({
     },
 });
 
+const columnSizingOptions: TableColumnSizingOptions = {
+    fullname: { idealWidth: 200, minWidth: 140 },
+    legalEntity: { idealWidth: 180, minWidth: 120 },
+    customerGroup: { idealWidth: 160, minWidth: 100 },
+};
+
 const columns: TableColumnDefinition<IChildContact>[] = [
     createTableColumn<IChildContact>({
         columnId: 'fullname',
@@ -63,8 +79,45 @@ const columns: TableColumnDefinition<IChildContact>[] = [
     }),
 ];
 
-export const ChildContactsGrid: React.FC<IChildContactsGridProps> = ({ contacts, isLoading, errorMessage }) => {
+export const ChildContactsGrid: React.FC<IChildContactsGridProps> = ({ masterContactId, webAPI }) => {
     const styles = useStyles();
+    const [contacts, setContacts] = React.useState<IChildContact[]>([]);
+    const [isLoading, setIsLoading] = React.useState(false);
+    const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        if (!masterContactId) {
+            setContacts([]);
+            return;
+        }
+
+        let cancelled = false;
+        setIsLoading(true);
+        setErrorMessage(null);
+
+        const options = `?$select=${SELECT_FIELDS}&$expand=${EXPAND_FIELDS}&$filter=_axx_mastercontactid_value eq '${masterContactId}'`;
+
+        webAPI.retrieveMultipleRecords("contact", options)
+            .then((result) => {
+                if (cancelled) return undefined;
+                const mapped = (result.entities as unknown as IContactEntity[]).map((e) => ({
+                    contactid: e.contactid,
+                    fullname: e.fullname ?? "",
+                    legalEntityName: e.msdyn_company?.cdm_name ?? "",
+                    customerGroupName: e.msdyn_customergroupid?.msdyn_description ?? "",
+                }));
+                setContacts(mapped);
+                setIsLoading(false);
+                return undefined;
+            })
+            .catch((error: Error) => {
+                if (cancelled) return;
+                setErrorMessage(`Error loading contacts: ${error.message}`);
+                setIsLoading(false);
+            });
+
+        return () => { cancelled = true; };
+    }, [masterContactId]);
 
     if (isLoading) {
         return (
@@ -97,6 +150,8 @@ export const ChildContactsGrid: React.FC<IChildContactsGridProps> = ({ contacts,
                 columns={columns}
                 getRowId={(item: IChildContact) => item.contactid}
                 focusMode="composite"
+                resizableColumns
+                columnSizingOptions={columnSizingOptions}
             >
                 <DataGridHeader>
                     <DataGridRow>

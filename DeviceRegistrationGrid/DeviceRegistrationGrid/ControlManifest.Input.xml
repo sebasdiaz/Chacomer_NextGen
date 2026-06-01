@@ -4,7 +4,7 @@
     <external-service-usage enabled="false">
     </external-service-usage>
     <!-- Placeholder required by PCF; actual record GUID is read from context.page.entityId at runtime -->
-    <property name="masterContactId" display-name-key="MasterContactId_Display_Key" description-key="MasterContactId_Desc_Key" of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="masterContactId" display-name-key="MasterContactId_Display_Key" description-key="MasterContactId_Desc_Key" of-type="SingleLine.Text" usage="bound" required="true" />
     <resources>
       <code path="index.ts" order="1"/>
       <platform-library name="React" version="16.14.0" />
