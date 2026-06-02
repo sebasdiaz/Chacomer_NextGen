@@ -15,10 +15,11 @@ var host = new HostBuilder()
         {
             DataverseUrl          = context.Configuration["DataverseUrl"] ?? string.Empty,
             ServiceBusQueueName   = context.Configuration["ServiceBusQueueName"] ?? string.Empty,
-DataverseClientId     = context.Configuration["DataverseClientId"],
+            DataverseClientId     = context.Configuration["DataverseClientId"],
             DataverseClientSecret = context.Configuration["DataverseClientSecret"],
             ServiceBusConnection  = context.Configuration["ServiceBusConnection"],
-            ServiceBusNamespace   = context.Configuration["ServiceBusConnection__fullyQualifiedNamespace"]
+            ServiceBusNamespace   = context.Configuration["ServiceBusConnection__fullyQualifiedNamespace"],
+            SetApiKey             = context.Configuration["SetApiKey"]
         };
 
         if (string.IsNullOrWhiteSpace(settings.DataverseUrl))
@@ -83,6 +84,24 @@ DataverseClientId     = context.Configuration["DataverseClientId"],
             var httpClient        = httpClientFactory.CreateClient("RucApi");
             var logger            = sp.GetRequiredService<ILogger<TurucApiService>>();
             return new TurucApiService(httpClient, logger);
+        });
+
+        // HttpClient para la API oficial de la SET (Subsecretaria de Estado de Tributacion).
+        services.AddHttpClient("SetApi", client =>
+        {
+            client.BaseAddress = new Uri("https://servicios.set.gov.py/EsetApiWS/ApiWS/");
+            client.Timeout     = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        });
+
+        // SetApiService: proxy HTTP a la API oficial de la SET Paraguay.
+        services.AddTransient<SetApiService>(sp =>
+        {
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient        = httpClientFactory.CreateClient("SetApi");
+            var appSettings       = sp.GetRequiredService<AppSettings>();
+            var logger            = sp.GetRequiredService<ILogger<SetApiService>>();
+            return new SetApiService(httpClient, appSettings, logger);
         });
 
         services.AddLogging(b => b.AddConsole());
