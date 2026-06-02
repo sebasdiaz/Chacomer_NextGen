@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "webresources",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "AxxonContacts.WebResources", "-p", "3030", "--no-clipboard"],
+      "port": 3030
+    }
+  ]
+}

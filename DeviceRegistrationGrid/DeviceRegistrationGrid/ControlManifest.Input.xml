@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="AxxonContacts" constructor="DeviceRegistrationGrid" version="0.0.1" display-name-key="DeviceRegistrationGrid" description-key="DeviceRegistrationGrid description" control-type="virtual" >
+    <external-service-usage enabled="false">
+    </external-service-usage>
+    <!-- Placeholder required by PCF; actual record GUID is read from context.page.entityId at runtime -->
+    <property name="masterContactId" display-name-key="MasterContactId_Display_Key" description-key="MasterContactId_Desc_Key" of-type="SingleLine.Text" usage="bound" required="true" />
+    <resources>
+      <code path="index.ts" order="1"/>
+      <platform-library name="React" version="16.14.0" />
+      <platform-library name="Fluent" version="9.46.2" />
+    </resources>
+    <feature-usage>
+      <uses-feature name="WebAPI" required="true" />
+    </feature-usage>
+  </control>
+</manifest>
