@@ -16,21 +16,24 @@ import {
     makeStyles,
 } from '@fluentui/react-components';
 
-const SELECT_FIELDS = "contactid,fullname,_msdyn_company_value,_msdyn_customergroupid_value";
-const EXPAND_FIELDS = "msdyn_company($select=cdm_name),msdyn_customergroupid($select=msdyn_description)";
+const SELECT_FIELDS = "contactid,fullname,_msdyn_company_value,_msdyn_customergroupid_value,_msdyn_paymentterms_value";
+const EXPAND_FIELDS = "msdyn_company($select=cdm_name,cdm_companycode),msdyn_customergroupid($select=msdyn_description),msdyn_paymentterms($select=msdyn_description)";
 
 interface IContactEntity {
     contactid: string;
     fullname: string;
-    msdyn_company?: { cdm_name?: string };
+    msdyn_company?: { cdm_name?: string; cdm_companycode?: string };
     msdyn_customergroupid?: { msdyn_description?: string };
+    msdyn_paymentterms?: { msdyn_description?: string };
 }
 
 interface IChildContact {
     contactid: string;
     fullname: string;
     legalEntityName: string;
+    legalEntityCode: string;
     customerGroupName: string;
+    paymentTermsName: string;
 }
 
 export interface IChildContactsGridProps {
@@ -58,7 +61,9 @@ const useStyles = makeStyles({
 const columnSizingOptions: TableColumnSizingOptions = {
     fullname: { idealWidth: 200, minWidth: 140 },
     legalEntity: { idealWidth: 180, minWidth: 120 },
+    legalEntityCode: { idealWidth: 120, minWidth: 80 },
     customerGroup: { idealWidth: 160, minWidth: 100 },
+    paymentTerms: { idealWidth: 140, minWidth: 100 },
 };
 
 const columns: TableColumnDefinition<IChildContact>[] = [
@@ -73,9 +78,19 @@ const columns: TableColumnDefinition<IChildContact>[] = [
         renderCell: (item) => item.legalEntityName || '—',
     }),
     createTableColumn<IChildContact>({
+        columnId: 'legalEntityCode',
+        renderHeaderCell: () => 'Company Code',
+        renderCell: (item) => item.legalEntityCode || '—',
+    }),
+    createTableColumn<IChildContact>({
         columnId: 'customerGroup',
         renderHeaderCell: () => 'Customer Group',
         renderCell: (item) => item.customerGroupName || '—',
+    }),
+    createTableColumn<IChildContact>({
+        columnId: 'paymentTerms',
+        renderHeaderCell: () => 'Payment Terms',
+        renderCell: (item) => item.paymentTermsName || '—',
     }),
 ];
 
@@ -104,7 +119,9 @@ export const ChildContactsGrid: React.FC<IChildContactsGridProps> = ({ masterCon
                     contactid: e.contactid,
                     fullname: e.fullname ?? "",
                     legalEntityName: e.msdyn_company?.cdm_name ?? "",
+                    legalEntityCode: e.msdyn_company?.cdm_companycode ?? "",
                     customerGroupName: e.msdyn_customergroupid?.msdyn_description ?? "",
+                    paymentTermsName: e.msdyn_paymentterms?.msdyn_description ?? "",
                 }));
                 setContacts(mapped);
                 setIsLoading(false);
