@@ -16,11 +16,11 @@ const DEVICE_EXPAND = [
     "msauto_DeviceId(",
         "$select=msauto_devicenumber,msauto_name,msauto_description;",
         "$expand=",
-            "msauto_devicebrandid($select=msauto_name),",
-            "msauto_deviceclassid($select=msauto_name),",
-            "msauto_devicemodelid($select=msauto_name),",
-            "msauto_devicemodelcodeid($select=msauto_name),",
-            "msauto_configurationcodeid($select=msauto_name),",
+            "msauto_DeviceBrandId($select=msauto_name),",
+            "msauto_DeviceClassId($select=msauto_name),",
+            "msauto_DeviceModelId($select=msauto_name),",
+            "msauto_DeviceModelCodeId($select=msauto_name),",
+            "a365_configurationcodeid($select=msauto_name),",
             "a365_deviceexteriorid($select=a365_name),",
             "a365_deviceinteriorid($select=a365_name)",
     ")",
@@ -37,11 +37,11 @@ interface IDeviceEntity {
         msauto_devicenumber?: string;
         msauto_name?: string;
         msauto_description?: string;
-        msauto_devicebrandid?: { msauto_name?: string };
-        msauto_deviceclassid?: { msauto_name?: string };
-        msauto_devicemodelid?: { msauto_name?: string };
-        msauto_devicemodelcodeid?: { msauto_name?: string };
-        msauto_configurationcodeid?: { msauto_name?: string };
+        msauto_DeviceBrandId?: { msauto_name?: string };
+        msauto_DeviceClassId?: { msauto_name?: string };
+        msauto_DeviceModelId?: { msauto_name?: string };
+        msauto_DeviceModelCodeId?: { msauto_name?: string };
+        a365_configurationcodeid?: { msauto_name?: string };
         a365_deviceexteriorid?: { a365_name?: string };
         a365_deviceinteriorid?: { a365_name?: string };
     };
@@ -120,11 +120,11 @@ export class DeviceRegistrationGrid implements ComponentFramework.ReactControl<I
                 deviceNumber:      e.msauto_DeviceId?.msauto_devicenumber ?? "",
                 deviceName:        e.msauto_DeviceId?.msauto_name ?? "",
                 deviceDescription: e.msauto_DeviceId?.msauto_description ?? "",
-                brandName:         e.msauto_DeviceId?.msauto_devicebrandid?.msauto_name ?? "",
-                className:         e.msauto_DeviceId?.msauto_deviceclassid?.msauto_name ?? "",
-                modelName:         e.msauto_DeviceId?.msauto_devicemodelid?.msauto_name ?? "",
-                modelCodeName:     e.msauto_DeviceId?.msauto_devicemodelcodeid?.msauto_name ?? "",
-                configCodeName:    e.msauto_DeviceId?.msauto_configurationcodeid?.msauto_name ?? "",
+                brandName:         e.msauto_DeviceId?.msauto_DeviceBrandId?.msauto_name ?? "",
+                className:         e.msauto_DeviceId?.msauto_DeviceClassId?.msauto_name ?? "",
+                modelName:         e.msauto_DeviceId?.msauto_DeviceModelId?.msauto_name ?? "",
+                modelCodeName:     e.msauto_DeviceId?.msauto_DeviceModelCodeId?.msauto_name ?? "",
+                configCodeName:    e.msauto_DeviceId?.a365_configurationcodeid?.msauto_name ?? "",
                 exteriorName:      e.msauto_DeviceId?.a365_deviceexteriorid?.a365_name ?? "",
                 interiorName:      e.msauto_DeviceId?.a365_deviceinteriorid?.a365_name ?? "",
             }));
