@@ -19,6 +19,12 @@ namespace AxxonContacts.Functions.Configuration
         /// </summary>
         public string ServiceBusQueueName { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Nombre de la queue de Service Bus para AccountMasterMatchingFunction.
+        /// Ejemplo: account
+        /// </summary>
+        public string AccountServiceBusQueueName { get; set; } = string.Empty;
+
 
         // ---- Solo para DESA / fallback cuando Managed Identity no esta disponible ----
 
