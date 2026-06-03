@@ -7,10 +7,13 @@ const CHILD_CONTACT_FILTER = (masterContactId: string) =>
 
 const DEVICE_ENTITY = "msauto_deviceregistration";
 
-const DEVICE_SELECT = "msauto_deviceregistrationid,a365_company,_msauto_customerid_value";
+// a365_contactid is the actual lookup field to contact on this entity (verified via metadata)
+// msauto_DeviceId is the SchemaName of the device lookup (OData navigation properties use SchemaName casing)
+const DEVICE_SELECT = "msauto_deviceregistrationid,_a365_company_value,_a365_contactid_value";
 
 const DEVICE_EXPAND = [
-    "msauto_deviceid(",
+    "a365_company($select=cdm_name),",
+    "msauto_DeviceId(",
         "$select=msauto_devicenumber,msauto_name,msauto_description;",
         "$expand=",
             "msauto_devicebrandid($select=msauto_name),",
@@ -29,8 +32,8 @@ interface IChildContact {
 
 interface IDeviceEntity {
     msauto_deviceregistrationid: string;
-    a365_company?: string;
-    msauto_deviceid?: {
+    a365_company?: { cdm_name?: string };
+    msauto_DeviceId?: {
         msauto_devicenumber?: string;
         msauto_name?: string;
         msauto_description?: string;
@@ -105,25 +108,25 @@ export class DeviceRegistrationGrid implements ComponentFramework.ReactControl<I
                 return;
             }
 
-            // Step 2: get device registrations where msauto_customerid is one of the child contacts
+            // Step 2: get device registrations where a365_contactid is one of the child contacts
             // Dataverse Web API does not support the `in` operator on _value lookup fields; use OR conditions instead
-            const orFilter = childIds.map((id) => `_msauto_customerid_value eq '${id}'`).join(" or ");
+            const orFilter = childIds.map((id) => `_a365_contactid_value eq '${id}'`).join(" or ");
             const deviceOptions = `?$select=${DEVICE_SELECT}&$expand=${DEVICE_EXPAND}&$filter=(${orFilter})`;
 
             const deviceResult = await this.context.webAPI.retrieveMultipleRecords(DEVICE_ENTITY, deviceOptions);
             this.items = (deviceResult.entities as unknown as IDeviceEntity[]).map((e) => ({
                 msauto_deviceregistrationid: e.msauto_deviceregistrationid,
-                companyName:      e.a365_company ?? "",
-                deviceNumber:     e.msauto_deviceid?.msauto_devicenumber ?? "",
-                deviceName:       e.msauto_deviceid?.msauto_name ?? "",
-                deviceDescription: e.msauto_deviceid?.msauto_description ?? "",
-                brandName:        e.msauto_deviceid?.msauto_devicebrandid?.msauto_name ?? "",
-                className:        e.msauto_deviceid?.msauto_deviceclassid?.msauto_name ?? "",
-                modelName:        e.msauto_deviceid?.msauto_devicemodelid?.msauto_name ?? "",
-                modelCodeName:    e.msauto_deviceid?.msauto_devicemodelcodeid?.msauto_name ?? "",
-                configCodeName:   e.msauto_deviceid?.msauto_configurationcodeid?.msauto_name ?? "",
-                exteriorName:     e.msauto_deviceid?.a365_deviceexteriorid?.a365_name ?? "",
-                interiorName:     e.msauto_deviceid?.a365_deviceinteriorid?.a365_name ?? "",
+                companyName:       e.a365_company?.cdm_name ?? "",
+                deviceNumber:      e.msauto_DeviceId?.msauto_devicenumber ?? "",
+                deviceName:        e.msauto_DeviceId?.msauto_name ?? "",
+                deviceDescription: e.msauto_DeviceId?.msauto_description ?? "",
+                brandName:         e.msauto_DeviceId?.msauto_devicebrandid?.msauto_name ?? "",
+                className:         e.msauto_DeviceId?.msauto_deviceclassid?.msauto_name ?? "",
+                modelName:         e.msauto_DeviceId?.msauto_devicemodelid?.msauto_name ?? "",
+                modelCodeName:     e.msauto_DeviceId?.msauto_devicemodelcodeid?.msauto_name ?? "",
+                configCodeName:    e.msauto_DeviceId?.msauto_configurationcodeid?.msauto_name ?? "",
+                exteriorName:      e.msauto_DeviceId?.a365_deviceexteriorid?.a365_name ?? "",
+                interiorName:      e.msauto_DeviceId?.a365_deviceinteriorid?.a365_name ?? "",
             }));
 
             this.isLoading = false;
