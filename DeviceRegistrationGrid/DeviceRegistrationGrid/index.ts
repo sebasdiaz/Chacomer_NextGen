@@ -6,8 +6,22 @@ const CHILD_CONTACT_FILTER = (masterContactId: string) =>
     `?$select=contactid&$filter=_axx_mastercontactid_value eq '${masterContactId}'`;
 
 const DEVICE_ENTITY = "msauto_deviceregistration";
-const DEVICE_SELECT = "msauto_deviceregistrationid,msauto_name,msauto_deviceid,_a365_company_value";
-const DEVICE_EXPAND = "a365_company($select=cdm_name)";
+
+const DEVICE_SELECT = "msauto_deviceregistrationid,a365_company,_msauto_customerid_value";
+
+const DEVICE_EXPAND = [
+    "msauto_deviceid(",
+        "$select=msauto_devicenumber,msauto_name,msauto_description;",
+        "$expand=",
+            "msauto_devicebrandid($select=msauto_name),",
+            "msauto_deviceclassid($select=msauto_name),",
+            "msauto_devicemodelid($select=msauto_name),",
+            "msauto_devicemodelcodeid($select=msauto_name),",
+            "msauto_configurationcodeid($select=msauto_name),",
+            "a365_deviceexteriorid($select=a365_name),",
+            "a365_deviceinteriorid($select=a365_name)",
+    ")",
+].join("");
 
 interface IChildContact {
     contactid: string;
@@ -15,9 +29,19 @@ interface IChildContact {
 
 interface IDeviceEntity {
     msauto_deviceregistrationid: string;
-    msauto_name: string;
-    msauto_deviceid: string;
-    a365_company?: { cdm_name?: string };
+    a365_company?: string;
+    msauto_deviceid?: {
+        msauto_devicenumber?: string;
+        msauto_name?: string;
+        msauto_description?: string;
+        msauto_devicebrandid?: { msauto_name?: string };
+        msauto_deviceclassid?: { msauto_name?: string };
+        msauto_devicemodelid?: { msauto_name?: string };
+        msauto_devicemodelcodeid?: { msauto_name?: string };
+        msauto_configurationcodeid?: { msauto_name?: string };
+        a365_deviceexteriorid?: { a365_name?: string };
+        a365_deviceinteriorid?: { a365_name?: string };
+    };
 }
 
 export class DeviceRegistrationGrid implements ComponentFramework.ReactControl<IInputs, IOutputs> {
@@ -81,16 +105,24 @@ export class DeviceRegistrationGrid implements ComponentFramework.ReactControl<I
                 return;
             }
 
-            // Step 2: get device registrations where a365_contactid is one of the child contacts
+            // Step 2: get device registrations where msauto_customerid is one of the child contacts
             const inFilter = childIds.map((id) => `'${id}'`).join(",");
-            const deviceOptions = `?$select=${DEVICE_SELECT}&$expand=${DEVICE_EXPAND}&$filter=_a365_contactid_value in (${inFilter})`;
+            const deviceOptions = `?$select=${DEVICE_SELECT}&$expand=${DEVICE_EXPAND}&$filter=_msauto_customerid_value in (${inFilter})`;
 
             const deviceResult = await this.context.webAPI.retrieveMultipleRecords(DEVICE_ENTITY, deviceOptions);
             this.items = (deviceResult.entities as unknown as IDeviceEntity[]).map((e) => ({
                 msauto_deviceregistrationid: e.msauto_deviceregistrationid,
-                msauto_name: e.msauto_name ?? "",
-                msauto_deviceid: e.msauto_deviceid ?? "",
-                companyName: e.a365_company?.cdm_name ?? "",
+                companyName:      e.a365_company ?? "",
+                deviceNumber:     e.msauto_deviceid?.msauto_devicenumber ?? "",
+                deviceName:       e.msauto_deviceid?.msauto_name ?? "",
+                deviceDescription: e.msauto_deviceid?.msauto_description ?? "",
+                brandName:        e.msauto_deviceid?.msauto_devicebrandid?.msauto_name ?? "",
+                className:        e.msauto_deviceid?.msauto_deviceclassid?.msauto_name ?? "",
+                modelName:        e.msauto_deviceid?.msauto_devicemodelid?.msauto_name ?? "",
+                modelCodeName:    e.msauto_deviceid?.msauto_devicemodelcodeid?.msauto_name ?? "",
+                configCodeName:   e.msauto_deviceid?.msauto_configurationcodeid?.msauto_name ?? "",
+                exteriorName:     e.msauto_deviceid?.a365_deviceexteriorid?.a365_name ?? "",
+                interiorName:     e.msauto_deviceid?.a365_deviceinteriorid?.a365_name ?? "",
             }));
 
             this.isLoading = false;
