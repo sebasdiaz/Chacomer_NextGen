@@ -13,8 +13,9 @@ var host = new HostBuilder()
     {
         var settings = new AppSettings
         {
-            DataverseUrl          = context.Configuration["DataverseUrl"] ?? string.Empty,
-            ServiceBusQueueName   = context.Configuration["ServiceBusQueueName"] ?? string.Empty,
+            DataverseUrl               = context.Configuration["DataverseUrl"] ?? string.Empty,
+            ServiceBusQueueName        = context.Configuration["ServiceBusQueueName"] ?? string.Empty,
+            AccountServiceBusQueueName = context.Configuration["AccountServiceBusQueueName"] ?? string.Empty,
             DataverseClientId     = context.Configuration["DataverseClientId"],
             DataverseClientSecret = context.Configuration["DataverseClientSecret"],
             ServiceBusConnection  = context.Configuration["ServiceBusConnection"],
@@ -48,6 +49,14 @@ var host = new HostBuilder()
             var orgService = factory.CreateOrganizationService();
             var logger     = sp.GetRequiredService<ILogger<MasterMatchingService>>();
             return new MasterMatchingService(orgService, logger);
+        });
+
+        services.AddTransient<AccountMasterMatchingService>(sp =>
+        {
+            var factory    = sp.GetRequiredService<DataverseClientFactory>();
+            var orgService = factory.CreateOrganizationService();
+            var logger     = sp.GetRequiredService<ILogger<AccountMasterMatchingService>>();
+            return new AccountMasterMatchingService(orgService, logger);
         });
 
         // HttpClient para la API de TURUC (RUC validation)
