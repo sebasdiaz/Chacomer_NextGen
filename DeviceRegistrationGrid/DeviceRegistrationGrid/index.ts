@@ -106,8 +106,9 @@ export class DeviceRegistrationGrid implements ComponentFramework.ReactControl<I
             }
 
             // Step 2: get device registrations where msauto_customerid is one of the child contacts
-            const inFilter = childIds.map((id) => `'${id}'`).join(",");
-            const deviceOptions = `?$select=${DEVICE_SELECT}&$expand=${DEVICE_EXPAND}&$filter=_msauto_customerid_value in (${inFilter})`;
+            // Dataverse Web API does not support the `in` operator on _value lookup fields; use OR conditions instead
+            const orFilter = childIds.map((id) => `_msauto_customerid_value eq '${id}'`).join(" or ");
+            const deviceOptions = `?$select=${DEVICE_SELECT}&$expand=${DEVICE_EXPAND}&$filter=(${orFilter})`;
 
             const deviceResult = await this.context.webAPI.retrieveMultipleRecords(DEVICE_ENTITY, deviceOptions);
             this.items = (deviceResult.entities as unknown as IDeviceEntity[]).map((e) => ({
