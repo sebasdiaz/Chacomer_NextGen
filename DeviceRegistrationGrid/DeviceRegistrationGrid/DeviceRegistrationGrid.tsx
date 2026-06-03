@@ -22,7 +22,7 @@ const CHILD_CONTACT_SELECT = "?$select=contactid&$filter=_axx_mastercontactid_va
 
 const DEVICE_ENTITY = "msauto_deviceregistration";
 
-const DEVICE_SELECT = "msauto_deviceregistrationid,_a365_company_value,_a365_contactid_value";
+const DEVICE_SELECT = "msauto_deviceregistrationid,_a365_company_value,_msauto_customerid_value";
 
 const DEVICE_EXPAND = [
     "a365_company($select=cdm_name),",
@@ -208,7 +208,7 @@ export const DeviceRegistrationGridView: React.FC<IDeviceRegistrationGridProps> 
 
             // Step 2: device registrations where a365_contactid is one of the child contacts
             // Note: Dataverse Web API does not support `in` on _value lookup fields — use OR conditions
-            const orFilter = childIds.map((id) => `_a365_contactid_value eq '${id}'`).join(" or ");
+            const orFilter = childIds.map((id) => `_msauto_customerid_value eq '${id}'`).join(" or ");
             const deviceOptions = `?$select=${DEVICE_SELECT}&$expand=${DEVICE_EXPAND}&$filter=(${orFilter})`;
 
             const deviceResult = await webAPI.retrieveMultipleRecords(DEVICE_ENTITY, deviceOptions);
