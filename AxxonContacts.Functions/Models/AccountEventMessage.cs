@@ -46,6 +46,10 @@ namespace AxxonContacts.Functions.Models
         [JsonPropertyName("masterAccountId")]
         public Guid? MasterAccountId { get; set; }
 
+        // ── Dual Write ───────────────────────────────────────────────
+        [JsonPropertyName("msdynCompany")]
+        public Guid? MsdynCompany { get; set; }
+
         // ── Clave de matching ────────────────────────────────────────
         /// <summary>Campo de identificacion unica. Coincide con el SessionId de Service Bus.</summary>
         [JsonPropertyName("msdynIdentificationNumber")]

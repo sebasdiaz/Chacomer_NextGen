@@ -105,7 +105,7 @@ namespace AxxonContacts.Functions.Services
             {
                 var record = await Task.Run(() =>
                     _service.Retrieve(EntityLogicalName, message.AccountId,
-                        new ColumnSet("name", IdentificationNumber, IsMaster, MasterAccountId)));
+                        new ColumnSet("name", IdentificationNumber, IsMaster, MasterAccountId, "msdyn_company")));
 
                 if (string.IsNullOrWhiteSpace(message.Name))
                     message.Name = record.GetAttributeValue<string>("name");
@@ -113,6 +113,7 @@ namespace AxxonContacts.Functions.Services
                     message.MsdynIdentificationNumber = record.GetAttributeValue<string>(IdentificationNumber);
                 message.IsMaster        = record.GetAttributeValue<bool>(IsMaster);
                 message.MasterAccountId = record.GetAttributeValue<EntityReference>(MasterAccountId)?.Id ?? message.MasterAccountId;
+                message.MsdynCompany    ??= record.GetAttributeValue<EntityReference>("msdyn_company")?.Id;
 
                 return message;
             }
@@ -206,12 +207,21 @@ namespace AxxonContacts.Functions.Services
             SetString(e, "description",   m.Description);
             SetString(e, IdentificationNumber, m.MsdynIdentificationNumber);
 
+            // msdyn_company requerido por plugin de Dual Write
+            SetRef(e, "msdyn_company", "cdm_company", m.MsdynCompany);
+
             return e;
         }
 
         private static void SetString(Entity e, string field, string? value)
         {
             if (!string.IsNullOrEmpty(value)) e[field] = value;
+        }
+
+        private static void SetRef(Entity e, string field, string logicalName, Guid? id)
+        {
+            if (id.HasValue && id.Value != Guid.Empty)
+                e[field] = new EntityReference(logicalName, id.Value);
         }
 
         // ────────────────────────────────────────────────────────────
