@@ -195,6 +195,8 @@ namespace AxxonContacts.Functions.Services
             var e = new Entity(EntityLogicalName);
 
             e[IsMaster] = true;
+            // Evita sincronizacion via Dual Write en el registro master
+            e["customertypecode"] = new OptionSetValue(12);
 
             // name es ApplicationRequired: usar identification como fallback si viene vacío
             var masterName = !string.IsNullOrEmpty(m.Name)
