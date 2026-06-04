@@ -44,12 +44,10 @@ namespace AxxonContacts.Functions.Services
             bool isCreate = string.Equals(message.TriggerMessage, "Create", StringComparison.OrdinalIgnoreCase);
             bool isUpdate = string.Equals(message.TriggerMessage, "Update", StringComparison.OrdinalIgnoreCase);
 
-            bool isUpdateWithIdentification = isUpdate && !string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber);
-
-            if (!isCreate && !isUpdateWithIdentification)
+            if (!isCreate && !isUpdate)
             {
                 _logger.LogInformation(
-                    "[MasterMatchingService] Evento '{Trigger}' ignorado (sin identification o trigger no relevante).",
+                    "[MasterMatchingService] Evento '{Trigger}' ignorado (trigger no relevante).",
                     message.TriggerMessage);
                 return null;
             }
