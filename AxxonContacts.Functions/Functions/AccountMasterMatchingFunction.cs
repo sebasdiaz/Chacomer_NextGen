@@ -24,15 +24,15 @@ namespace AxxonContacts.Functions.Functions
     /// </summary>
     public class AccountMasterMatchingFunction
     {
-        private readonly AccountMasterMatchingService _matchingService;
+        private readonly AccountProcessingService _processingService;
         private readonly ILogger<AccountMasterMatchingFunction> _logger;
 
         public AccountMasterMatchingFunction(
-            AccountMasterMatchingService matchingService,
+            AccountProcessingService processingService,
             ILogger<AccountMasterMatchingFunction> logger)
         {
-            _matchingService = matchingService;
-            _logger          = logger;
+            _processingService = processingService;
+            _logger            = logger;
         }
 
         [Function(nameof(AccountMasterMatchingFunction))]
@@ -74,8 +74,8 @@ namespace AxxonContacts.Functions.Functions
                     return;
                 }
 
-                // 2. Crear master y linkear el raw
-                await _matchingService.ProcessAsync(payload);
+                // 2. Crear/localizar master, linkear raws y validar RUC contra SET
+                await _processingService.ProcessAsync(payload);
 
                 // 3. Completar el mensaje (autoComplete = false)
                 await messageActions.CompleteMessageAsync(message);

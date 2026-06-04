@@ -63,12 +63,29 @@ var host = new HostBuilder()
             return new RucValidationService(httpClient, orgService, logger);
         });
 
+        services.AddTransient<SetRucValidationService>(sp =>
+        {
+            var setApi     = sp.GetRequiredService<SetApiService>();
+            var factory    = sp.GetRequiredService<DataverseClientFactory>();
+            var orgService = factory.CreateOrganizationService();
+            var logger     = sp.GetRequiredService<ILogger<SetRucValidationService>>();
+            return new SetRucValidationService(setApi, orgService, logger);
+        });
+
         services.AddTransient<ContactProcessingService>(sp =>
         {
-            var masterMatchingService = sp.GetRequiredService<MasterMatchingService>();
-            var rucValidationService  = sp.GetRequiredService<RucValidationService>();
-            var logger                = sp.GetRequiredService<ILogger<ContactProcessingService>>();
-            return new ContactProcessingService(masterMatchingService, rucValidationService, logger);
+            var masterMatchingService   = sp.GetRequiredService<MasterMatchingService>();
+            var setRucValidationService = sp.GetRequiredService<SetRucValidationService>();
+            var logger                  = sp.GetRequiredService<ILogger<ContactProcessingService>>();
+            return new ContactProcessingService(masterMatchingService, setRucValidationService, logger);
+        });
+
+        services.AddTransient<AccountProcessingService>(sp =>
+        {
+            var matchingService        = sp.GetRequiredService<AccountMasterMatchingService>();
+            var setRucValidationService = sp.GetRequiredService<SetRucValidationService>();
+            var logger                  = sp.GetRequiredService<ILogger<AccountProcessingService>>();
+            return new AccountProcessingService(matchingService, setRucValidationService, logger);
         });
 
         // TurucApiService: proxy HTTP a la API publica de TURUC.
