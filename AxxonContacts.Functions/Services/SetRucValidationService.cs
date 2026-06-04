@@ -110,8 +110,7 @@ namespace AxxonContacts.Functions.Services
                     {
                         if (EstadoMap.TryGetValue(estado, out var estadoValue))
                         {
-                            upd["axx_fiscalstate"] = new OptionSetValueCollection(
-                                new List<OptionSetValue> { new OptionSetValue(estadoValue) });
+                            upd["axx_fiscalstate"] = new OptionSetValue(estadoValue);
 
                             _logger.LogInformation(
                                 "[SetRucValidationService] Master {MasterId} | Estado={Estado} → axx_fiscalstate={Value}",
