@@ -61,10 +61,20 @@ namespace AxxonContacts.Functions.Services
                 return null;
             }
 
+            // Si identification no llego en el payload (Step sin PreImage completo),
+            // se busca directamente en Dataverse.
+            if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber))
+            {
+                _logger.LogInformation(
+                    "[MasterMatchingService] IdentificationNumber ausente en payload. Recuperando Contact {ContactId} de Dataverse.",
+                    message.ContactId);
+                message = await EnrichFromDataverseAsync(message);
+            }
+
             // Identificacion requerida
             if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber))
             {
-                _logger.LogWarning("[MasterMatchingService] IdentificationNumber vacio. Skip.");
+                _logger.LogWarning("[MasterMatchingService] IdentificationNumber vacio tras enrich. Skip.");
                 return null;
             }
 
@@ -92,6 +102,37 @@ namespace AxxonContacts.Functions.Services
                 message.ContactId, newMasterRef.Id);
 
             return newMasterRef;
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // EnrichFromDataverse
+        // ────────────────────────────────────────────────────────────
+
+        private async Task<ContactEventMessage> EnrichFromDataverseAsync(ContactEventMessage message)
+        {
+            try
+            {
+                var record = await Task.Run(() =>
+                    _service.Retrieve(EntityLogicalName, message.ContactId,
+                        new ColumnSet(IsMaster, MasterContactId, IdentificationNumber,
+                            "firstname", "lastname", "mobilephone", "emailaddress1")));
+
+                if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber))
+                    message.MsdynIdentificationNumber = record.GetAttributeValue<string>(IdentificationNumber);
+                message.IsMaster = record.GetAttributeValue<bool>(IsMaster);
+                message.MasterContactId = record.GetAttributeValue<EntityReference>(MasterContactId)?.Id ?? message.MasterContactId;
+                if (string.IsNullOrWhiteSpace(message.FirstName))
+                    message.FirstName = record.GetAttributeValue<string>("firstname");
+                if (string.IsNullOrWhiteSpace(message.LastName))
+                    message.LastName = record.GetAttributeValue<string>("lastname");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "[MasterMatchingService] No se pudo recuperar Contact {ContactId} de Dataverse. Usando payload original.",
+                    message.ContactId);
+            }
+            return message;
         }
 
         // ────────────────────────────────────────────────────────────
