@@ -9,8 +9,13 @@ namespace AxxonContacts.Functions.Services
     /// </summary>
     public static class AccountExecutionContextParser
     {
-        public static AccountEventMessage Parse(string json)
+        public static AccountEventMessage Parse(string raw)
         {
+            // Dataverse puede envolver el body con framing AMQP (byte 0x40 = '@').
+            // Extraemos el JSON real buscando el primer '{'.
+            var jsonStart = raw.IndexOf('{');
+            var json = jsonStart >= 0 ? raw[jsonStart..] : raw;
+
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
