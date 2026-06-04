@@ -27,9 +27,23 @@ namespace AxxonContacts.Functions.Services
         public Task<(string? json, int statusCode)> SearchContribuyentesAsync(string search, int page)
             => GetAsync($"search?search={Uri.EscapeDataString(search)}&page={page}");
 
-        /// <summary>GET /api/contribuyente/table?draw={draw}&amp;start={start}&amp;length={length}&amp;search={search}</summary>
+        /// <summary>
+        /// POST /api/contribuyente/table (DataTables server-side processing).
+        /// TURUC espera un POST con application/x-www-form-urlencoded, no GET con query params.
+        /// El campo de busqueda sigue el formato DataTables: search[value].
+        /// </summary>
         public Task<(string? json, int statusCode)> GetTableAsync(int draw, int start, int length, string search)
-            => GetAsync($"table?draw={draw}&start={start}&length={length}&search={Uri.EscapeDataString(search)}");
+        {
+            var formData = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("draw",           draw.ToString()),
+                new KeyValuePair<string, string>("start",          start.ToString()),
+                new KeyValuePair<string, string>("length",         length.ToString()),
+                new KeyValuePair<string, string>("search[value]",  search),
+                new KeyValuePair<string, string>("search[regex]",  "false"),
+            });
+            return PostAsync("table", formData);
+        }
 
         /// <summary>GET /api/contribuyente/persona-juridica?ruc={ruc}</summary>
         public Task<(string? json, int statusCode)> GetPersonaJuridicaAsync(string ruc)
@@ -40,6 +54,35 @@ namespace AxxonContacts.Functions.Services
             => GetAsync($"entidad-publica?ruc={Uri.EscapeDataString(ruc)}");
 
         // ── Implementación común ──────────────────────────────────────
+
+        private async Task<(string? json, int statusCode)> PostAsync(string relativeUrl, HttpContent content)
+        {
+            _logger.LogInformation("[TurucApiService] POST {Url}", relativeUrl);
+
+            try
+            {
+                var response = await _httpClient.PostAsync(relativeUrl, content);
+                var body     = await response.Content.ReadAsStringAsync();
+                var status   = (int)response.StatusCode;
+
+                if (!response.IsSuccessStatusCode)
+                    _logger.LogWarning(
+                        "[TurucApiService] HTTP {Status} para '{Url}'. Body={Body}",
+                        status, relativeUrl, body);
+
+                return (body, status);
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "[TurucApiService] Error de red llamando '{Url}'.", relativeUrl);
+                return (null, 502);
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogError(ex, "[TurucApiService] Timeout llamando '{Url}'.", relativeUrl);
+                return (null, 504);
+            }
+        }
 
         private async Task<(string? json, int statusCode)> GetAsync(string relativeUrl)
         {
