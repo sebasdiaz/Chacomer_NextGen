@@ -10,8 +10,11 @@ namespace AxxonContacts.Functions.Services
     /// </summary>
     public static class ExecutionContextParser
     {
-        public static ContactEventMessage Parse(string json)
+        public static ContactEventMessage Parse(string raw)
         {
+            var jsonStart = raw.IndexOf('{');
+            var json = jsonStart >= 0 ? raw[jsonStart..] : raw;
+
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
