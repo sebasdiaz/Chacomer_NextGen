@@ -42,14 +42,15 @@ namespace AxxonContacts.Functions.Services
             // En Dual Write el contacto se crea primero sin RUC y se actualiza despues con el campo,
             // por lo que el evento relevante para crear el master puede ser un Update.
             bool isCreate = string.Equals(message.TriggerMessage, "Create", StringComparison.OrdinalIgnoreCase);
-            bool isUpdateWithNewIdentification = string.Equals(message.TriggerMessage, "Update", StringComparison.OrdinalIgnoreCase)
-                                                 && message.IdentificationNumberChanged;
+            bool isUpdate = string.Equals(message.TriggerMessage, "Update", StringComparison.OrdinalIgnoreCase);
 
-            if (!isCreate && !isUpdateWithNewIdentification)
+            bool isUpdateWithIdentification = isUpdate && !string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber);
+
+            if (!isCreate && !isUpdateWithIdentification)
             {
                 _logger.LogInformation(
-                    "[MasterMatchingService] Evento '{Trigger}' ignorado (IdentificationChanged={Changed}).",
-                    message.TriggerMessage, message.IdentificationNumberChanged);
+                    "[MasterMatchingService] Evento '{Trigger}' ignorado (sin identification o trigger no relevante).",
+                    message.TriggerMessage);
                 return null;
             }
 

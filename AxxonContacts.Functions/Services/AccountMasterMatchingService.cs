@@ -39,14 +39,18 @@ namespace AxxonContacts.Functions.Services
                 message.AccountId, message.MsdynIdentificationNumber, message.TriggerMessage);
 
             bool isCreate = string.Equals(message.TriggerMessage, "Create", StringComparison.OrdinalIgnoreCase);
-            bool isUpdateWithNewIdentification = string.Equals(message.TriggerMessage, "Update", StringComparison.OrdinalIgnoreCase)
-                                                 && message.IdentificationNumberChanged;
+            bool isUpdate = string.Equals(message.TriggerMessage, "Update", StringComparison.OrdinalIgnoreCase);
 
-            if (!isCreate && !isUpdateWithNewIdentification)
+            // Para Update: procesar si el account tiene identification (venga del Target o del PreImage).
+            // No es suficiente chequear que cambio en este update; puede haberse seteado antes y el master
+            // nunca fue creado (ej. Dual Write actualiza name en un segundo paso).
+            bool isUpdateWithIdentification = isUpdate && !string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber);
+
+            if (!isCreate && !isUpdateWithIdentification)
             {
                 _logger.LogInformation(
-                    "[AccountMasterMatchingService] Evento '{Trigger}' ignorado (IdentificationChanged={Changed}).",
-                    message.TriggerMessage, message.IdentificationNumberChanged);
+                    "[AccountMasterMatchingService] Evento '{Trigger}' ignorado (sin identification o trigger no relevante).",
+                    message.TriggerMessage);
                 return null;
             }
 
