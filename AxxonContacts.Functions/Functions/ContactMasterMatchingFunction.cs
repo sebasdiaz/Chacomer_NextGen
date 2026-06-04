@@ -1,4 +1,3 @@
-using AxxonContacts.Functions.Configuration;
 using AxxonContacts.Functions.Models;
 using AxxonContacts.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
@@ -22,23 +21,18 @@ namespace AxxonContacts.Functions.Functions
     ///
     /// autoComplete = false (configurado en host.json):
     ///   - El mensaje se completa manualmente via messageActions.CompleteMessageAsync().
+    ///   - La renovacion del lock es manejada automaticamente por el host (maxAutoRenewDuration en host.json).
     /// </summary>
     public class ContactMasterMatchingFunction
     {
         private readonly ContactProcessingService _processingService;
-        private readonly ServiceBusClient         _sbClient;
-        private readonly AppSettings              _settings;
         private readonly ILogger<ContactMasterMatchingFunction> _logger;
 
         public ContactMasterMatchingFunction(
             ContactProcessingService processingService,
-            ServiceBusClient         sbClient,
-            AppSettings              settings,
             ILogger<ContactMasterMatchingFunction> logger)
         {
             _processingService = processingService;
-            _sbClient          = sbClient;
-            _settings          = settings;
             _logger            = logger;
         }
 
@@ -81,27 +75,10 @@ namespace AxxonContacts.Functions.Functions
                     return;
                 }
 
-                // 2. Renovar el lock periodicamente mientras se procesa.
-                // Se usa ServiceBusReceiver directamente (SDK) en lugar de messageActions para
-                // evitar el error gRPC "Unimplemented" del host de Functions.
-                await using var receiver  = _sbClient.CreateReceiver(
-                    _settings.ServiceBusQueueName,
-                    new ServiceBusReceiverOptions { PrefetchCount = 0 });
-                using var cts       = new CancellationTokenSource();
-                var       renewTask = RenewLockPeriodicallyAsync(message, receiver, cts.Token);
+                // 2. Orquestar master matching + validacion RUC
+                await _processingService.ProcessAsync(payload);
 
-                try
-                {
-                    // 3. Orquestar master matching + validacion RUC
-                    await _processingService.ProcessAsync(payload);
-                }
-                finally
-                {
-                    cts.Cancel();
-                    await renewTask;
-                }
-
-                // 4. Completar el mensaje (autoComplete = false)
+                // 3. Completar el mensaje (autoComplete = false)
                 await messageActions.CompleteMessageAsync(message);
 
                 _logger.LogInformation(
@@ -120,38 +97,6 @@ namespace AxxonContacts.Functions.Functions
 
                 // Re-lanzar para que Application Insights registre la excepcion
                 throw;
-            }
-        }
-
-        /// <summary>
-        /// Renueva el lock cada 30s usando el SDK de Azure.Messaging.ServiceBus directamente.
-        /// Evita el error gRPC "Unimplemented" que ocurre al usar ServiceBusMessageActions.RenewMessageLockAsync.
-        /// PrefetchCount=0 garantiza que el receiver auxiliar no consuma mensajes de la queue.
-        /// </summary>
-        private async Task RenewLockPeriodicallyAsync(
-            ServiceBusReceivedMessage message,
-            ServiceBusReceiver        receiver,
-            CancellationToken         cancellationToken)
-        {
-            try
-            {
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
-                    if (cancellationToken.IsCancellationRequested) break;
-
-                    await receiver.RenewMessageLockAsync(message, cancellationToken);
-                    _logger.LogDebug(
-                        "[ContactMasterMatchingFunction] Lock renovado para mensaje {MessageId}.",
-                        message.MessageId);
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "[ContactMasterMatchingFunction] Error renovando lock del mensaje {MessageId}.",
-                    message.MessageId);
             }
         }
 

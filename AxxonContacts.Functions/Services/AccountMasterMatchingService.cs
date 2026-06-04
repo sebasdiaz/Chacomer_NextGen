@@ -156,7 +156,12 @@ namespace AxxonContacts.Functions.Services
 
             e[IsMaster] = true;
 
-            SetString(e, "name",          m.Name);
+            // name es ApplicationRequired: usar identification como fallback si viene vacío
+            var masterName = !string.IsNullOrEmpty(m.Name)
+                ? m.Name
+                : m.MsdynIdentificationNumber;
+            SetString(e, "name", masterName);
+
             SetString(e, "telephone1",    m.Telephone1);
             SetString(e, "emailaddress1", m.EmailAddress1);
             SetString(e, "description",   m.Description);
