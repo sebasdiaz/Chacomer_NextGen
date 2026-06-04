@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="AxxonContacts" constructor="DnitResponseViewer" version="0.0.1"
+           display-name-key="DnitResponseViewer" description-key="DnitResponseViewer_Desc"
+           control-type="virtual">
+    <external-service-usage enabled="false" />
+    <property name="dnitResponse"
+              display-name-key="DnitResponse_Display_Key"
+              description-key="DnitResponse_Desc_Key"
+              of-type="Multiple"
+              usage="bound"
+              required="false" />
+    <resources>
+      <code path="index.ts" order="1" />
+      <platform-library name="React" version="16.14.0" />
+      <platform-library name="Fluent" version="9.46.2" />
+    </resources>
+  </control>
+</manifest>
