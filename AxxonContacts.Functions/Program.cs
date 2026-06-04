@@ -1,5 +1,3 @@
-using Azure.Identity;
-using Azure.Messaging.ServiceBus;
 using AxxonContacts.Functions.Configuration;
 using AxxonContacts.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
@@ -18,8 +16,6 @@ var host = new HostBuilder()
             AccountServiceBusQueueName = context.Configuration["AccountServiceBusQueueName"] ?? string.Empty,
             DataverseClientId     = context.Configuration["DataverseClientId"],
             DataverseClientSecret = context.Configuration["DataverseClientSecret"],
-            ServiceBusConnection  = context.Configuration["ServiceBusConnection"],
-            ServiceBusNamespace   = context.Configuration["ServiceBusConnection__fullyQualifiedNamespace"],
             SetApiKey             = context.Configuration["SetApiKey"]
         };
 
@@ -28,16 +24,6 @@ var host = new HostBuilder()
                 "La variable de entorno 'DataverseUrl' no esta configurada.");
 
         services.AddSingleton(settings);
-
-        // ServiceBusClient singleton para renovacion directa de locks (evita el gRPC del host).
-        // Managed Identity (produccion): ServiceBusConnection__fullyQualifiedNamespace
-        // Connection string (local/SAS):  ServiceBusConnection
-        ServiceBusClient sbClient = !string.IsNullOrEmpty(settings.ServiceBusNamespace)
-            ? new ServiceBusClient(settings.ServiceBusNamespace, new DefaultAzureCredential())
-            : new ServiceBusClient(settings.ServiceBusConnection
-                ?? throw new InvalidOperationException(
-                    "Configurar 'ServiceBusConnection' o 'ServiceBusConnection__fullyQualifiedNamespace'."));
-        services.AddSingleton(sbClient);
 
         // DataverseClientFactory Transient: cada invocacion obtiene su propio ServiceClient.
         // Sessions de Service Bus garantizan maxConcurrentCallsPerSession=1 por cliente,

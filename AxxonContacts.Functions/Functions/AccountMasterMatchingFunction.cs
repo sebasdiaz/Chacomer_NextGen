@@ -1,4 +1,3 @@
-using AxxonContacts.Functions.Configuration;
 using AxxonContacts.Functions.Models;
 using AxxonContacts.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
@@ -21,23 +20,18 @@ namespace AxxonContacts.Functions.Functions
     ///
     /// autoComplete = false (configurado en host.json):
     ///   - El mensaje se completa manualmente via messageActions.CompleteMessageAsync().
+    ///   - La renovacion del lock es manejada automaticamente por el host (maxAutoRenewDuration en host.json).
     /// </summary>
     public class AccountMasterMatchingFunction
     {
         private readonly AccountMasterMatchingService _matchingService;
-        private readonly ServiceBusClient             _sbClient;
-        private readonly AppSettings                  _settings;
         private readonly ILogger<AccountMasterMatchingFunction> _logger;
 
         public AccountMasterMatchingFunction(
             AccountMasterMatchingService matchingService,
-            ServiceBusClient             sbClient,
-            AppSettings                  settings,
             ILogger<AccountMasterMatchingFunction> logger)
         {
             _matchingService = matchingService;
-            _sbClient        = sbClient;
-            _settings        = settings;
             _logger          = logger;
         }
 
@@ -80,25 +74,10 @@ namespace AxxonContacts.Functions.Functions
                     return;
                 }
 
-                // 2. Renovar el lock periodicamente mientras se procesa
-                await using var receiver  = _sbClient.CreateReceiver(
-                    _settings.AccountServiceBusQueueName,
-                    new ServiceBusReceiverOptions { PrefetchCount = 0 });
-                using var cts       = new CancellationTokenSource();
-                var       renewTask = RenewLockPeriodicallyAsync(message, receiver, cts.Token);
+                // 2. Crear master y linkear el raw
+                await _matchingService.ProcessAsync(payload);
 
-                try
-                {
-                    // 3. Crear master y linkear el raw
-                    await _matchingService.ProcessAsync(payload);
-                }
-                finally
-                {
-                    cts.Cancel();
-                    await renewTask;
-                }
-
-                // 4. Completar el mensaje (autoComplete = false)
+                // 3. Completar el mensaje (autoComplete = false)
                 await messageActions.CompleteMessageAsync(message);
 
                 _logger.LogInformation(
@@ -114,36 +93,6 @@ namespace AxxonContacts.Functions.Functions
 
                 await messageActions.AbandonMessageAsync(message);
                 throw;
-            }
-        }
-
-        /// <summary>
-        /// Renueva el lock cada 30s usando el SDK directo para evitar el error gRPC "Unimplemented".
-        /// </summary>
-        private async Task RenewLockPeriodicallyAsync(
-            ServiceBusReceivedMessage message,
-            ServiceBusReceiver        receiver,
-            CancellationToken         cancellationToken)
-        {
-            try
-            {
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
-                    if (cancellationToken.IsCancellationRequested) break;
-
-                    await receiver.RenewMessageLockAsync(message, cancellationToken);
-                    _logger.LogDebug(
-                        "[AccountMasterMatchingFunction] Lock renovado para mensaje {MessageId}.",
-                        message.MessageId);
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "[AccountMasterMatchingFunction] Error renovando lock del mensaje {MessageId}.",
-                    message.MessageId);
             }
         }
 
