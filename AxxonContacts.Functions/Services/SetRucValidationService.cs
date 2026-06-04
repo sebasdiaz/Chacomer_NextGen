@@ -20,11 +20,12 @@ namespace AxxonContacts.Functions.Services
         private static readonly Dictionary<string, int> EstadoMap =
             new(StringComparer.OrdinalIgnoreCase)
             {
-                { "Activo",     1 },
-                { "Suspendido", 2 },
-                { "Cancelado",  3 },
-                { "Bloqueado",  4 },
-                { "No Vigente", 5 }
+                { "ACTIVO",     1 },
+                { "SUSPENDIDO", 2 },
+                { "CANCELADO",  3 },
+                { "BLOQUEADO",  4 },
+                { "NO VIGENTE", 5 },
+                { "SUSPENSION TEMPORAL", 6 }
             };
 
         private static readonly JsonSerializerOptions JsonOpts = new()
