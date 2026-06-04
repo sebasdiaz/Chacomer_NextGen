@@ -41,15 +41,10 @@ namespace AxxonContacts.Functions.Services
             bool isCreate = string.Equals(message.TriggerMessage, "Create", StringComparison.OrdinalIgnoreCase);
             bool isUpdate = string.Equals(message.TriggerMessage, "Update", StringComparison.OrdinalIgnoreCase);
 
-            // Para Update: procesar si el account tiene identification (venga del Target o del PreImage).
-            // No es suficiente chequear que cambio en este update; puede haberse seteado antes y el master
-            // nunca fue creado (ej. Dual Write actualiza name en un segundo paso).
-            bool isUpdateWithIdentification = isUpdate && !string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber);
-
-            if (!isCreate && !isUpdateWithIdentification)
+            if (!isCreate && !isUpdate)
             {
                 _logger.LogInformation(
-                    "[AccountMasterMatchingService] Evento '{Trigger}' ignorado (sin identification o trigger no relevante).",
+                    "[AccountMasterMatchingService] Evento '{Trigger}' ignorado.",
                     message.TriggerMessage);
                 return null;
             }
@@ -60,9 +55,19 @@ namespace AxxonContacts.Functions.Services
                 return null;
             }
 
+            // Si identification o name no llegaron en el payload (Step sin PreImage completo),
+            // se buscan directamente en Dataverse.
+            if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber) || string.IsNullOrWhiteSpace(message.Name))
+            {
+                _logger.LogInformation(
+                    "[AccountMasterMatchingService] Campos faltantes en payload. Recuperando Account {AccountId} de Dataverse.",
+                    message.AccountId);
+                message = await EnrichFromDataverseAsync(message);
+            }
+
             if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber))
             {
-                _logger.LogWarning("[AccountMasterMatchingService] IdentificationNumber vacio. Skip.");
+                _logger.LogWarning("[AccountMasterMatchingService] IdentificationNumber vacio tras enrich. Skip.");
                 return null;
             }
 
@@ -88,6 +93,37 @@ namespace AxxonContacts.Functions.Services
                 message.AccountId, newMasterRef.Id);
 
             return newMasterRef;
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // EnrichFromDataverse
+        // ────────────────────────────────────────────────────────────
+
+        private async Task<AccountEventMessage> EnrichFromDataverseAsync(AccountEventMessage message)
+        {
+            try
+            {
+                var record = await Task.Run(() =>
+                    _service.Retrieve(EntityLogicalName, message.AccountId,
+                        new ColumnSet("name", IdentificationNumber, IsMaster, MasterAccountId, "msdyn_company")));
+
+                if (string.IsNullOrWhiteSpace(message.Name))
+                    message.Name = record.GetAttributeValue<string>("name");
+                if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber))
+                    message.MsdynIdentificationNumber = record.GetAttributeValue<string>(IdentificationNumber);
+                message.IsMaster        = record.GetAttributeValue<bool>(IsMaster);
+                message.MasterAccountId = record.GetAttributeValue<EntityReference>(MasterAccountId)?.Id ?? message.MasterAccountId;
+                message.MsdynCompany    ??= record.GetAttributeValue<EntityReference>("msdyn_company")?.Id;
+
+                return message;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "[AccountMasterMatchingService] No se pudo recuperar Account {AccountId} de Dataverse. Usando payload original.",
+                    message.AccountId);
+                return message;
+            }
         }
 
         // ────────────────────────────────────────────────────────────
@@ -159,6 +195,8 @@ namespace AxxonContacts.Functions.Services
             var e = new Entity(EntityLogicalName);
 
             e[IsMaster] = true;
+            // Evita sincronizacion via Dual Write en el registro master
+            e["customertypecode"] = new OptionSetValue(12);
 
             // name es ApplicationRequired: usar identification como fallback si viene vacío
             var masterName = !string.IsNullOrEmpty(m.Name)
@@ -171,12 +209,21 @@ namespace AxxonContacts.Functions.Services
             SetString(e, "description",   m.Description);
             SetString(e, IdentificationNumber, m.MsdynIdentificationNumber);
 
+            // msdyn_company requerido por plugin de Dual Write
+            SetRef(e, "msdyn_company", "cdm_company", m.MsdynCompany);
+
             return e;
         }
 
         private static void SetString(Entity e, string field, string? value)
         {
             if (!string.IsNullOrEmpty(value)) e[field] = value;
+        }
+
+        private static void SetRef(Entity e, string field, string logicalName, Guid? id)
+        {
+            if (id.HasValue && id.Value != Guid.Empty)
+                e[field] = new EntityReference(logicalName, id.Value);
         }
 
         // ────────────────────────────────────────────────────────────

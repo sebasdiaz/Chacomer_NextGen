@@ -49,7 +49,8 @@ namespace AxxonContacts.Functions.Services
                 EmailAddress1 = Str(merged, "emailaddress1"),
                 Description   = Str(merged, "description"),
 
-                ModifiedBy = Ref(merged, "modifiedby"),
+                MsdynCompany = Ref(merged, "msdyn_company"),
+                ModifiedBy   = Ref(merged, "modifiedby"),
             };
         }
 
