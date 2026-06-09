@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "AxxonProducts.Functions": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7170",
+      "launchBrowser": false
+    }
+  }
+}
