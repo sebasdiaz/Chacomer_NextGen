@@ -1,13 +1,13 @@
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using AxxonContacts.Functions.Configuration;
-using AxxonContacts.Functions.Models;
+using AxxonProducts.Functions.Configuration;
+using AxxonProducts.Functions.Models;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.Logging;
 
-namespace AxxonContacts.Functions.Services
+namespace AxxonProducts.Functions.Services
 {
     /// <summary>
     /// Servicio que consume la OData API de Finance & Operations para leer ReleasedProductsV2.
@@ -17,9 +17,7 @@ namespace AxxonContacts.Functions.Services
     /// </summary>
     public class FoDataService : IFoDataService
     {
-        private const string FoResource = "https://common.dynamics.com";
         private const string EntitySet = "ReleasedProductsV2";
-        // Tama~no de pagina OData. F&O tiene un maximo de 10000 por request.
         private const int PageSize = 1000;
 
         private readonly HttpClient _httpClient;

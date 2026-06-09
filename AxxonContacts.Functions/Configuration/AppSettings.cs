@@ -51,30 +51,5 @@ namespace AxxonContacts.Functions.Configuration
         /// </summary>
         public string? SetApiKey { get; set; }
 
-        // ---- Finance & Operations OData (ReleasedProductsV2 sync) ----
-
-        /// <summary>
-        /// URL base del ambiente de F&O.
-        /// Ejemplo: https://miempresa.operations.dynamics.com
-        /// </summary>
-        public string FoBaseUrl { get; set; } = string.Empty;
-
-        /// <summary>
-        /// Schedule CRON para el sync de ReleasedProductsV2.
-        /// Formato de 6 partes (segundos incluidos): "0 0 * * * *" = cada hora en punto.
-        /// Configurar como "Schedules:ReleasedProductSync" en App Settings.
-        /// </summary>
-        public string ReleasedProductSyncSchedule { get; set; } = "0 0 * * * *";
-
-        // ---- Solo para DESA cuando se necesita Service Principal para F&O ----
-
-        /// <summary>Tenant ID del AAD. Solo necesario si UseClientSecretAuth = true para F&O.</summary>
-        public string? FoTenantId { get; set; }
-
-        /// <summary>Client ID del App Registration con acceso a F&O. Solo para desarrollo local.</summary>
-        public string? FoClientId { get; set; }
-
-        /// <summary>Client Secret del App Registration con acceso a F&O. Solo para desarrollo local.</summary>
-        public string? FoClientSecret { get; set; }
     }
 }

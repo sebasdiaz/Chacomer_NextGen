@@ -1,9 +1,9 @@
-using AxxonContacts.Functions.Services;
+using AxxonProducts.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Extensions.Timer;
 using Microsoft.Extensions.Logging;
 
-namespace AxxonContacts.Functions.Functions
+namespace AxxonProducts.Functions.Functions
 {
     /// <summary>
     /// Timer Trigger que corre cada hora y sincroniza ReleasedProductsV2 de F&O
@@ -57,9 +57,6 @@ namespace AxxonContacts.Functions.Functions
 
             try
             {
-                // Acumular en memoria y sincronizar en batches.
-                // Para volumenes muy grandes (>50k registros) se puede cambiar
-                // a un streaming por ventanas con IAsyncEnumerable directamente.
                 const int windowSize = 1000;
                 var window = new List<Models.FoReleasedProduct>(windowSize);
 

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace AxxonContacts.Functions.Models
+namespace AxxonProducts.Functions.Models
 {
     /// <summary>
     /// DTO que representa un registro de la entidad ReleasedProductsV2 de F&O.

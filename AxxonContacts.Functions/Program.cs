@@ -16,11 +16,7 @@ var host = new HostBuilder()
             AccountServiceBusQueueName = context.Configuration["AccountServiceBusQueueName"] ?? string.Empty,
             DataverseClientId     = context.Configuration["DataverseClientId"],
             DataverseClientSecret = context.Configuration["DataverseClientSecret"],
-            SetApiKey             = context.Configuration["SetApiKey"],
-            FoBaseUrl             = context.Configuration["FoBaseUrl"] ?? string.Empty,
-            FoTenantId            = context.Configuration["FoTenantId"],
-            FoClientId            = context.Configuration["FoClientId"],
-            FoClientSecret        = context.Configuration["FoClientSecret"]
+            SetApiKey             = context.Configuration["SetApiKey"]
         };
 
         if (string.IsNullOrWhiteSpace(settings.DataverseUrl))
@@ -118,32 +114,6 @@ var host = new HostBuilder()
             var appSettings       = sp.GetRequiredService<AppSettings>();
             var logger            = sp.GetRequiredService<ILogger<SetApiService>>();
             return new SetApiService(httpClient, appSettings, logger);
-        });
-
-        // HttpClient para F&O OData (ReleasedProductsV2)
-        services.AddHttpClient("FoOData", client =>
-        {
-            client.Timeout = TimeSpan.FromMinutes(5);
-            client.DefaultRequestHeaders.Add("Accept", "application/json");
-            client.DefaultRequestHeaders.Add("OData-MaxVersion", "4.0");
-            client.DefaultRequestHeaders.Add("OData-Version", "4.0");
-        });
-
-        services.AddTransient<IFoDataService>(sp =>
-        {
-            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
-            var httpClient        = httpClientFactory.CreateClient("FoOData");
-            var appSettings       = sp.GetRequiredService<AppSettings>();
-            var logger            = sp.GetRequiredService<ILogger<FoDataService>>();
-            return new FoDataService(httpClient, appSettings, logger);
-        });
-
-        services.AddTransient<ISharedProductSyncService>(sp =>
-        {
-            var factory    = sp.GetRequiredService<DataverseClientFactory>();
-            var orgService = factory.CreateOrganizationService();
-            var logger     = sp.GetRequiredService<ILogger<SharedProductSyncService>>();
-            return new SharedProductSyncService(orgService, logger);
         });
 
         services.AddLogging(b => b.AddConsole());
