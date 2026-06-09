@@ -1,10 +1,10 @@
-using AxxonContacts.Functions.Models;
+using AxxonProducts.Functions.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
-namespace AxxonContacts.Functions.Services
+namespace AxxonProducts.Functions.Services
 {
     /// <summary>
     /// Sincroniza productos liberados de F&O hacia msdyn_sharedproductdetails en Dataverse.
@@ -22,21 +22,21 @@ namespace AxxonContacts.Functions.Services
     /// </summary>
     public class SharedProductSyncService : ISharedProductSyncService
     {
-        private const string EntityName   = "msdyn_sharedproductdetails";
-        private const int    BatchSize    = 200;
+        private const string EntityName = "msdyn_sharedproductdetails";
+        private const int    BatchSize  = 200;
 
         private readonly IOrganizationService _orgService;
         private readonly ILogger<SharedProductSyncService> _logger;
 
         // Caches de lookups (validos durante una ejecucion del timer)
-        private readonly Dictionary<string, Guid> _globalProductCache  = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Guid> _uomCache            = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Guid> _vendorCache         = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Guid> _prodDimGroupCache   = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Guid> _storageDimGroupCache= new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Guid> _trackingDimGroupCache=new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Guid> _companyCache        = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Guid> _altItemCache        = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Guid> _globalProductCache   = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Guid> _uomCache             = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Guid> _vendorCache          = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Guid> _prodDimGroupCache    = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Guid> _storageDimGroupCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Guid> _trackingDimGroupCache= new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Guid> _companyCache         = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Guid> _altItemCache         = new(StringComparer.OrdinalIgnoreCase);
 
         public SharedProductSyncService(IOrganizationService orgService, ILogger<SharedProductSyncService> logger)
         {
@@ -129,13 +129,11 @@ namespace AxxonContacts.Functions.Services
 
             e["msdyn_itemnumber"] = p.ItemNumber;
 
-            // --- Lookup: msdyn_companyid via cdm_company.cdm_companycode = dataAreaId ---
             var companyRef = await ResolveLookupAsync(
                 _companyCache, p.DataAreaId, "cdm_company", "cdm_companyid", "cdm_companycode", ct);
             if (companyRef.HasValue)
                 e["msdyn_companyid"] = new EntityReference("cdm_company", companyRef.Value);
 
-            // --- Lookup: msdyn_globalproduct via msdyn_globalproducts.msdyn_productnumber ---
             if (!string.IsNullOrEmpty(p.ProductNumber))
             {
                 var gpRef = await ResolveLookupAsync(
@@ -144,7 +142,6 @@ namespace AxxonContacts.Functions.Services
                     e["msdyn_globalproduct"] = new EntityReference("msdyn_globalproduct", gpRef.Value);
             }
 
-            // --- Scalars ---
             SetIfNotNull(e, "msdyn_intrastatchargepercentage",                p.IntrastatChargePercentage);
             SetIfNotNull(e, "msdyn_approximatesalestaxpercentage",             p.ApproximateSalesTaxPercentage);
             SetIfNotNull(e, "msdyn_bestbeforeperioddays",                      p.BestBeforePeriodDays);
@@ -203,10 +200,8 @@ namespace AxxonContacts.Functions.Services
             SetIfNotNull(e, "msdyn_maximumcatchweightquantity",                p.MaximumCatchWeightQuantity);
             SetIfNotNull(e, "msdyn_alternativeitemnumber",                     p.AlternativeItemNumber);
 
-            // msdyn_shouldsyncwithproducts: Default = False (segun mapping)
             e["msdyn_shouldsyncwithproducts"] = false;
 
-            // --- OptionSets (value maps del JSON) ---
             MapOptionSet(e, "msdyn_carryingcostabccode", p.CarryingCostAbcCode,
                 ("a", 806380001), ("b", 806380002), ("c", 806380003), ("none", 806380000));
 
@@ -234,7 +229,6 @@ namespace AxxonContacts.Functions.Services
             MapOptionSet(e, "msdyn_scaleindicator", p.ScaleIndicator,
                 ("notRelevant", 806380001), ("relevant", 806380000));
 
-            // --- Booleans (yes/no -> True/False) ---
             MapBool(e, "msdyn_isdiscountposregistrationprohibited",         p.IsDiscountPosRegistrationProhibited);
             MapBool(e, "msdyn_exemptautomaticnotificationcancel",            p.IsExemptFromAutomaticNotificationAndCancellation);
             MapBool(e, "msdyn_isinstallmenteligible",                        p.IsInstallmentEligible);
@@ -266,15 +260,13 @@ namespace AxxonContacts.Functions.Services
             MapBool(e, "msdyn_isunitcostincludingcharges",                   p.IsUnitCostIncludingCharges);
             MapBool(e, "msdyn_iscatchweight",                                p.IsCatchWeightProduct);
 
-            // --- Lookups: UoM ---
             await MapUomAsync(e, "msdyn_inventoryunitsymbol", p.InventoryUnitSymbol, ct);
             await MapUomAsync(e, "msdyn_salesunitsymbol",     p.SalesUnitSymbol,     ct);
             await MapUomAsync(e, "msdyn_purchaseunitsymbol",  p.PurchaseUnitSymbol,  ct);
             await MapUomAsync(e, "msdyn_bomunitsymbol",       p.BomUnitSymbol,       ct);
-            await MapUomAsync(e, "msdyn_catchweightunitsymbol",         p.CatchWeightUnitSymbol,          ct);
-            await MapUomAsync(e, "msdyn_comparisonpricebaseunitsymbol", p.ComparisonPriceBaseUnitSymbol,  ct);
+            await MapUomAsync(e, "msdyn_catchweightunitsymbol",         p.CatchWeightUnitSymbol,         ct);
+            await MapUomAsync(e, "msdyn_comparisonpricebaseunitsymbol", p.ComparisonPriceBaseUnitSymbol, ct);
 
-            // --- Lookup: Vendor ---
             if (!string.IsNullOrEmpty(p.PrimaryVendorAccountNumber))
             {
                 var vRef = await ResolveLookupAsync(
@@ -284,7 +276,6 @@ namespace AxxonContacts.Functions.Services
                     e["msdyn_vendorid"] = new EntityReference("msdyn_vendor", vRef.Value);
             }
 
-            // --- Lookups: dimension groups ---
             if (!string.IsNullOrEmpty(p.ProductDimensionGroupName))
             {
                 var r = await ResolveLookupAsync(_prodDimGroupCache, p.ProductDimensionGroupName,
@@ -309,7 +300,6 @@ namespace AxxonContacts.Functions.Services
                     e["msdyn_trackingdimensiongroup"] = new EntityReference("msdyn_producttrackingdimensiongroup", r.Value);
             }
 
-            // --- Lookup: msdyn_alternativeitemnumber ---
             if (!string.IsNullOrEmpty(p.AlternativeItemNumber))
             {
                 var r = await ResolveLookupAsync(_altItemCache, p.AlternativeItemNumber,
@@ -327,14 +317,13 @@ namespace AxxonContacts.Functions.Services
             {
                 var query = new QueryExpression(EntityName)
                 {
-                    ColumnSet    = new ColumnSet(false),
-                    TopCount     = 1,
-                    NoLock       = true
+                    ColumnSet = new ColumnSet(false),
+                    TopCount  = 1,
+                    NoLock    = true
                 };
 
                 query.Criteria.AddCondition("msdyn_itemnumber", ConditionOperator.Equal, itemNumber);
 
-                // Join a cdm_company para filtrar por companycode
                 var companyLink = query.AddLink("cdm_company", "msdyn_companyid", "cdm_companyid");
                 companyLink.LinkCriteria.AddCondition("cdm_companycode", ConditionOperator.Equal, dataAreaId);
 
@@ -364,7 +353,7 @@ namespace AxxonContacts.Functions.Services
             if (cache.TryGetValue(key, out var cached))
                 return cached;
 
-            await Task.Yield(); // mantiene la firma async sin bloquear
+            await Task.Yield();
 
             try
             {
