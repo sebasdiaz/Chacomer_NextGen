@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonContacts.Functions", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DnitResponseViewer", "DnitResponseViewer\DnitResponseViewer.pcfproj", "{F3C8D2E1-9A4B-4F72-BC35-7D1E2F890ABC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonCustomers.Functions", "AxxonCustomers.Functions\AxxonCustomers.Functions.csproj", "{A7D9E8C2-4B31-4F56-9A78-3C2D1E0F5B64}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,6 +22,10 @@ Global
 		{F3C8D2E1-9A4B-4F72-BC35-7D1E2F890ABC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F3C8D2E1-9A4B-4F72-BC35-7D1E2F890ABC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F3C8D2E1-9A4B-4F72-BC35-7D1E2F890ABC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7D9E8C2-4B31-4F56-9A78-3C2D1E0F5B64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7D9E8C2-4B31-4F56-9A78-3C2D1E0F5B64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7D9E8C2-4B31-4F56-9A78-3C2D1E0F5B64}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7D9E8C2-4B31-4F56-9A78-3C2D1E0F5B64}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
