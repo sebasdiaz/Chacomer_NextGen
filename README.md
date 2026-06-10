@@ -19,8 +19,8 @@ Dataverse — Create/Update Master Contact + BulkAssociate + PropagateFields
 ## Estructura del solution
 
 ```
-AxxonContactsSolution/
-├── AxxonContacts.sln
+Chacomer_NextGen/
+├── Chacomer.sln
 ├── .gitignore
 ├── generate-snk.ps1
 │
