@@ -17,10 +17,13 @@ namespace AxxonCustomerGroups.Functions.Services
     ///   CLEARINGPERIODPAYMENTTERMNAME -> msdyn_clearingperiodpaymenttermname (lookup msdyn_paymentterm por msdyn_name)
     ///   dataAreaId                    -> msdyn_company (lookup cdm_company por cdm_companycode)
     ///
-    /// Estrategia de upsert (mismo patron que SharedProductSyncService):
-    ///   1. Resuelve msdyn_company via cdm_company.cdm_companycode = dataAreaId.
-    ///   2. Busca el registro existente por (msdyn_groupid, msdyn_company).
-    ///      - Si existe: Update. Si no: Create.
+    /// Estrategia de upsert:
+    ///   1. Resuelve msdyn_company via cdm_company.cdm_companycode = dataAreaId
+    ///      (si la compania no existe en Dataverse el registro se omite: es parte
+    ///      de la clave y no puede upsertearse sin ella).
+    ///   2. UpsertRequest con KeyAttributes contra la alternate key
+    ///      (msdyn_groupid + msdyn_company): Dataverse decide Create vs Update
+    ///      en el servidor, sin query previa por registro.
     ///   3. Procesa en batches de ExecuteMultiple para reducir round-trips.
     ///
     /// Los payment terms se resuelven por nombre dentro de la misma compania
@@ -78,17 +81,13 @@ namespace AxxonCustomerGroups.Functions.Services
                     try
                     {
                         var entity = MapToEntity(group);
-                        var existingId = FindExisting(group.CustomerGroupId, group.DataAreaId);
+                        if (entity is null)
+                        {
+                            failed++;
+                            continue;
+                        }
 
-                        if (existingId.HasValue)
-                        {
-                            entity.Id = existingId.Value;
-                            requests.Requests.Add(new UpdateRequest { Target = entity });
-                        }
-                        else
-                        {
-                            requests.Requests.Add(new CreateRequest { Target = entity });
-                        }
+                        requests.Requests.Add(new UpsertRequest { Target = entity });
                     }
                     catch (Exception ex)
                     {
@@ -113,7 +112,7 @@ namespace AxxonCustomerGroups.Functions.Services
                             responseItem.RequestIndex, responseItem.Fault.Message);
                         failed++;
                     }
-                    else if (responseItem.Response is CreateResponse)
+                    else if (responseItem.Response is UpsertResponse { RecordCreated: true })
                         created++;
                     else
                         updated++;
@@ -129,11 +128,31 @@ namespace AxxonCustomerGroups.Functions.Services
 
         // ── Mapeo F&O -> Dataverse ────────────────────────────────────
 
-        private Entity MapToEntity(FoCustomerGroup g)
+        private Entity? MapToEntity(FoCustomerGroup g)
         {
+            // msdyn_company integra la alternate key: sin compania resuelta
+            // no hay clave de upsert y el registro se omite.
+            var companyId = ResolveCompany(g.DataAreaId);
+            if (!companyId.HasValue)
+            {
+                _logger.LogWarning(
+                    "[CustomerGroupSyncService] Compania no encontrada en Dataverse. " +
+                    "cdm_companycode={DataAreaId} (GroupId={GroupId}). Se omite el registro.",
+                    g.DataAreaId, g.CustomerGroupId);
+                return null;
+            }
+
+            var companyRef = new EntityReference("cdm_company", companyId.Value);
+
             var e = new Entity(EntityName);
 
+            // Alternate key (msdyn_groupid + msdyn_company): Dataverse resuelve
+            // Create vs Update en el servidor via UpsertRequest.
+            e.KeyAttributes["msdyn_groupid"] = g.CustomerGroupId;
+            e.KeyAttributes["msdyn_company"] = companyRef;
+
             e["msdyn_groupid"] = g.CustomerGroupId;
+            e["msdyn_company"] = companyRef;
 
             if (g.Description is not null)
                 e["msdyn_description"] = g.Description;
@@ -142,15 +161,6 @@ namespace AxxonCustomerGroups.Functions.Services
             if (!string.IsNullOrEmpty(g.IsSalesTaxIncludedInPrice))
                 e["msdyn_issalestaxincludedinprice"] =
                     g.IsSalesTaxIncludedInPrice.Equals("yes", StringComparison.OrdinalIgnoreCase);
-
-            var companyId = ResolveCompany(g.DataAreaId);
-            if (companyId.HasValue)
-                e["msdyn_company"] = new EntityReference("cdm_company", companyId.Value);
-            else
-                _logger.LogWarning(
-                    "[CustomerGroupSyncService] Compania no encontrada en Dataverse. " +
-                    "cdm_companycode={DataAreaId} (GroupId={GroupId})",
-                    g.DataAreaId, g.CustomerGroupId);
 
             SetPaymentTermLookup(e, "msdyn_paymenttermid",                  g.PaymentTermId,                 g.DataAreaId);
             SetPaymentTermLookup(e, "msdyn_clearingperiodpaymenttermname", g.ClearingPeriodPaymentTermName, g.DataAreaId);
@@ -234,32 +244,5 @@ namespace AxxonCustomerGroups.Functions.Services
             return result.Entities.Count > 0 ? result.Entities[0].Id : null;
         }
 
-        private Guid? FindExisting(string customerGroupId, string dataAreaId)
-        {
-            try
-            {
-                var query = new QueryExpression(EntityName)
-                {
-                    ColumnSet = new ColumnSet(false),
-                    TopCount  = 1,
-                    NoLock    = true
-                };
-
-                query.Criteria.AddCondition("msdyn_groupid", ConditionOperator.Equal, customerGroupId);
-
-                var companyLink = query.AddLink("cdm_company", "msdyn_company", "cdm_companyid");
-                companyLink.LinkCriteria.AddCondition("cdm_companycode", ConditionOperator.Equal, dataAreaId);
-
-                var result = _orgService.RetrieveMultiple(query);
-                return result.Entities.Count > 0 ? result.Entities[0].Id : null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "[CustomerGroupSyncService] Error buscando existente para GroupId={GroupId} DataArea={Area}.",
-                    customerGroupId, dataAreaId);
-                return null;
-            }
-        }
     }
 }

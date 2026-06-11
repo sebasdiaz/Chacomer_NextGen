@@ -10,9 +10,13 @@ clientes de Finance & Operations (**CustomerGroups**) hacia la tabla
    (default `0 0 23 * * *` — todos los dias a las 23:00).
 2. `FoCustomerGroupService` lee `GET {FoBaseUrl}/data/CustomerGroups?cross-company=true`
    con paginacion automatica (`@odata.nextLink`).
-3. `CustomerGroupSyncService` hace upsert en `msdyn_customergroup` usando
-   **(msdyn_groupid + msdyn_company)** como clave, en batches de `ExecuteMultiple`
-   de 200 requests (`ContinueOnError = true`: un registro fallido no corta el sync).
+3. `CustomerGroupSyncService` hace upsert en `msdyn_customergroup` con
+   `UpsertRequest` + `KeyAttributes` contra la **alternate key
+   (msdyn_groupid + msdyn_company)** — Dataverse resuelve Create vs Update en el
+   servidor — en batches de `ExecuteMultiple` de 200 requests
+   (`ContinueOnError = true`: un registro fallido no corta el sync).
+   Si la compania (`dataAreaId`) no existe en Dataverse el registro se omite
+   con Warning, porque es parte de la clave.
 
 > **Zona horaria:** el CRON corre en UTC salvo que la Function App tenga
 > `WEBSITE_TIME_ZONE` configurado. Para las 23:00 de Asuncion, setear
