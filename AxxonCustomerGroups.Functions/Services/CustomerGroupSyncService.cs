@@ -27,8 +27,9 @@ namespace AxxonCustomerGroups.Functions.Services
     ///   3. Procesa en batches de ExecuteMultiple para reducir round-trips.
     ///
     /// Los payment terms se resuelven por nombre dentro de la misma compania
-    /// (pueden repetirse entre companias); si no hay match con compania se
-    /// reintenta solo por nombre y se loguea Warning si no existe.
+    /// (el plugin de Dynamics365Company valida que los lookups company-striped
+    /// pertenezcan a la misma compania del registro); si no existe en esa
+    /// compania el campo se omite y se loguea Warning.
     /// </summary>
     public class CustomerGroupSyncService : ICustomerGroupSyncService
     {
@@ -76,6 +77,10 @@ namespace AxxonCustomerGroups.Functions.Services
                     }
                 };
 
+                // Paralela a requests.Requests: los registros omitidos en el mapeo
+                // corren los indices, asi que RequestIndex no apunta al batch original.
+                var requestGroups = new List<FoCustomerGroup>();
+
                 foreach (var group in batch)
                 {
                     try
@@ -88,6 +93,7 @@ namespace AxxonCustomerGroups.Functions.Services
                         }
 
                         requests.Requests.Add(new UpsertRequest { Target = entity });
+                        requestGroups.Add(group);
                     }
                     catch (Exception ex)
                     {
@@ -107,9 +113,16 @@ namespace AxxonCustomerGroups.Functions.Services
                 {
                     if (responseItem.Fault is not null)
                     {
+                        var faultedGroup = requestGroups[responseItem.RequestIndex];
                         _logger.LogError(
-                            "[CustomerGroupSyncService] Fault en request index {Index}: {Message}",
-                            responseItem.RequestIndex, responseItem.Fault.Message);
+                            "[CustomerGroupSyncService] Fault en request index {Index} " +
+                            "(GroupId={GroupId} DataAreaId={Area} PaymentTermId={PaymentTerm} ClearingPeriod={ClearingPeriod}): {Message}",
+                            responseItem.RequestIndex,
+                            faultedGroup.CustomerGroupId,
+                            faultedGroup.DataAreaId,
+                            faultedGroup.PaymentTermId,
+                            faultedGroup.ClearingPeriodPaymentTermName,
+                            responseItem.Fault.Message);
                         failed++;
                     }
                     else if (responseItem.Response is UpsertResponse { RecordCreated: true })
@@ -216,15 +229,16 @@ namespace AxxonCustomerGroups.Functions.Services
             if (_paymentTermCache.TryGetValue(cacheKey, out var cached))
                 return cached;
 
-            // Primero por nombre + compania (los nombres pueden repetirse entre companias)
-            var id = QueryPaymentTerm(termName, dataAreaId)
-                     ?? QueryPaymentTerm(termName, dataAreaId: null);
+            // Solo nombre + compania: el plugin de Dynamics365Company rechaza
+            // lookups a payment terms de otra compania ("Lookup field company
+            // mismatched"), asi que un match cross-company no sirve.
+            var id = QueryPaymentTerm(termName, dataAreaId);
 
             _paymentTermCache[cacheKey] = id;
             return id;
         }
 
-        private Guid? QueryPaymentTerm(string termName, string? dataAreaId)
+        private Guid? QueryPaymentTerm(string termName, string dataAreaId)
         {
             var query = new QueryExpression("msdyn_paymentterm")
             {
@@ -234,11 +248,8 @@ namespace AxxonCustomerGroups.Functions.Services
             };
             query.Criteria.AddCondition("msdyn_name", ConditionOperator.Equal, termName);
 
-            if (dataAreaId is not null)
-            {
-                var companyLink = query.AddLink("cdm_company", "msdyn_company", "cdm_companyid");
-                companyLink.LinkCriteria.AddCondition("cdm_companycode", ConditionOperator.Equal, dataAreaId);
-            }
+            var companyLink = query.AddLink("cdm_company", "msdyn_company", "cdm_companyid");
+            companyLink.LinkCriteria.AddCondition("cdm_companycode", ConditionOperator.Equal, dataAreaId);
 
             var result = _orgService.RetrieveMultiple(query);
             return result.Entities.Count > 0 ? result.Entities[0].Id : null;
