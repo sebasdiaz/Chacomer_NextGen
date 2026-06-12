@@ -38,7 +38,7 @@ namespace AxxonCustomerGroups.Functions.Functions
 
         [Function(nameof(CustomerGroupSyncFunction))]
         public async Task Run(
-            [TimerTrigger("%Schedules:CustomerGroupSync%")] TimerInfo timer,
+            [TimerTrigger("%Schedules:CustomerGroupSync%", RunOnStartup = true)] TimerInfo timer,
             CancellationToken cancellationToken)
         {
             if (timer.IsPastDue)
