@@ -33,7 +33,6 @@ namespace AxxonCustomers.Functions.Services
             "a365_creditrating",
             "a365_onholdstatus",
             "a365_notes",
-            "msdyn_sellable",
             "msdyn_partyid",
             "msdyn_customergroupid",
             "transactioncurrencyid",
@@ -45,6 +44,7 @@ namespace AxxonCustomers.Functions.Services
             "msdyn_primarycontact",
             "msdyn_company"
         };
+        // (msdyn_sellable ya no se lee: A365Sellable se fuerza a "No")
 
         // a365_onholdstatus (OptionSet CRM) -> OnHoldStatus (enum CustVendorBlocked F&O).
         // Inverso del valueMap de CustomersV3_Contact.json, con los nombres de
@@ -174,7 +174,10 @@ namespace AxxonCustomers.Functions.Services
 
                 CreditRating = ResolveCreditRating(contact),
                 OnHoldStatus = ResolveOnHoldStatus(contact),
-                A365Sellable = ResolveSellable(contact)
+
+                // Forzado: el customer creado desde un lead calificado nace no vendible,
+                // independientemente de msdyn_sellable en el contact.
+                A365Sellable = "No"
             };
 
             // CustomerAccount se omite: F&O lo genera por number sequence.
@@ -211,12 +214,6 @@ namespace AxxonCustomers.Functions.Services
                 "[ContactCustomerSyncService] a365_onholdstatus={Value} sin mapeo a F&O. " +
                 "Se omite OnHoldStatus.", osv.Value);
             return null;
-        }
-
-        private static string? ResolveSellable(Entity contact)
-        {
-            var sellable = contact.GetAttributeValue<bool?>("msdyn_sellable");
-            return sellable.HasValue ? (sellable.Value ? "Yes" : "No") : null;
         }
 
         // ── Resolucion de lookups ─────────────────────────────────────

@@ -27,7 +27,8 @@ namespace AxxonCustomers.Functions.Models
     ///   CreditRating          &lt;- a365_creditrating
     ///   OnHoldStatus          &lt;- a365_onholdstatus (value map invertido)
     ///   CredManNotes          &lt;- a365_notes
-    ///   A365Sellable          &lt;- msdyn_sellable (true -> "Yes", false -> "No")
+    ///   A365Sellable          &lt;- forzado "No" (decision de negocio: el customer
+    ///                            creado desde un lead calificado nace no vendible)
     ///
     /// Los nulls se omiten en la serializacion (JsonIgnoreCondition.WhenWritingNull)
     /// para que F&O aplique sus defaults.
@@ -112,7 +113,9 @@ namespace AxxonCustomers.Functions.Models
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? CredManNotes { get; set; }
 
-        [JsonPropertyName("A365SELLABLE")]
+        // Nombre exacto de la propiedad OData en CustomerV3 (verificado contra
+        // el environment): "A365Sellable", no "A365SELLABLE".
+        [JsonPropertyName("A365Sellable")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? A365Sellable { get; set; }
     }
