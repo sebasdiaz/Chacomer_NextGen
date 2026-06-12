@@ -7,9 +7,15 @@ namespace AxxonCustomers.Functions.Services
     /// Parsea el RemoteExecutionContext nativo que el Service Endpoint de Dataverse
     /// publica en la cola ante cada QualifyLead.
     ///
-    /// Del payload solo interesa InputParameters:
-    ///   - "OpportunityCustomerId" : EntityReference al contact creado/asociado al calificar.
-    ///   - "LeadId"                : EntityReference al lead calificado (para logging).
+    /// Del payload interesan:
+    ///   - InputParameters."OpportunityCustomerId" : EntityReference al cliente asociado
+    ///     a la opportunity. Solo trae valor cuando el caller lo pasa explicitamente;
+    ///     en el flujo estandar de la UI viene null (o referencia al account en leads B2B).
+    ///   - OutputParameters."CreatedEntities" : EntityReferenceCollection del
+    ///     QualifyLeadResponse con los registros creados al calificar (account,
+    ///     contact, opportunity). De aqui se toma el contact cuando
+    ///     OpportunityCustomerId no lo trae.
+    ///   - InputParameters."LeadId" : EntityReference al lead calificado (para logging).
     /// </summary>
     public static class QualifyLeadContextParser
     {
@@ -30,40 +36,83 @@ namespace AxxonCustomers.Functions.Services
                     : string.Empty
             };
 
-            if (!root.TryGetProperty("InputParameters", out var inputParams)
-                || inputParams.ValueKind != JsonValueKind.Array)
-                return context;
-
-            foreach (var param in inputParams.EnumerateArray())
+            if (root.TryGetProperty("InputParameters", out var inputParams)
+                && inputParams.ValueKind == JsonValueKind.Array)
             {
-                if (!param.TryGetProperty("key", out var keyEl))
-                    continue;
-
-                var key = keyEl.GetString();
-
-                if (string.Equals(key, "OpportunityCustomerId", StringComparison.OrdinalIgnoreCase))
+                foreach (var param in inputParams.EnumerateArray())
                 {
-                    var (id, logicalName) = ReadEntityReference(param);
-                    context.CustomerLogicalName = logicalName;
+                    if (!param.TryGetProperty("key", out var keyEl))
+                        continue;
 
-                    if (string.Equals(logicalName, "contact", StringComparison.OrdinalIgnoreCase))
-                        context.ContactId = id;
-                }
-                else if (string.Equals(key, "LeadId", StringComparison.OrdinalIgnoreCase))
-                {
-                    var (id, _) = ReadEntityReference(param);
-                    context.LeadId = id;
+                    var key = keyEl.GetString();
+
+                    if (string.Equals(key, "OpportunityCustomerId", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var (id, logicalName) = ReadEntityReference(param);
+                        context.CustomerLogicalName = logicalName;
+
+                        if (string.Equals(logicalName, "contact", StringComparison.OrdinalIgnoreCase))
+                            context.ContactId = id;
+                    }
+                    else if (string.Equals(key, "LeadId", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var (id, _) = ReadEntityReference(param);
+                        context.LeadId = id;
+                    }
                 }
             }
+
+            // Flujo estandar de la UI: OpportunityCustomerId viene null (o es el
+            // account en leads B2B). El contact creado al calificar llega en
+            // OutputParameters.CreatedEntities (QualifyLeadResponse).
+            if (context.ContactId == null)
+                context.ContactId = FindCreatedContact(root);
 
             return context;
         }
 
-        // EntityReference: { "value": { "Id": "guid", "LogicalName": "contact", ... } }
+        private static Guid? FindCreatedContact(JsonElement root)
+        {
+            if (!root.TryGetProperty("OutputParameters", out var outputParams)
+                || outputParams.ValueKind != JsonValueKind.Array)
+                return null;
+
+            foreach (var param in outputParams.EnumerateArray())
+            {
+                if (!param.TryGetProperty("key", out var keyEl)
+                    || !string.Equals(keyEl.GetString(), "CreatedEntities", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!param.TryGetProperty("value", out var refs)
+                    || refs.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (var reference in refs.EnumerateArray())
+                {
+                    var (id, logicalName) = ReadReference(reference);
+                    if (id.HasValue
+                        && string.Equals(logicalName, "contact", StringComparison.OrdinalIgnoreCase))
+                        return id;
+                }
+            }
+
+            return null;
+        }
+
+        // Entrada {key, value} cuyo value es un EntityReference
         private static (Guid? Id, string? LogicalName) ReadEntityReference(JsonElement param)
         {
             if (!param.TryGetProperty("value", out var value)
                 || value.ValueKind != JsonValueKind.Object)
+                return (null, null);
+
+            return ReadReference(value);
+        }
+
+        // EntityReference: { "Id": "guid", "LogicalName": "contact", ... }
+        private static (Guid? Id, string? LogicalName) ReadReference(JsonElement value)
+        {
+            if (value.ValueKind != JsonValueKind.Object)
                 return (null, null);
 
             Guid? id = null;
