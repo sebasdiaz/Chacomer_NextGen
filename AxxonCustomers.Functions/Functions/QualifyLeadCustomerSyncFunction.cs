@@ -11,8 +11,10 @@ namespace AxxonCustomers.Functions.Functions
     /// via la cola "leadcontacts" del Service Bus.
     ///
     /// Flujo:
-    ///   1. Parsea el RemoteExecutionContext y extrae InputParameters.OpportunityCustomerId.
-    ///   2. Si referencia un contact, lo lee de Dataverse y lo inserta en CustomersV3 de F&O
+    ///   1. Parsea el RemoteExecutionContext y extrae el contact desde
+    ///      InputParameters.OpportunityCustomerId o, en su defecto, desde
+    ///      OutputParameters.CreatedEntities (flujo estandar de la UI).
+    ///   2. Si hay contact, lo lee de Dataverse y lo inserta en CustomersV3 de F&O
     ///      segun el mapeo CustomersV3_Contact.json.
     ///   3. Escribe el CustomerAccount generado en msdyn_contactpersonid del contact.
     ///
@@ -74,11 +76,12 @@ namespace AxxonCustomers.Functions.Functions
 
             if (context.ContactId == null)
             {
-                // QualifyLead sin contact asociado (OpportunityCustomerId nulo o apunta
-                // a un account). No es un error: se completa sin procesar.
+                // QualifyLead sin contact: no vino en OpportunityCustomerId ni se creo
+                // uno al calificar (CreatedEntities). No es un error: se completa sin procesar.
                 _logger.LogInformation(
                     "[QualifyLeadCustomerSyncFunction] Mensaje {MessageId} sin contact en " +
-                    "OpportunityCustomerId (LogicalName={LogicalName}). Se completa sin procesar.",
+                    "OpportunityCustomerId ni en CreatedEntities (LogicalName={LogicalName}). " +
+                    "Se completa sin procesar.",
                     messageId, context.CustomerLogicalName ?? "null");
 
                 await messageActions.CompleteMessageAsync(message);

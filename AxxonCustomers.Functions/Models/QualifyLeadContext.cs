@@ -13,8 +13,9 @@ namespace AxxonCustomers.Functions.Models
         public Guid? LeadId { get; set; }
 
         /// <summary>
-        /// Id del contact referenciado en InputParameters.OpportunityCustomerId.
-        /// Null cuando la calificacion apunta a un account u otro tipo de registro.
+        /// Id del contact referenciado en InputParameters.OpportunityCustomerId o,
+        /// en su defecto, creado al calificar (OutputParameters.CreatedEntities).
+        /// Null cuando la calificacion no involucra un contact.
         /// </summary>
         public Guid? ContactId { get; set; }
 
