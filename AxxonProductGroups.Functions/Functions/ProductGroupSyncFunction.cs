@@ -46,7 +46,7 @@ namespace AxxonProductGroups.Functions.Functions
             }
 
             _logger.LogInformation(
-                "[ProductGroupSyncFunction] Iniciando sync de ProductGroups. " +
+                "Iniciando sync de ProductGroups. " +
                 "ScheduledTime={ScheduledTime} ActualTime={ActualTime}",
                 timer.ScheduleStatus?.Next, DateTimeOffset.UtcNow);
 
@@ -62,6 +62,11 @@ namespace AxxonProductGroups.Functions.Functions
                     groups.Add(group);
                     totalRead++;
                 }
+
+                _logger.LogInformation(
+                    "[ProductGroupSyncFunction] Lectura de ProductGroups completada. " +
+                    "TotalLeidos={Total} Duracion={Elapsed}ms",
+                    totalRead, stopwatch.ElapsedMilliseconds);
 
                 if (groups.Count > 0)
                     await _syncService.SyncAsync(groups, cancellationToken);

@@ -7,3 +7,4 @@ namespace AxxonProductGroups.Functions.Services
         Task SyncAsync(IReadOnlyList<FoProductGroup> groups, CancellationToken cancellationToken = default);
     }
 }
+
