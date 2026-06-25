@@ -35,7 +35,7 @@ namespace AxxonProductGroups.Functions.Functions
 
         [Function(nameof(ProductGroupSyncFunction))]
         public async Task Run(
-            [TimerTrigger("%Schedules:ProductGroupSync%")] TimerInfo timer,
+            [TimerTrigger("0 */5 * * * *", RunOnStartup = true)] TimerInfo timer,
             CancellationToken cancellationToken)
         {
             if (timer.IsPastDue)

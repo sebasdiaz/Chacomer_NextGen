@@ -13,6 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="local.settings.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Azure Functions runtime (.NET 10 isolated process) -->
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Timer" Version="4.3.1" />
