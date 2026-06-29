@@ -11,13 +11,15 @@ var host = new HostBuilder()
     {
         var settings = new AppSettings
         {
-            DataverseUrl          = context.Configuration["DataverseUrl"] ?? string.Empty,
-            DataverseClientId     = context.Configuration["DataverseClientId"],
-            DataverseClientSecret = context.Configuration["DataverseClientSecret"],
-            FoBaseUrl             = context.Configuration["FoBaseUrl"] ?? string.Empty,
-            FoTenantId            = context.Configuration["FoTenantId"],
-            FoClientId            = context.Configuration["FoClientId"],
-            FoClientSecret        = context.Configuration["FoClientSecret"]
+            DataverseUrl               = context.Configuration["DataverseUrl"] ?? string.Empty,
+            DataverseClientId          = context.Configuration["DataverseClientId"],
+            DataverseClientSecret      = context.Configuration["DataverseClientSecret"],
+            FoBaseUrl                  = context.Configuration["FoBaseUrl"] ?? string.Empty,
+            FoTenantId                 = context.Configuration["FoTenantId"],
+            FoClientId                 = context.Configuration["FoClientId"],
+            FoClientSecret             = context.Configuration["FoClientSecret"],
+            AssignOwningBusinessUnit   = bool.TryParse(
+                context.Configuration["AssignOwningBusinessUnit"], out var assignBu) && assignBu
         };
 
         if (string.IsNullOrWhiteSpace(settings.DataverseUrl))
@@ -52,10 +54,11 @@ var host = new HostBuilder()
 
         services.AddTransient<IProductGroupSyncService>(sp =>
         {
-            var factory    = sp.GetRequiredService<DataverseClientFactory>();
-            var orgService = factory.CreateOrganizationService();
-            var logger     = sp.GetRequiredService<ILogger<ProductGroupSyncService>>();
-            return new ProductGroupSyncService(orgService, logger);
+            var factory     = sp.GetRequiredService<DataverseClientFactory>();
+            var orgService  = factory.CreateOrganizationService();
+            var appSettings = sp.GetRequiredService<AppSettings>();
+            var logger      = sp.GetRequiredService<ILogger<ProductGroupSyncService>>();
+            return new ProductGroupSyncService(orgService, appSettings, logger);
         });
 
         services.AddLogging(b => b.AddConsole());
