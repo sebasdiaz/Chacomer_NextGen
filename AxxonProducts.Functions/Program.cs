@@ -13,9 +13,12 @@ var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 
-builder.Services.AddOpenTelemetry()
-    .UseFunctionsWorkerDefaults()
-    .UseAzureMonitorExporter();
+var otelBuilder = builder.Services.AddOpenTelemetry()
+    .UseFunctionsWorkerDefaults();
+
+var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+    otelBuilder.UseAzureMonitorExporter();
 
 var settings = new AppSettings
 {
