@@ -10,8 +10,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonProducts.Functions", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonCustomerGroups.Functions", "AxxonCustomerGroups.Functions\AxxonCustomerGroups.Functions.csproj", "{C5E1F7A9-2D48-4B63-8F91-6A0B3D2C7E15}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonProductGroups.Functions", "AxxonProductGroups.Functions\AxxonProductGroups.Functions.csproj", "{D0B74F12-97D4-23A4-C587-30DB380E89A3}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -34,10 +32,6 @@ Global
 		{C5E1F7A9-2D48-4B63-8F91-6A0B3D2C7E15}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C5E1F7A9-2D48-4B63-8F91-6A0B3D2C7E15}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C5E1F7A9-2D48-4B63-8F91-6A0B3D2C7E15}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D0B74F12-97D4-23A4-C587-30DB380E89A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D0B74F12-97D4-23A4-C587-30DB380E89A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D0B74F12-97D4-23A4-C587-30DB380E89A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D0B74F12-97D4-23A4-C587-30DB380E89A3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,6 +1,6 @@
-using AxxonProductGroups.Functions.Models;
+using AxxonProducts.Functions.Models;
 
-namespace AxxonProductGroups.Functions.Services
+namespace AxxonProducts.Functions.Services
 {
     public interface IFoProductGroupService
     {

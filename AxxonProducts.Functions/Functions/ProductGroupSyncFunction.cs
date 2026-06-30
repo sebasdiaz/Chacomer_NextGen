@@ -1,8 +1,8 @@
-using AxxonProductGroups.Functions.Services;
+using AxxonProducts.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 
-namespace AxxonProductGroups.Functions.Functions
+namespace AxxonProducts.Functions.Functions
 {
     /// <summary>
     /// Timer Trigger que sincroniza ProductGroups de F&O hacia msdyn_productgroup en Dataverse.
@@ -35,7 +35,7 @@ namespace AxxonProductGroups.Functions.Functions
 
         [Function(nameof(ProductGroupSyncFunction))]
         public async Task Run(
-            [TimerTrigger("0 */5 * * * *", RunOnStartup = true)] TimerInfo timer,
+            [TimerTrigger("%Schedules:ProductGroupSync%", RunOnStartup = true)] TimerInfo timer,
             CancellationToken cancellationToken)
         {
             if (timer.IsPastDue)
