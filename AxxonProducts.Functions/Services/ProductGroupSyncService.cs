@@ -1,12 +1,12 @@
-using AxxonProductGroups.Functions.Configuration;
-using AxxonProductGroups.Functions.Models;
+using AxxonProducts.Functions.Configuration;
+using AxxonProducts.Functions.Models;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
-namespace AxxonProductGroups.Functions.Services
+namespace AxxonProducts.Functions.Services
 {
     /// <summary>
     /// Sincroniza product groups de F&O hacia msdyn_productgroup en Dataverse.
@@ -27,6 +27,7 @@ namespace AxxonProductGroups.Functions.Services
     ///      de la BU (teamtype = 0). AssignRequest funciona tanto para Create como Update,
     ///      a diferencia de setear ownerid en el payload (ignorado en Update por Dataverse).
     ///   4. Los AssignRequests se envian en un segundo batch de ExecuteMultiple por batch de upsert.
+    ///      Solo se ejecutan si AppSettings.AssignOwningBusinessUnit = true.
     /// </summary>
     public class ProductGroupSyncService : IProductGroupSyncService
     {

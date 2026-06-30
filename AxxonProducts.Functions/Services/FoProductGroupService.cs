@@ -1,13 +1,13 @@
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using AxxonProductGroups.Functions.Configuration;
-using AxxonProductGroups.Functions.Models;
+using AxxonProducts.Functions.Configuration;
+using AxxonProducts.Functions.Models;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.Logging;
 
-namespace AxxonProductGroups.Functions.Services
+namespace AxxonProducts.Functions.Services
 {
     /// <summary>
     /// Servicio que consume la OData API de Finance &amp; Operations para leer ProductGroups.

@@ -1,10 +1,9 @@
-using AxxonProductGroups.Functions.Models;
+using AxxonProducts.Functions.Models;
 
-namespace AxxonProductGroups.Functions.Services
+namespace AxxonProducts.Functions.Services
 {
     public interface IProductGroupSyncService
     {
         Task SyncAsync(IReadOnlyList<FoProductGroup> groups, CancellationToken cancellationToken = default);
     }
 }
-
