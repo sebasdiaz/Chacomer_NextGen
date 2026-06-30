@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace AxxonProductGroups.Functions.Models
+namespace AxxonProducts.Functions.Models
 {
     /// <summary>
     /// DTO que representa un registro de la entidad ProductGroups de F&O.
@@ -16,14 +16,5 @@ namespace AxxonProductGroups.Functions.Models
 
         [JsonPropertyName("GroupName")]
         public string? GroupName { get; set; }
-    }
-
-    public class FoODataResponse<T>
-    {
-        [JsonPropertyName("value")]
-        public List<T> Value { get; set; } = new();
-
-        [JsonPropertyName("@odata.nextLink")]
-        public string? NextLink { get; set; }
     }
 }
