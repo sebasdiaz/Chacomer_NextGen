@@ -23,7 +23,7 @@ namespace AxxonProducts.Functions.Services
                 throw new InvalidOperationException(
                     "DataverseUrl no esta configurado. Verificar Application Settings de la Function App.");
 
-            if (_settings.UseClientSecretAuth)
+            if (_settings.UseDataverseClientSecretAuth)
             {
                 _logger.LogInformation(
                     "[DataverseClientFactory] Usando Client Secret (modo DESA). " +

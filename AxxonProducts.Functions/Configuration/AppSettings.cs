@@ -8,9 +8,14 @@ namespace AxxonProducts.Functions.Configuration
 
         public string? DataverseClientSecret { get; set; }
 
-        public bool UseClientSecretAuth =>
+        public bool UseDataverseClientSecretAuth =>
             !string.IsNullOrEmpty(DataverseClientId) &&
             !string.IsNullOrEmpty(DataverseClientSecret);
+
+        public bool UseFoClientSecretAuth =>
+            !string.IsNullOrEmpty(FoTenantId) &&
+            !string.IsNullOrEmpty(FoClientId) &&
+            !string.IsNullOrEmpty(FoClientSecret);
 
         /// <summary>
         /// Si es true, ProductGroupSyncService ejecuta AssignRequest para setear

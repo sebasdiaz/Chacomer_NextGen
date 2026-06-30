@@ -30,7 +30,7 @@ namespace AxxonProducts.Functions.Services
             _httpClient = httpClient;
             _settings   = settings;
             _logger     = logger;
-            _credential = settings.UseClientSecretAuth
+            _credential = settings.UseFoClientSecretAuth
                 ? new ClientSecretCredential(
                     settings.FoTenantId,
                     settings.FoClientId,
