@@ -37,7 +37,7 @@ namespace AxxonProducts.Functions.Functions
 
         [Function(nameof(ReleasedProductSyncFunction))]
         public async Task Run(
-            [TimerTrigger("%Schedules:ReleasedProductSync%", RunOnStartup = true)] TimerInfo timer,
+            [TimerTrigger("%Schedules:ReleasedProductSync%", RunOnStartup = false)] TimerInfo timer,
             CancellationToken cancellationToken)
         {
             if (timer.IsPastDue)

@@ -1,11 +1,12 @@
-using AxxonProductGroups.Functions.Models;
+using AxxonProducts.Functions.Configuration;
+using AxxonProducts.Functions.Models;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
-namespace AxxonProductGroups.Functions.Services
+namespace AxxonProducts.Functions.Services
 {
     /// <summary>
     /// Sincroniza product groups de F&O hacia msdyn_productgroup en Dataverse.
@@ -26,6 +27,7 @@ namespace AxxonProductGroups.Functions.Services
     ///      de la BU (teamtype = 0). AssignRequest funciona tanto para Create como Update,
     ///      a diferencia de setear ownerid en el payload (ignorado en Update por Dataverse).
     ///   4. Los AssignRequests se envian en un segundo batch de ExecuteMultiple por batch de upsert.
+    ///      Solo se ejecutan si AppSettings.AssignOwningBusinessUnit = true.
     /// </summary>
     public class ProductGroupSyncService : IProductGroupSyncService
     {
@@ -34,14 +36,19 @@ namespace AxxonProductGroups.Functions.Services
 
         private readonly IOrganizationService _orgService;
         private readonly ILogger<ProductGroupSyncService> _logger;
+        private readonly AppSettings _settings;
 
         // Caches validos durante una ejecucion del timer
         private readonly Dictionary<string, Guid>  _companyCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Guid?> _buTeamCache  = new(StringComparer.OrdinalIgnoreCase);
 
-        public ProductGroupSyncService(IOrganizationService orgService, ILogger<ProductGroupSyncService> logger)
+        public ProductGroupSyncService(
+            IOrganizationService orgService,
+            AppSettings settings,
+            ILogger<ProductGroupSyncService> logger)
         {
             _orgService = orgService;
+            _settings   = settings;
             _logger     = logger;
         }
 
@@ -105,22 +112,7 @@ namespace AxxonProductGroups.Functions.Services
 
                 var upsertResponse = (ExecuteMultipleResponse)_orgService.Execute(upsertRequests);
 
-                // ── Paso 2: Recolectar IDs exitosos y preparar AssignRequests ─────────
-                // UpsertResponse.Target devuelve el EntityReference del registro
-                // creado o actualizado, sin necesidad de query adicional.
-                var assignRequests = new ExecuteMultipleRequest
-                {
-                    Requests = new OrganizationRequestCollection(),
-                    Settings = new ExecuteMultipleSettings
-                    {
-                        ContinueOnError = true,
-                        ReturnResponses = true
-                    }
-                };
-
-                // Mapa de indice en assignRequests -> GroupId para logging de faults
-                var assignIndexToGroupId = new Dictionary<int, string>();
-
+                // ── Paso 2: Contabilizar upserts ─────────────────────────────────────
                 foreach (var responseItem in upsertResponse.Responses)
                 {
                     if (responseItem.Fault is not null)
@@ -141,8 +133,26 @@ namespace AxxonProductGroups.Functions.Services
                         created++;
                     else
                         updated++;
+                }
 
-                    // Preparar AssignRequest si hay BU resuelta para este registro
+                // ── Paso 3: AssignRequests (solo si AssignOwningBusinessUnit=true) ────
+                if (!_settings.AssignOwningBusinessUnit)
+                    continue;
+
+                var assignRequests = new ExecuteMultipleRequest
+                {
+                    Requests = new OrganizationRequestCollection(),
+                    Settings = new ExecuteMultipleSettings
+                    {
+                        ContinueOnError = true,
+                        ReturnResponses = true
+                    }
+                };
+
+                var assignIndexToGroupId = new Dictionary<int, string>();
+
+                foreach (var responseItem in upsertResponse.Responses.Where(r => r.Fault is null))
+                {
                     var successGroup = requestGroups[responseItem.RequestIndex];
                     var buTeamId     = ResolveBuDefaultTeam(successGroup.DataAreaId);
                     if (!buTeamId.HasValue)
@@ -158,7 +168,6 @@ namespace AxxonProductGroups.Functions.Services
                     });
                 }
 
-                // ── Paso 3: Ejecutar assigns ──────────────────────────────────────────
                 if (assignRequests.Requests.Count == 0)
                     continue;
 

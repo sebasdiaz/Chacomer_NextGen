@@ -13,19 +13,24 @@ var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 
-builder.Services.AddOpenTelemetry()
-    .UseFunctionsWorkerDefaults()
-    .UseAzureMonitorExporter();
+var otelBuilder = builder.Services.AddOpenTelemetry()
+    .UseFunctionsWorkerDefaults();
+
+var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+    otelBuilder.UseAzureMonitorExporter();
 
 var settings = new AppSettings
 {
-    DataverseUrl          = builder.Configuration["DataverseUrl"] ?? string.Empty,
-    DataverseClientId     = builder.Configuration["DataverseClientId"],
-    DataverseClientSecret = builder.Configuration["DataverseClientSecret"],
-    FoBaseUrl             = builder.Configuration["FoBaseUrl"] ?? string.Empty,
-    FoTenantId            = builder.Configuration["FoTenantId"],
-    FoClientId            = builder.Configuration["FoClientId"],
-    FoClientSecret        = builder.Configuration["FoClientSecret"]
+    DataverseUrl             = builder.Configuration["DataverseUrl"] ?? string.Empty,
+    DataverseClientId        = builder.Configuration["DataverseClientId"],
+    DataverseClientSecret    = builder.Configuration["DataverseClientSecret"],
+    FoBaseUrl                = builder.Configuration["FoBaseUrl"] ?? string.Empty,
+    FoTenantId               = builder.Configuration["FoTenantId"],
+    FoClientId               = builder.Configuration["FoClientId"],
+    FoClientSecret           = builder.Configuration["FoClientSecret"],
+    AssignOwningBusinessUnit = bool.TryParse(
+        builder.Configuration["AssignOwningBusinessUnit"], out var assignBu) && assignBu
 };
 
 if (string.IsNullOrWhiteSpace(settings.DataverseUrl))
@@ -62,6 +67,24 @@ builder.Services.AddTransient<ISharedProductSyncService>(sp =>
     var orgService = factory.CreateOrganizationService();
     var logger     = sp.GetRequiredService<ILogger<SharedProductSyncService>>();
     return new SharedProductSyncService(orgService, logger);
+});
+
+builder.Services.AddTransient<IFoProductGroupService>(sp =>
+{
+    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+    var httpClient        = httpClientFactory.CreateClient("FoOData");
+    var appSettings       = sp.GetRequiredService<AppSettings>();
+    var logger            = sp.GetRequiredService<ILogger<FoProductGroupService>>();
+    return new FoProductGroupService(httpClient, appSettings, logger);
+});
+
+builder.Services.AddTransient<IProductGroupSyncService>(sp =>
+{
+    var factory     = sp.GetRequiredService<DataverseClientFactory>();
+    var orgService  = factory.CreateOrganizationService();
+    var appSettings = sp.GetRequiredService<AppSettings>();
+    var logger      = sp.GetRequiredService<ILogger<ProductGroupSyncService>>();
+    return new ProductGroupSyncService(orgService, appSettings, logger);
 });
 
 builder.Services.AddLogging(b => b.AddConsole());

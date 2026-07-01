@@ -12,6 +12,14 @@ namespace AxxonProducts.Functions.Configuration
             !string.IsNullOrEmpty(DataverseClientId) &&
             !string.IsNullOrEmpty(DataverseClientSecret);
 
+        /// <summary>
+        /// Si es true, ProductGroupSyncService ejecuta AssignRequest para setear
+        /// owningbusinessunit/owningteam por el team por defecto de la BU correspondiente
+        /// al dataAreaId. Requiere que el default team de cada BU tenga prvRead sobre
+        /// msdyn_productgroup.
+        /// </summary>
+        public bool AssignOwningBusinessUnit { get; set; } = false;
+
         public string FoBaseUrl { get; set; } = string.Empty;
 
         public string? FoTenantId { get; set; }
