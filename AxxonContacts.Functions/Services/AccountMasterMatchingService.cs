@@ -13,6 +13,7 @@ namespace AxxonContacts.Functions.Services
         private const string IsMaster             = "axx_ismaster";
         private const string MasterAccountId      = "axx_masteraccountid";
         private const string IdentificationNumber = "msdyn_identificationnumber";
+        private const string TipoDocumento        = "axx_tipodocumento";
         private const int    BulkBatchSize        = 1000;
 
         private readonly IOrganizationService _service;
@@ -55,9 +56,11 @@ namespace AxxonContacts.Functions.Services
                 return null;
             }
 
-            // Si identification o name no llegaron en el payload (Step sin PreImage completo),
-            // se buscan directamente en Dataverse.
-            if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber) || string.IsNullOrWhiteSpace(message.Name))
+            // Si identification, name o tipo de documento no llegaron en el payload
+            // (Step sin PreImage completo), se buscan directamente en Dataverse.
+            if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber)
+                || string.IsNullOrWhiteSpace(message.Name)
+                || message.AxxTipoDocumento is null)
             {
                 _logger.LogInformation(
                     "[AccountMasterMatchingService] Campos faltantes en payload. Recuperando Account {AccountId} de Dataverse.",
@@ -71,22 +74,22 @@ namespace AxxonContacts.Functions.Services
                 return null;
             }
 
-            var existingMaster = await FindMasterByIdentificationAsync(message.MsdynIdentificationNumber);
+            var existingMaster = await FindMasterByIdentificationAsync(message.MsdynIdentificationNumber, message.AxxTipoDocumento);
             if (existingMaster != null)
             {
                 _logger.LogInformation(
-                    "[AccountMasterMatchingService] Master {MasterId} ya existe para '{Identification}'. Linkeando raws pendientes.",
-                    existingMaster.Id, message.MsdynIdentificationNumber);
-                await BulkAssociateRawsToMasterAsync(message.MsdynIdentificationNumber, existingMaster.ToEntityReference());
+                    "[AccountMasterMatchingService] Master {MasterId} ya existe para '{Identification}' (TipoDocumento={TipoDocumento}). Linkeando raws pendientes.",
+                    existingMaster.Id, message.MsdynIdentificationNumber, message.AxxTipoDocumento);
+                await BulkAssociateRawsToMasterAsync(message.MsdynIdentificationNumber, message.AxxTipoDocumento, existingMaster.ToEntityReference());
                 return existingMaster.ToEntityReference();
             }
 
             _logger.LogInformation(
-                "[AccountMasterMatchingService] Sin Master para '{Identification}'. Creando.",
-                message.MsdynIdentificationNumber);
+                "[AccountMasterMatchingService] Sin Master para '{Identification}' (TipoDocumento={TipoDocumento}). Creando.",
+                message.MsdynIdentificationNumber, message.AxxTipoDocumento);
 
             var newMasterRef = await CreateMasterAsync(message);
-            await BulkAssociateRawsToMasterAsync(message.MsdynIdentificationNumber, newMasterRef);
+            await BulkAssociateRawsToMasterAsync(message.MsdynIdentificationNumber, message.AxxTipoDocumento, newMasterRef);
 
             _logger.LogInformation(
                 "[AccountMasterMatchingService] Completado. Account={AccountId} | Master={MasterId}",
@@ -105,12 +108,13 @@ namespace AxxonContacts.Functions.Services
             {
                 var record = await Task.Run(() =>
                     _service.Retrieve(EntityLogicalName, message.AccountId,
-                        new ColumnSet("name", IdentificationNumber, IsMaster, MasterAccountId, "msdyn_company")));
+                        new ColumnSet("name", IdentificationNumber, TipoDocumento, IsMaster, MasterAccountId, "msdyn_company")));
 
                 if (string.IsNullOrWhiteSpace(message.Name))
                     message.Name = record.GetAttributeValue<string>("name");
                 if (string.IsNullOrWhiteSpace(message.MsdynIdentificationNumber))
                     message.MsdynIdentificationNumber = record.GetAttributeValue<string>(IdentificationNumber);
+                message.AxxTipoDocumento ??= record.GetAttributeValue<OptionSetValue>(TipoDocumento)?.Value;
                 message.IsMaster        = record.GetAttributeValue<bool>(IsMaster);
                 message.MasterAccountId = record.GetAttributeValue<EntityReference>(MasterAccountId)?.Id ?? message.MasterAccountId;
                 message.MsdynCompany    ??= record.GetAttributeValue<EntityReference>("msdyn_company")?.Id;
@@ -130,16 +134,17 @@ namespace AxxonContacts.Functions.Services
         // FindMasterByIdentification
         // ────────────────────────────────────────────────────────────
 
-        private async Task<Entity?> FindMasterByIdentificationAsync(string identificationNumber)
+        private async Task<Entity?> FindMasterByIdentificationAsync(string identificationNumber, int? tipoDocumento)
         {
             var query = new QueryExpression(EntityLogicalName)
             {
-                ColumnSet = new ColumnSet(IsMaster, IdentificationNumber),
+                ColumnSet = new ColumnSet(IsMaster, IdentificationNumber, TipoDocumento),
                 Criteria = new FilterExpression(LogicalOperator.And)
                 {
                     Conditions =
                     {
                         new ConditionExpression(IdentificationNumber, ConditionOperator.Equal, identificationNumber),
+                        TipoDocumentoCondition(tipoDocumento),
                         new ConditionExpression(IsMaster, ConditionOperator.Equal, true)
                     }
                 },
@@ -150,11 +155,18 @@ namespace AxxonContacts.Functions.Services
 
             if (results.Entities.Count > 1)
                 _logger.LogWarning(
-                    "[AccountMasterMatchingService] {Count} Masters para '{Identification}'. Usando el primero ({Id}).",
-                    results.Entities.Count, identificationNumber, results.Entities[0].Id);
+                    "[AccountMasterMatchingService] {Count} Masters para '{Identification}' (TipoDocumento={TipoDocumento}). Usando el primero ({Id}).",
+                    results.Entities.Count, identificationNumber, tipoDocumento, results.Entities[0].Id);
 
             return results.Entities.Count > 0 ? results.Entities[0] : null;
         }
+
+        // El matching es por par exacto (numero + tipo de documento), igual que la alternate key:
+        // un raw sin tipo de documento solo matchea masters sin tipo de documento.
+        private static ConditionExpression TipoDocumentoCondition(int? tipoDocumento)
+            => tipoDocumento.HasValue
+                ? new ConditionExpression(TipoDocumento, ConditionOperator.Equal, tipoDocumento.Value)
+                : new ConditionExpression(TipoDocumento, ConditionOperator.Null);
 
         // ────────────────────────────────────────────────────────────
         // CreateMaster
@@ -176,7 +188,7 @@ namespace AxxonContacts.Functions.Services
                     "[AccountMasterMatchingService] Create fallo: {Error}. Re-buscando (posible race condition).",
                     ex.Message);
 
-                var existing = await FindMasterByIdentificationAsync(message.MsdynIdentificationNumber!);
+                var existing = await FindMasterByIdentificationAsync(message.MsdynIdentificationNumber!, message.AxxTipoDocumento);
                 if (existing != null)
                 {
                     _logger.LogInformation("[AccountMasterMatchingService] Race condition resuelta. Master={Id}", existing.Id);
@@ -208,6 +220,8 @@ namespace AxxonContacts.Functions.Services
             SetString(e, "emailaddress1", m.EmailAddress1);
             SetString(e, "description",   m.Description);
             SetString(e, IdentificationNumber, m.MsdynIdentificationNumber);
+            if (m.AxxTipoDocumento.HasValue)
+                e[TipoDocumento] = new OptionSetValue(m.AxxTipoDocumento.Value);
 
             // msdyn_company requerido por plugin de Dual Write
             SetRef(e, "msdyn_company", "cdm_company", m.MsdynCompany);
@@ -230,7 +244,7 @@ namespace AxxonContacts.Functions.Services
         // BulkAssociateRawsToMaster
         // ────────────────────────────────────────────────────────────
 
-        private async Task BulkAssociateRawsToMasterAsync(string identificationNumber, EntityReference masterRef)
+        private async Task BulkAssociateRawsToMasterAsync(string identificationNumber, int? tipoDocumento, EntityReference masterRef)
         {
             var notMasterFilter = new FilterExpression(LogicalOperator.Or);
             notMasterFilter.AddCondition(IsMaster, ConditionOperator.Equal, false);
@@ -238,6 +252,7 @@ namespace AxxonContacts.Functions.Services
 
             var criteria = new FilterExpression(LogicalOperator.And);
             criteria.AddCondition(IdentificationNumber, ConditionOperator.Equal, identificationNumber);
+            criteria.AddCondition(TipoDocumentoCondition(tipoDocumento));
             criteria.AddFilter(notMasterFilter);
 
             var query = new QueryExpression(EntityLogicalName)

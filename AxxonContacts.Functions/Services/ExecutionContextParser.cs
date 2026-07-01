@@ -43,6 +43,7 @@ namespace AxxonContacts.Functions.Services
                 IdentificationNumberChanged = identificationChanged,
 
                 MsdynIdentificationNumber = Str(merged, "msdyn_identificationnumber"),
+                AxxTipoDocumento        = Osv(merged, "axx_tipodocumento"),
                 IsMaster                = Bool(merged, "axx_ismaster") ?? false,
                 MasterContactId         = Ref(merged,  "axx_mastercontactid"),
 

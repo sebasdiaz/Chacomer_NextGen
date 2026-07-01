@@ -55,6 +55,13 @@ namespace AxxonContacts.Functions.Models
         [JsonPropertyName("msdynIdentificationNumber")]
         public string? MsdynIdentificationNumber { get; set; }
 
+        /// <summary>
+        /// Tipo de documento (OptionSet). Forma parte de la clave de matching junto con
+        /// msdyn_identificationnumber (alternate key: numero + tipo de documento).
+        /// </summary>
+        [JsonPropertyName("axxTipoDocumento")]
+        public int? AxxTipoDocumento { get; set; }
+
         // ── Auditoria ────────────────────────────────────────────────
         [JsonPropertyName("modifiedBy")]
         public Guid? ModifiedBy { get; set; }
