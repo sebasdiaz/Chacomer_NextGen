@@ -21,5 +21,14 @@ namespace AxxonCustomerGroups.Functions.Configuration
         public string? FoClientId { get; set; }
 
         public string? FoClientSecret { get; set; }
+
+        // ── Dual Write ────────────────────────────────────────────
+
+        /// <summary>
+        /// dataAreaIds (legal entities) que ya sincroniza Dual Write y este sync
+        /// debe excluir. Se setea via App Setting "DualWriteLegalEntities" como
+        /// lista separada por comas (ej: "cha,cne"). Vacio = se sincronizan todas.
+        /// </summary>
+        public IReadOnlyList<string> DualWriteLegalEntities { get; set; } = Array.Empty<string>();
     }
 }

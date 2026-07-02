@@ -9,7 +9,9 @@ clientes de Finance & Operations (**CustomerGroups**) hacia la tabla
 1. `CustomerGroupSyncFunction` corre segun el CRON `Schedules:CustomerGroupSync`
    (default `0 0 23 * * *` — todos los dias a las 23:00).
 2. `FoCustomerGroupService` lee `GET {FoBaseUrl}/data/CustomerGroups?cross-company=true`
-   con paginacion automatica (`@odata.nextLink`).
+   con paginacion automatica (`@odata.nextLink`). Las legal entities listadas en
+   `DualWriteLegalEntities` (ya sincronizadas por Dual Write) se excluyen
+   server-side con `$filter=dataAreaId ne '...'`.
 3. `CustomerGroupSyncService` hace upsert en `msdyn_customergroup` con
    `UpsertRequest` + `KeyAttributes` contra la **alternate key
    (msdyn_groupid + msdyn_company)** — Dataverse resuelve Create vs Update en el
@@ -44,6 +46,7 @@ por nombre. Si no existe, el campo se omite y se loguea Warning (el mapeo tiene
 |-------------------------------|------------------------------------------------------------------|
 | `Schedules:CustomerGroupSync` | CRON del timer. Default sugerido: `0 0 23 * * *`                 |
 | `WEBSITE_TIME_ZONE`           | Zona horaria del CRON (ej. `Paraguay Standard Time`)             |
+| `DualWriteLegalEntities`      | dataAreaIds excluidos del sync por estar en Dual Write, separados por coma (ej: `cha,cne`). Vacio = todas |
 | `DataverseUrl`                | URL del environment de Dataverse                                 |
 | `DataverseClientId`           | (DESA) Client Id del app registration; vacio => Managed Identity |
 | `DataverseClientSecret`       | (DESA) Secret del app registration                               |
