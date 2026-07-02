@@ -97,8 +97,35 @@ namespace AxxonCustomerGroups.Functions.Services
         private string BuildInitialUrl()
         {
             var baseUrl = _settings.FoBaseUrl.TrimEnd('/');
-            return $"{baseUrl}/data/{EntitySet}?cross-company=true&$top={PageSize}";
+            var url     = $"{baseUrl}/data/{EntitySet}?cross-company=true&$top={PageSize}";
+
+            // Excluye las legal entities que ya sincroniza Dual Write: el filtro
+            // se aplica server-side para no leer esos registros de F&O.
+            if (_settings.DualWriteLegalEntities.Count > 0)
+            {
+                var conditions = _settings.DualWriteLegalEntities
+                    .Select(le => $"dataAreaId ne '{EscapeODataLiteral(le)}'");
+                var filter = string.Join(" and ", conditions);
+
+                url += $"&$filter={Uri.EscapeDataString(filter)}";
+
+                _logger.LogInformation(
+                    "[FoCustomerGroupService] Excluyendo legal entities sincronizadas por " +
+                    "Dual Write: [{LegalEntities}]",
+                    string.Join(", ", _settings.DualWriteLegalEntities));
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "[FoCustomerGroupService] 'DualWriteLegalEntities' vacio: se sincronizan " +
+                    "los customer groups de TODAS las companias.");
+            }
+
+            return url;
         }
+
+        // OData escapa la comilla simple duplicandola dentro del literal.
+        private static string EscapeODataLiteral(string value) => value.Replace("'", "''");
 
         private async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
         {

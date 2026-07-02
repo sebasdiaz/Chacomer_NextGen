@@ -17,7 +17,12 @@ var host = new HostBuilder()
             FoBaseUrl             = context.Configuration["FoBaseUrl"] ?? string.Empty,
             FoTenantId            = context.Configuration["FoTenantId"],
             FoClientId            = context.Configuration["FoClientId"],
-            FoClientSecret        = context.Configuration["FoClientSecret"]
+            FoClientSecret        = context.Configuration["FoClientSecret"],
+
+            // Legal entities que ya sincroniza Dual Write: se excluyen del sync.
+            // Formato: dataAreaIds separados por coma (ej: "cha,cne").
+            DualWriteLegalEntities = (context.Configuration["DualWriteLegalEntities"] ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         };
 
         if (string.IsNullOrWhiteSpace(settings.DataverseUrl))
