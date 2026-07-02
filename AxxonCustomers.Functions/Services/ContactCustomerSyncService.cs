@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AxxonCustomers.Functions.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
@@ -59,6 +60,13 @@ namespace AxxonCustomers.Functions.Services
             [806380005] = "Never"
         };
 
+        // Para loguear el payload que se envia a F&O (solo campos con valor).
+        private static readonly JsonSerializerOptions PayloadLogOptions = new()
+        {
+            WriteIndented = false,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        };
+
         private readonly IOrganizationService _orgService;
         private readonly IFoCustomerService _foCustomerService;
         private readonly ILogger<ContactCustomerSyncService> _logger;
@@ -79,28 +87,51 @@ namespace AxxonCustomers.Functions.Services
                 "[ContactCustomerSyncService] Inicio. ContactId={ContactId}", contactId);
 
             var contact    = RetrieveContact(contactId);
+
+            _logger.LogInformation(
+                "[ContactCustomerSyncService] Contact recuperado de Dataverse. ContactId={ContactId} | " +
+                "Atributos con valor: [{Attributes}]",
+                contactId, string.Join(", ", contact.Attributes.Keys));
+
             var dataAreaId = ResolveDataAreaId(contact);
             var payload    = BuildFoCustomer(contact, dataAreaId);
+
+            _logger.LogInformation(
+                "[ContactCustomerSyncService] Payload CustomersV3 armado para {ContactId}: {Payload}",
+                contactId,
+                JsonSerializer.Serialize(payload, PayloadLogOptions));
 
             // Idempotencia: la existencia se verifica contra F&O, no contra el
             // campo de CRM. msdyn_contactpersonid puede tener valor sin que el
             // customer exista (datos previos, write-back de un registro borrado).
             var writtenBackAccount = contact.GetAttributeValue<string>("msdyn_contactpersonid");
+
+            _logger.LogInformation(
+                "[ContactCustomerSyncService] Chequeo de idempotencia contra F&O. " +
+                "DataAreaId={DataAreaId} | PartyNumber={PartyNumber} | " +
+                "msdyn_contactpersonid (CRM)={WrittenBackAccount}",
+                dataAreaId, payload.PartyNumber ?? "null", writtenBackAccount ?? "null");
+
             var existing = await _foCustomerService.FindCustomerAsync(
                 dataAreaId, payload.PartyNumber, writtenBackAccount, cancellationToken);
 
             if (existing != null)
             {
-                _logger.LogInformation(
-                    "[ContactCustomerSyncService] Contact {ContactId} ya existe en F&O " +
-                    "(CustomerAccount={CustomerAccount}, DataAreaId={DataAreaId}). Se omite el insert.",
-                    contactId, existing.CustomerAccount, dataAreaId);
+                _logger.LogWarning(
+                    "[ContactCustomerSyncService] Contact {ContactId} YA EXISTE en F&O " +
+                    "(CustomerAccount={CustomerAccount}, PartyNumber={PartyNumber}, DataAreaId={DataAreaId}). " +
+                    "Se OMITE el insert (idempotencia).",
+                    contactId, existing.CustomerAccount, existing.PartyNumber, dataAreaId);
 
                 // Re-sincroniza el campo de CRM si quedo desactualizado.
                 if (!string.Equals(existing.CustomerAccount, writtenBackAccount, StringComparison.OrdinalIgnoreCase))
                     WriteBackCustomerAccount(contactId, existing.CustomerAccount);
                 return;
             }
+
+            _logger.LogInformation(
+                "[ContactCustomerSyncService] No existe customer previo en F&O. " +
+                "Se procede al insert en CustomersV3 (DataAreaId={DataAreaId}).", dataAreaId);
 
             var created = await _foCustomerService.CreateCustomerAsync(payload, cancellationToken);
 

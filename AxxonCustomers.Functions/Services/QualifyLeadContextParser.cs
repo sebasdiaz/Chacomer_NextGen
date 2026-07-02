@@ -48,6 +48,8 @@ namespace AxxonCustomers.Functions.Services
 
                     if (string.Equals(key, "OpportunityCustomerId", StringComparison.OrdinalIgnoreCase))
                     {
+                        context.HasOpportunityCustomerId = true;
+
                         var (id, logicalName) = ReadEntityReference(param);
                         context.CustomerLogicalName = logicalName;
 
@@ -65,23 +67,27 @@ namespace AxxonCustomers.Functions.Services
             // Flujo estandar de la UI: OpportunityCustomerId viene null (o es el
             // account en leads B2B). El contact creado al calificar llega en
             // OutputParameters.CreatedEntities (QualifyLeadResponse).
-            if (context.ContactId == null)
-                context.ContactId = FindCreatedContact(root);
+            var createdContact = FindCreatedContact(root, context);
+            context.ContactId ??= createdContact;
 
             return context;
         }
 
-        private static Guid? FindCreatedContact(JsonElement root)
+        private static Guid? FindCreatedContact(JsonElement root, QualifyLeadContext context)
         {
             if (!root.TryGetProperty("OutputParameters", out var outputParams)
                 || outputParams.ValueKind != JsonValueKind.Array)
                 return null;
+
+            Guid? contactId = null;
 
             foreach (var param in outputParams.EnumerateArray())
             {
                 if (!param.TryGetProperty("key", out var keyEl)
                     || !string.Equals(keyEl.GetString(), "CreatedEntities", StringComparison.OrdinalIgnoreCase))
                     continue;
+
+                context.HasCreatedEntities = true;
 
                 if (!param.TryGetProperty("value", out var refs)
                     || refs.ValueKind != JsonValueKind.Array)
@@ -90,13 +96,18 @@ namespace AxxonCustomers.Functions.Services
                 foreach (var reference in refs.EnumerateArray())
                 {
                     var (id, logicalName) = ReadReference(reference);
-                    if (id.HasValue
+
+                    if (!string.IsNullOrEmpty(logicalName))
+                        context.CreatedEntityLogicalNames.Add(logicalName);
+
+                    if (contactId == null
+                        && id.HasValue
                         && string.Equals(logicalName, "contact", StringComparison.OrdinalIgnoreCase))
-                        return id;
+                        contactId = id;
                 }
             }
 
-            return null;
+            return contactId;
         }
 
         // Entrada {key, value} cuyo value es un EntityReference

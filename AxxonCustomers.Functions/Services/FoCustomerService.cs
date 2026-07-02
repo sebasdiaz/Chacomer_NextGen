@@ -96,7 +96,13 @@ namespace AxxonCustomers.Functions.Services
                 criteria.Add($"CustomerAccount eq '{EscapeODataLiteral(customerAccount)}'");
 
             if (criteria.Count == 0)
+            {
+                _logger.LogInformation(
+                    "[FoCustomerService] FindCustomer sin criterios (PartyNumber y CustomerAccount " +
+                    "vacios). Se asume que el customer NO existe en F&O (DataAreaId={DataAreaId}).",
+                    dataAreaId);
                 return null;
+            }
 
             // cross-company: sin esto F&O filtra por la compania default del caller.
             var filter = $"dataAreaId eq '{EscapeODataLiteral(dataAreaId)}' " +
@@ -105,6 +111,9 @@ namespace AxxonCustomers.Functions.Services
                       $"?cross-company=true" +
                       $"&$filter={Uri.EscapeDataString(filter)}" +
                       $"&$select=CustomerAccount,PartyNumber,dataAreaId&$top=1";
+
+            _logger.LogInformation(
+                "[FoCustomerService] GET FindCustomer. Filter: {Filter}", filter);
 
             var token = await GetAccessTokenAsync(cancellationToken);
 
@@ -123,8 +132,20 @@ namespace AxxonCustomers.Functions.Services
                     $"F&O OData respondio con HTTP {(int)httpResponse.StatusCode}: {content}");
             }
 
-            var page = JsonSerializer.Deserialize<ODataCollection<FoCustomerV3CreatedResponse>>(content);
-            return page?.Value is { Count: > 0 } ? page.Value[0] : null;
+            var page  = JsonSerializer.Deserialize<ODataCollection<FoCustomerV3CreatedResponse>>(content);
+            var found = page?.Value is { Count: > 0 } ? page.Value[0] : null;
+
+            if (found != null)
+                _logger.LogInformation(
+                    "[FoCustomerService] FindCustomer ENCONTRO un customer existente. " +
+                    "CustomerAccount={CustomerAccount} | PartyNumber={PartyNumber} | DataAreaId={DataAreaId}",
+                    found.CustomerAccount, found.PartyNumber, dataAreaId);
+            else
+                _logger.LogInformation(
+                    "[FoCustomerService] FindCustomer no encontro coincidencias en {DataAreaId}.",
+                    dataAreaId);
+
+            return found;
         }
 
         // OData escapa la comilla simple duplicandola dentro del literal.
