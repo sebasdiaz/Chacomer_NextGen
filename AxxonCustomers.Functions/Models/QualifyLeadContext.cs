@@ -21,5 +21,16 @@ namespace AxxonCustomers.Functions.Models
 
         /// <summary>LogicalName del registro referenciado en OpportunityCustomerId.</summary>
         public string? CustomerLogicalName { get; set; }
+
+        // ── Diagnostico (solo para logging) ───────────────────────────
+
+        /// <summary>True si InputParameters trae la key OpportunityCustomerId (aunque sea null).</summary>
+        public bool HasOpportunityCustomerId { get; set; }
+
+        /// <summary>True si el payload trae OutputParameters.CreatedEntities.</summary>
+        public bool HasCreatedEntities { get; set; }
+
+        /// <summary>LogicalNames de los registros en CreatedEntities (account, contact, opportunity...).</summary>
+        public List<string> CreatedEntityLogicalNames { get; } = new();
     }
 }

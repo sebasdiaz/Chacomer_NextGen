@@ -74,15 +74,36 @@ namespace AxxonCustomers.Functions.Functions
                 return;
             }
 
+            _logger.LogInformation(
+                "[QualifyLeadCustomerSyncFunction] Contexto parseado. MessageId={MessageId} | " +
+                "MessageName={MessageName} | LeadId={LeadId} | ContactId={ContactId} | " +
+                "OpportunityCustomerId presente={HasOppCustomerId} (LogicalName={CustomerLogicalName}) | " +
+                "CreatedEntities presente={HasCreatedEntities} [{CreatedEntityLogicalNames}]",
+                messageId,
+                context.MessageName,
+                context.LeadId?.ToString() ?? "null",
+                context.ContactId?.ToString() ?? "null",
+                context.HasOpportunityCustomerId,
+                context.CustomerLogicalName ?? "null",
+                context.HasCreatedEntities,
+                string.Join(", ", context.CreatedEntityLogicalNames));
+
             if (context.ContactId == null)
             {
                 // QualifyLead sin contact: no vino en OpportunityCustomerId ni se creo
                 // uno al calificar (CreatedEntities). No es un error: se completa sin procesar.
-                _logger.LogInformation(
-                    "[QualifyLeadCustomerSyncFunction] Mensaje {MessageId} sin contact en " +
-                    "OpportunityCustomerId ni en CreatedEntities (LogicalName={LogicalName}). " +
-                    "Se completa sin procesar.",
-                    messageId, context.CustomerLogicalName ?? "null");
+                var body        = message.Body.ToString();
+                var bodyPreview = body.Length > 2000 ? body[..2000] + "...(truncado)" : body;
+
+                _logger.LogWarning(
+                    "[QualifyLeadCustomerSyncFunction] Mensaje {MessageId} SIN CONTACT: no vino en " +
+                    "OpportunityCustomerId (LogicalName={LogicalName}) ni en CreatedEntities " +
+                    "[{CreatedEntityLogicalNames}]. Se completa SIN insertar en F&O. " +
+                    "Body (preview): {BodyPreview}",
+                    messageId,
+                    context.CustomerLogicalName ?? "null",
+                    string.Join(", ", context.CreatedEntityLogicalNames),
+                    bodyPreview);
 
                 await messageActions.CompleteMessageAsync(message);
                 return;
