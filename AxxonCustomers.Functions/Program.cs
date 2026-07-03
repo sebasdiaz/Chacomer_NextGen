@@ -1,9 +1,12 @@
+using System.Net;
 using AxxonCustomers.Functions.Configuration;
 using AxxonCustomers.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
+using Polly;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWorkerDefaults()
@@ -39,6 +42,49 @@ var host = new HostBuilder()
             client.DefaultRequestHeaders.Add("Accept", "application/json");
             client.DefaultRequestHeaders.Add("OData-MaxVersion", "4.0");
             client.DefaultRequestHeaders.Add("OData-Version", "4.0");
+        })
+        .AddResilienceHandler("FoThrottlingRetry", (resilience, context) =>
+        {
+            var logger = context.ServiceProvider
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger("FoThrottlingRetry");
+
+            // Reintenta SOLO HTTP 429 (service protection de F&O): el server
+            // rechaza la request sin procesarla, asi que es seguro incluso para
+            // POST no idempotentes. 5xx/timeouts NO se reintentan aca para no
+            // duplicar inserts: de esos se encarga el reintento de Service Bus.
+            resilience.AddRetry(new HttpRetryStrategyOptions
+            {
+                MaxRetryAttempts = 3,
+                Delay            = TimeSpan.FromSeconds(5),
+                BackoffType      = DelayBackoffType.Exponential,
+                UseJitter        = true,
+                ShouldHandle     = args => ValueTask.FromResult(
+                    args.Outcome.Result is { StatusCode: HttpStatusCode.TooManyRequests }),
+                // Respeta el Retry-After que manda F&O, con tope de 60s para no
+                // exceder el Timeout del HttpClient (5 min) ni el lock del
+                // mensaje de Service Bus. Sin header, cae al backoff exponencial.
+                DelayGenerator = args =>
+                {
+                    var retryAfter   = args.Outcome.Result?.Headers.RetryAfter;
+                    TimeSpan? delay  = retryAfter?.Delta
+                        ?? (retryAfter?.Date is { } date ? date - DateTimeOffset.UtcNow : null);
+
+                    if (delay is { Ticks: > 0 } d)
+                        return ValueTask.FromResult<TimeSpan?>(
+                            d <= TimeSpan.FromSeconds(60) ? d : TimeSpan.FromSeconds(60));
+
+                    return ValueTask.FromResult<TimeSpan?>(null);
+                },
+                OnRetry = args =>
+                {
+                    logger.LogWarning(
+                        "[FoOData] HTTP 429 (throttling) de F&O. " +
+                        "Reintento {Attempt}/{Max} en {Delay}s.",
+                        args.AttemptNumber + 1, 3, args.RetryDelay.TotalSeconds);
+                    return ValueTask.CompletedTask;
+                }
+            });
         });
 
         services.AddTransient<IFoCustomerService>(sp =>
