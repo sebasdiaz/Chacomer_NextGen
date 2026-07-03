@@ -47,7 +47,7 @@ namespace AxxonCustomers.Functions.Functions
             ServiceBusMessageActions  messageActions,
             CancellationToken         cancellationToken)
         {
-            var messageId     = message.MessageId;
+           var messageId     = message.MessageId;
             var deliveryCount = message.DeliveryCount;
 
             _logger.LogInformation(
