@@ -199,17 +199,12 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
         const qs  = apiKey ? `?code=${encodeURIComponent(apiKey)}` : "";
         const url = `${base}/api/turuc/contribuyente/${encodeURIComponent(ruc)}${qs}`;
 
-        console.log("[RucValidator] Calling:", url);
-
         const response = await fetch(url, {
             method: "GET",
             headers: { "Accept": "application/json" },
         });
 
-        console.log("[RucValidator] HTTP status:", response.status);
-
         if (response.status === 404) {
-            console.log("[RucValidator] 404 → RUC no encontrado");
             return null;
         }
 
@@ -218,7 +213,6 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
         }
 
         const rawText = await response.text();
-        console.log("[RucValidator] Raw body:", rawText);
 
         let body: ContribuyenteResponse;
         try {
@@ -227,13 +221,10 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             throw new Error(`Respuesta no es JSON válido: ${rawText.substring(0, 100)}`);
         }
 
-        console.log("[RucValidator] data:", body.data, "message:", body.message);
-
         // Acepta "OK" en cualquier casing y sin importar whitespace
         const messageOk = body.message?.trim().toUpperCase() === "OK";
 
         if (!body.data || !messageOk) {
-            console.log("[RucValidator] Validación fallida → data:", !!body.data, "messageOk:", messageOk);
             return null;
         }
 
