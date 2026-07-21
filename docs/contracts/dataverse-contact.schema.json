@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chacomer.com/eip/contracts/dataverse-contact/1.0",
+  "title": "Dataverse Contact payload (EiP)",
+  "description": "Payload del envelope EiP para source=dataverse, entityType=contact. Lo emite ContactEventPublisherPlugin y lo consume ContactMasterMatchingFunction. En Update el payload trae solo los campos que cambiaron (delta) mas los de identidad.",
+  "type": "object",
+  "required": ["contactId", "triggerMessage", "msdynIdentificationNumber"],
+  "properties": {
+    "contactId": { "type": "string", "format": "uuid" },
+    "triggerMessage": { "type": "string", "enum": ["Create", "Update"] },
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "identificationNumberChanged": {
+      "type": "boolean",
+      "description": "true si msdyn_identificationnumber vino en el Target del evento."
+    },
+
+    "firstName": { "type": ["string", "null"] },
+    "middleName": { "type": ["string", "null"] },
+    "lastName": { "type": ["string", "null"] },
+    "mobilePhone": { "type": ["string", "null"] },
+    "description": { "type": ["string", "null"] },
+    "emailAddress1": { "type": ["string", "null"] },
+    "emailAddress2": { "type": ["string", "null"] },
+    "msdynIsProspect": { "type": ["boolean", "null"] },
+
+    "isMaster": { "type": "boolean" },
+    "masterContactId": { "type": ["string", "null"], "format": "uuid" },
+    "masterContactIdName": { "type": ["string", "null"] },
+
+    "msdynCompany": { "type": ["string", "null"], "format": "uuid" },
+    "msdynCompanyName": { "type": ["string", "null"] },
+    "msdynSellable": { "type": ["boolean", "null"] },
+    "msdynPartyId": { "type": ["string", "null"], "format": "uuid" },
+    "msdynContactPersonId": { "type": ["string", "null"] },
+    "msdynCustomerGroupId": { "type": ["string", "null"], "format": "uuid" },
+    "msdynCustomerGroupIdName": { "type": ["string", "null"] },
+    "msdynIdentificationNumber": {
+      "type": ["string", "null"],
+      "description": "Clave de matching. Coincide con el partitionKey/SessionId del envelope."
+    },
+    "msdynPartyCountry": { "type": ["string", "null"] },
+    "msdynPartyStateProvince": { "type": ["string", "null"] },
+    "transactionCurrencyId": { "type": ["string", "null"], "format": "uuid" },
+    "transactionCurrencyIdName": { "type": ["string", "null"] },
+    "msdynPaymentDay": {
+      "type": ["string", "null"],
+      "description": "Lookup (Guid) u OptionSet segun el environment; viaja como string."
+    },
+    "msdynPaymentDayName": { "type": ["string", "null"] },
+    "msdynPaymentSchedule": { "type": ["string", "null"], "format": "uuid" },
+    "msdynCustomerPaymentMethod": { "type": ["string", "null"] },
+    "msdynCustomerPaymentMethodName": { "type": ["string", "null"] },
+    "msdynSalesTaxGroup": { "type": ["string", "null"], "format": "uuid" },
+    "msdynSalesTaxGroupName": { "type": ["string", "null"] },
+    "msdynPaymentTerms": { "type": ["string", "null"], "format": "uuid" },
+    "msdynPaymentTermsName": { "type": ["string", "null"] },
+    "msdynPrimaryContact": { "type": ["string", "null"], "format": "uuid" },
+    "creditLimit": { "type": ["string", "null"] },
+
+    "a365CreditRating": { "type": ["integer", "null"] },
+    "a365OnHoldStatus": { "type": ["boolean", "null"] },
+    "a365Notes": { "type": ["string", "null"] },
+
+    "modifiedBy": { "type": ["string", "null"], "format": "uuid" },
+    "modifiedByName": { "type": ["string", "null"] },
+    "modifiedOn": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

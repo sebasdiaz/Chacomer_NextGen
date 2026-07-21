@@ -96,6 +96,9 @@ namespace AxxonContacts.Plugins
                     return;
                 }
 
+                // true si el RUC vino en el Target (se establecio/modifico en esta operacion).
+                var identificationChanged = target.Contains(ContactConstants.MsdynIdentificationNumber);
+
                 // Para Update: el mensaje lleva SOLO los campos que cambiaron (Target delta)
                 // mas los campos de identidad. Evita sobreescribir el master con datos
                 // sin cambios de la PreImage que podrian pisar valores de otra fuente.
@@ -105,14 +108,23 @@ namespace AxxonContacts.Plugins
                     : fullContact;
 
                 var message = BuildMessage(messageSource, context.MessageName);
-                var json    = SerializeToJson(message);
+                message.IdentificationNumberChanged = identificationChanged;
+
+                // Se publica el envelope EiP con el snapshot como payload.
+                var payloadJson = SerializeToJson(message);
+                var envelope = EipEnvelope.Wrap(
+                    payloadJson,
+                    entityType:   "contact",
+                    operation:    context.MessageName.ToLowerInvariant(),
+                    partitionKey: identificationNumber,
+                    correlationId: context.CorrelationId);
 
                 var publisher = new ServiceBusPublisher(_secureConfig, tracing);
-                publisher.PublishAsync(json, sessionId: identificationNumber)
+                publisher.PublishAsync(envelope, sessionId: identificationNumber)
                          .GetAwaiter()
                          .GetResult();
 
-                tracing.Trace("[ContactEventPublisherPlugin] Mensaje publicado. SessionId={0}", identificationNumber);
+                tracing.Trace("[ContactEventPublisherPlugin] Envelope publicado. SessionId={0}", identificationNumber);
             }
             catch (InvalidPluginExecutionException) { throw; }
             catch (Exception ex)
@@ -237,6 +249,7 @@ namespace AxxonContacts.Plugins
             AppendString(sb, "contactId",                m.ContactId);               sb.Append(',');
             AppendString(sb, "triggerMessage",           m.TriggerMessage);           sb.Append(',');
             AppendString(sb, "publishedAt",              m.PublishedAt);              sb.Append(',');
+            AppendBool  (sb, "identificationNumberChanged", m.IdentificationNumberChanged); sb.Append(',');
             AppendString(sb, "firstName",                m.FirstName);                sb.Append(',');
             AppendString(sb, "middleName",               m.MiddleName);               sb.Append(',');
             AppendString(sb, "lastName",                 m.LastName);                 sb.Append(',');

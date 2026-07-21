@@ -11,7 +11,9 @@ que la propuesta EiP busca eliminar.
 |---|---|
 | [eip-message-envelope.schema.json](eip-message-envelope.schema.json) | JSON Schema (draft 2020-12) del envelope estándar |
 | [eip-message-envelope.example.json](eip-message-envelope.example.json) | Ejemplo de un mensaje válido |
-| [dataverse-remote-execution-context.sample.json](dataverse-remote-execution-context.sample.json) | Muestra del formato **nativo** de Dataverse (interino — ver Estado actual) |
+| [dataverse-contact.schema.json](dataverse-contact.schema.json) | Payload de `source=dataverse, entityType=contact` |
+| [dataverse-account.schema.json](dataverse-account.schema.json) | Payload de `source=dataverse, entityType=account` |
+| [dataverse-remote-execution-context.sample.json](dataverse-remote-execution-context.sample.json) | Muestra del formato **nativo** de Dataverse (legacy — ver Estado actual) |
 
 El envelope está tipado en código en `Axxon.Eip.Core/Messaging/EipMessage.cs`.
 
@@ -72,43 +74,44 @@ Constantes en `Axxon.Eip.Core/Messaging/EipConstants.cs` (`EipDeadLetterReason`)
 
 | Integración | source | entityType | Transporte | Estado |
 |---|---|---|---|---|
-| Contacts (master matching) | dataverse | contact | Queue `contact-master-matching` (sessions) | **Interino**: formato nativo, ver abajo |
-| Accounts (master matching) | dataverse | account | Queue `account-master-matching` (sessions) | **Interino**: formato nativo |
-| Customers (qualify lead → F&O) | dataverse | customer | Queue (SB trigger) | **Interino** |
+| Contacts (master matching) | dataverse | contact | Queue `contact-master-matching` (sessions) | **Envelope** vía plugin thin; Function soporta envelope + legacy |
+| Accounts (master matching) | dataverse | account | Queue `account-master-matching` (sessions) | **Envelope** vía plugin thin; Function soporta envelope + legacy |
+| Customers (qualify lead → F&O) | dataverse | customer | Queue (SB trigger) | Interino |
 | CustomerGroups (F&O → Dataverse) | fo | customergroup | Timer (sin SB) | Pull batch, sin envelope |
 | Products (F&O → Dataverse) | fo | product / productgroup | Timer/HTTP (sin SB) | Pull batch, sin envelope |
 
 > Cada integración nueva debe agregar aquí su fila y, si define un payload propio,
 > un archivo `{source}-{entityType}.schema.json` en este directorio.
 
-## Estado actual vs objetivo
+## Estado actual (emisor de Dataverse unificado)
 
-**Importante para el equipo.** Hoy el flujo de Contacts/Accounts **no** usa el
-envelope EiP: Dataverse publica su `RemoteExecutionContext` nativo vía **Service
-Endpoint** (ver [muestra](dataverse-remote-execution-context.sample.json)) y la
-Function lo parsea con `ExecutionContextParser`. Ese formato:
+El lado emisor de Contacts/Accounts quedó unificado en el **plugin thin**, que
+emite el **envelope EiP** con el DTO de dominio en `payload`:
 
-- Es enorme y **específico de Dataverse** (InputParameters, PreEntityImages, ...);
-  no sirve como contrato para satélites como Magento o los bancos.
-- Acopla el consumer al modelo de ejecución de plugins de Dataverse.
+- `ContactEventPublisherPlugin` → envelope `entityType=contact`.
+- `AccountEventPublisherPlugin` → envelope `entityType=account`.
 
-Además, en el repo conviven **dos diseños del lado emisor** que hoy no coinciden:
+Del lado consumidor, las Functions hacen **deserialización dual** (`EipEnvelopeParser`):
+si el body trae `schemaVersion` → camino envelope (`EipMessage<T>`); si no → el
+parser legacy del `RemoteExecutionContext` (`ExecutionContextParser` /
+`AccountExecutionContextParser`). Esto permite convivir durante el rollout sin cortar
+el flujo vivo.
 
-1. **Service Endpoint nativo** (el que está vivo): publica el `RemoteExecutionContext`.
-2. **`ContactEventPublisherPlugin` + `ServiceBusPublisher`** (código presente pero
-   desconectado): publica un DTO limpio `ContactEventMessage`, que **no** es lo que
-   `ExecutionContextParser` espera.
+### Rollout (pasos de Dataverse, fuera del repo)
 
-**Objetivo:** que todos los productores (incluido Dataverse, vía el plugin thin)
-emitan el **envelope EiP** con el DTO de dominio en `payload`. Camino sugerido:
+1. Registrar los plugins (Create/Update en `contact` y `account`, Post-Op async) con
+   su Secure Config `{connectionString}|{queueName}` apuntando a la queue de cada entidad.
+2. Validar end-to-end en test (el envelope llega y se procesa).
+3. **Deshabilitar el Service Endpoint nativo** de esas entidades. Reversible: si algo
+   falla, se reactiva y la Function sigue procesando por el camino legacy.
 
-1. Nuevos satélites nacen ya con el envelope (source-agnostic) — sin deuda.
-2. Unificar el lado Dataverse en **un** mecanismo: el plugin thin publica
-   `EipMessage<ContactPayload>` (reusando el DTO limpio que ya existe) en lugar del
-   Service Endpoint nativo.
-3. Migrar `ExecutionContextParser` → deserializar el envelope. Se puede soportar
-   ambos formatos en transición (detectar `schemaVersion`) y retirar el nativo
-   cuando el plugin esté en producción.
+### Deuda que queda
 
-Esto resuelve además la ambigüedad de diseño del punto 1 y deja un solo contrato
-para las 12 integraciones.
+- El **legacy** (`RemoteExecutionContext` + los parsers + la
+  [muestra](dataverse-remote-execution-context.sample.json)) se puede **retirar**
+  cuando los plugins estén estables en producción y no queden mensajes legacy en vuelo.
+- **Customers** (`QualifyLeadCustomerSyncFunction`) todavía no usa el envelope; es el
+  siguiente candidato a unificar con el mismo patrón.
+
+Nuevos satélites nacen directamente con el envelope (source-agnostic), sin pasar por
+el formato nativo. Un solo contrato para las 12 integraciones.
