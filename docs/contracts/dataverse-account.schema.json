@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chacomer.com/eip/contracts/dataverse-account/1.0",
+  "title": "Dataverse Account payload (EiP)",
+  "description": "Payload del envelope EiP para source=dataverse, entityType=account. Lo emite AccountEventPublisherPlugin y lo consume AccountMasterMatchingFunction.",
+  "type": "object",
+  "required": ["accountId", "triggerMessage", "msdynIdentificationNumber"],
+  "properties": {
+    "accountId": { "type": "string", "format": "uuid" },
+    "triggerMessage": { "type": "string", "enum": ["Create", "Update"] },
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "identificationNumberChanged": {
+      "type": "boolean",
+      "description": "true si msdyn_identificationnumber vino en el Target del evento."
+    },
+    "name": { "type": ["string", "null"] },
+    "telephone1": { "type": ["string", "null"] },
+    "emailAddress1": { "type": ["string", "null"] },
+    "description": { "type": ["string", "null"] },
+    "isMaster": { "type": "boolean" },
+    "masterAccountId": { "type": ["string", "null"], "format": "uuid" },
+    "msdynCompany": { "type": ["string", "null"], "format": "uuid" },
+    "msdynIdentificationNumber": {
+      "type": ["string", "null"],
+      "description": "Clave de matching. Coincide con el partitionKey/SessionId del envelope."
+    },
+    "modifiedBy": { "type": ["string", "null"], "format": "uuid" },
+    "modifiedOn": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

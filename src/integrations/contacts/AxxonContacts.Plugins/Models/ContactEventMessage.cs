@@ -72,5 +72,12 @@ namespace AxxonContacts.Plugins.Models
         // ── Metadata del evento ──────────────────────────────────────
         public string TriggerMessage { get; set; }          // Create | Update
         public string PublishedAt    { get; set; }          // ISO 8601
+
+        /// <summary>
+        /// true cuando msdyn_identificationnumber estaba en el Target del evento
+        /// (los campos que cambiaron). En Update indica que el RUC fue establecido
+        /// o modificado en esta operacion; dispara la creacion de master en el consumer.
+        /// </summary>
+        public bool IdentificationNumberChanged { get; set; }
     }
 }

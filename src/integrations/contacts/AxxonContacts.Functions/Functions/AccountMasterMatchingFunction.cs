@@ -98,14 +98,19 @@ namespace AxxonContacts.Functions.Functions
 
         private static AccountEventMessage? DeserializeMessage(ServiceBusReceivedMessage message)
         {
+            var raw = message.Body.ToString();
             try
             {
-                return AccountExecutionContextParser.Parse(message.Body.ToString());
+                // Transicion: el plugin thin emite el envelope EiP; el Service Endpoint
+                // nativo (legacy) emite el RemoteExecutionContext. Se soportan ambos.
+                return EipEnvelopeParser.IsEnvelope(raw)
+                    ? EipEnvelopeParser.ParsePayload<AccountEventMessage>(raw)
+                    : AccountExecutionContextParser.Parse(raw);
             }
             catch (Exception ex)
             {
                 throw new InvalidOperationException(
-                    $"Error procesando RemoteExecutionContext: {ex.Message}", ex);
+                    $"Error deserializando el mensaje: {ex.Message}", ex);
             }
         }
     }
