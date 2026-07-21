@@ -1,0 +1,26 @@
+# Pipeline de la integracion CustomerGroups.
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/integrations/customers/AxxonCustomerGroups.Functions/**
+      - src/core/**
+      - pipelines/azure-pipelines-customergroups.yml
+      - pipelines/templates/functionapp-build-deploy.yml
+
+variables:
+  - name: azureServiceConnection
+    value: 'sc-chacomer-eip-inte'
+  - name: environmentName
+    value: 'inte'
+
+extends:
+  template: templates/functionapp-build-deploy.yml
+  parameters:
+    appName: 'fa-axxoncustomergroups-$(environmentName)'
+    projectPath: 'src/integrations/customers/AxxonCustomerGroups.Functions/AxxonCustomerGroups.Functions.csproj'
+    azureServiceConnection: '$(azureServiceConnection)'
+    environmentName: '$(environmentName)'

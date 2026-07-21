@@ -1,0 +1,27 @@
+# Pipeline de la integracion Contacts.
+# Se dispara ante cambios en su proyecto o en el core compartido.
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/integrations/contacts/AxxonContacts.Functions/**
+      - src/core/**
+      - pipelines/azure-pipelines-contacts.yml
+      - pipelines/templates/functionapp-build-deploy.yml
+
+variables:
+  - name: azureServiceConnection
+    value: 'sc-chacomer-eip-inte'
+  - name: environmentName
+    value: 'inte'
+
+extends:
+  template: templates/functionapp-build-deploy.yml
+  parameters:
+    appName: 'fa-axxoncontacts-$(environmentName)'
+    projectPath: 'src/integrations/contacts/AxxonContacts.Functions/AxxonContacts.Functions.csproj'
+    azureServiceConnection: '$(azureServiceConnection)'
+    environmentName: '$(environmentName)'

@@ -1,0 +1,77 @@
+# ---------------------------------------------------------------------------
+# Template compartido: build + deploy de una Function App de la EiP.
+# Reutilizado por cada pipeline de integracion (contacts, customers, ...).
+#
+# Build: dotnet publish del proyecto (arrastra Axxon.Eip.Core por ProjectReference).
+# Deploy: AzureFunctionApp@2 (Flex Consumption / Linux) via service connection.
+# ---------------------------------------------------------------------------
+
+parameters:
+  - name: appName            # Nombre de la Function App en Azure (ej: fa-axxoncontacts-inte)
+    type: string
+  - name: projectPath        # Ruta al .csproj de la Function App
+    type: string
+  - name: azureServiceConnection  # Service connection de Azure DevOps (ARM)
+    type: string
+  - name: environmentName    # Ambiente de Azure DevOps (para approvals/gates)
+    type: string
+  - name: dotnetVersion
+    type: string
+    default: '10.0.x'
+  - name: buildConfiguration
+    type: string
+    default: 'Release'
+
+stages:
+  - stage: Build
+    displayName: 'Build ${{ parameters.appName }}'
+    jobs:
+      - job: Build
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Instalar .NET SDK ${{ parameters.dotnetVersion }}'
+            inputs:
+              packageType: 'sdk'
+              version: ${{ parameters.dotnetVersion }}
+
+          - task: DotNetCoreCLI@2
+            displayName: 'dotnet publish'
+            inputs:
+              command: 'publish'
+              publishWebProjects: false
+              projects: '${{ parameters.projectPath }}'
+              arguments: '-c ${{ parameters.buildConfiguration }} -o $(Build.ArtifactStagingDirectory)/publish'
+              zipAfterPublish: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publicar artifact'
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)/publish'
+              ArtifactName: 'functionapp'
+
+  - stage: Deploy
+    displayName: 'Deploy ${{ parameters.appName }}'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: Deploy
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: ${{ parameters.environmentName }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: functionapp
+
+                - task: AzureFunctionApp@2
+                  displayName: 'Deploy a ${{ parameters.appName }}'
+                  inputs:
+                    connectedServiceNameARM: ${{ parameters.azureServiceConnection }}
+                    appType: 'functionAppLinux'
+                    appName: ${{ parameters.appName }}
+                    package: '$(Pipeline.Workspace)/functionapp/**/*.zip'
+                    deploymentMethod: 'auto'
