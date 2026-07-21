@@ -1,7 +1,7 @@
 # generate-snk.ps1 — Ejecutar UNA SOLA VEZ antes del primer build.
 # El .snk generado NO debe commitearse al repo (.gitignore ya lo excluye).
 
-$snkPath = "AxxonContacts.Plugins\AxxonContacts.Plugins.snk"
+$snkPath = "src\integrations\contacts\AxxonContacts.Plugins\AxxonContacts.Plugins.snk"
 
 if (Test-Path $snkPath) {
     Write-Host "El archivo $snkPath ya existe. No se sobreescribe." -ForegroundColor Yellow
