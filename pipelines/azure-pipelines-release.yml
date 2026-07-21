@@ -1,0 +1,72 @@
+# ===========================================================================
+# Pipeline de RELEASE de la EiP — el que corre el DevOps del cliente al recibir
+# una entrega (cierre de sprint).
+#
+# Dispara al pushear un tag vX.Y.Z. Despliega la infra (idempotente) y las 4
+# Function Apps al ambiente elegido (default: inte = test). Los gates de
+# aprobacion viven en los Environments de Azure DevOps ({env}, {env}-infra).
+#
+# Promocion a UAT/PROD: ejecutar manualmente eligiendo environmentName; cada
+# uno con su approval gate.
+#
+# Setup requerido en el DevOps del cliente (una vez por ambiente):
+#   - Service connection ARM 'sc-chacomer-eip-{env}' a la suscripcion del cliente
+#     (Contributor + User Access Administrator sobre el RG).
+#   - Environments '{env}' y '{env}-infra' con approvals.
+#   - Ajustar el RG real de cada env en pipelines/vars/env-config.yml.
+# ===========================================================================
+
+trigger:
+  tags:
+    include:
+      - v*
+pr: none
+
+parameters:
+  - name: environmentName
+    type: string
+    default: inte
+    values:
+      - inte
+      - uat
+      - prod
+  - name: apps
+    type: object
+    default:
+      - appKey: contacts
+        appName: fa-axxoncontacts
+        projectPath: src/integrations/contacts/AxxonContacts.Functions/AxxonContacts.Functions.csproj
+      - appKey: customers
+        appName: fa-axxoncustomers
+        projectPath: src/integrations/customers/AxxonCustomers.Functions/AxxonCustomers.Functions.csproj
+      - appKey: customergroups
+        appName: fa-axxoncustomergroups
+        projectPath: src/integrations/customers/AxxonCustomerGroups.Functions/AxxonCustomerGroups.Functions.csproj
+      - appKey: products
+        appName: fa-axxonproducts
+        projectPath: src/integrations/products/AxxonProducts.Functions/AxxonProducts.Functions.csproj
+
+variables:
+  - template: vars/env-config.yml
+    parameters:
+      environmentName: ${{ parameters.environmentName }}
+
+stages:
+  # 1) Infra primero (idempotente). Deja el ambiente listo para las apps.
+  - template: templates/infra-deploy.yml
+    parameters:
+      environmentName: ${{ parameters.environmentName }}
+      azureServiceConnection: 'sc-chacomer-eip-${{ parameters.environmentName }}'
+      resourceGroupName: $(resourceGroupName)
+
+  # 2) Build + deploy de cada app. El Deploy espera a que termine la infra.
+  - ${{ each app in parameters.apps }}:
+      - template: templates/functionapp-build-deploy.yml
+        parameters:
+          appKey: ${{ app.appKey }}
+          appName: '${{ app.appName }}-${{ parameters.environmentName }}'
+          projectPath: ${{ app.projectPath }}
+          azureServiceConnection: 'sc-chacomer-eip-${{ parameters.environmentName }}'
+          environmentName: ${{ parameters.environmentName }}
+          extraDeployDependsOn:
+            - Infra_Deploy

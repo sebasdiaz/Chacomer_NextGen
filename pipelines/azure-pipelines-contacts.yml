@@ -1,27 +1,23 @@
-# Pipeline de la integracion Contacts.
-# Se dispara ante cambios en su proyecto o en el core compartido.
+# Pipeline targeted de la integracion Contacts (redeploy de una sola app).
+# Manual: elegir environmentName. El release completo usa azure-pipelines-release.yml.
 
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - src/integrations/contacts/AxxonContacts.Functions/**
-      - src/core/**
-      - pipelines/azure-pipelines-contacts.yml
-      - pipelines/templates/functionapp-build-deploy.yml
+trigger: none
+pr: none
 
-variables:
-  - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
+parameters:
   - name: environmentName
-    value: 'inte'
+    type: string
+    default: inte
+    values:
+      - inte
+      - uat
+      - prod
 
 extends:
   template: templates/functionapp-build-deploy.yml
   parameters:
-    appName: 'fa-axxoncontacts-$(environmentName)'
+    appKey: contacts
+    appName: 'fa-axxoncontacts-${{ parameters.environmentName }}'
     projectPath: 'src/integrations/contacts/AxxonContacts.Functions/AxxonContacts.Functions.csproj'
-    azureServiceConnection: '$(azureServiceConnection)'
-    environmentName: '$(environmentName)'
+    azureServiceConnection: 'sc-chacomer-eip-${{ parameters.environmentName }}'
+    environmentName: ${{ parameters.environmentName }}

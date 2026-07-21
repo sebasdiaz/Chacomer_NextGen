@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------------------
+# Template de despliegue de infraestructura (Bicep) a un ambiente.
+# what-if + deploy idempotente (az deployment group create). Reutilizado por
+# el pipeline de infra y por el pipeline de release.
+# ---------------------------------------------------------------------------
+
+parameters:
+  - name: environmentName        # inte | uat | prod
+    type: string
+  - name: azureServiceConnection # service connection ARM
+    type: string
+  - name: resourceGroupName      # RG destino
+    type: string
+  - name: extraDependsOn         # stages previas de las que depende Deploy
+    type: object
+    default: []
+
+stages:
+  - stage: Infra_Validate
+    displayName: 'Infra what-if (${{ parameters.environmentName }})'
+    jobs:
+      - job: WhatIf
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: AzureCLI@2
+            displayName: 'az deployment group what-if'
+            inputs:
+              azureSubscription: ${{ parameters.azureServiceConnection }}
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group what-if \
+                  --resource-group ${{ parameters.resourceGroupName }} \
+                  --template-file infra/main.bicep \
+                  --parameters infra/environments/${{ parameters.environmentName }}.bicepparam
+
+  - stage: Infra_Deploy
+    displayName: 'Infra deploy (${{ parameters.environmentName }})'
+    dependsOn:
+      - Infra_Validate
+      - ${{ each dep in parameters.extraDependsOn }}:
+          - ${{ dep }}
+    condition: succeeded()
+    jobs:
+      - deployment: DeployInfra
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: '${{ parameters.environmentName }}-infra'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: AzureCLI@2
+                  displayName: 'az deployment group create'
+                  inputs:
+                    azureSubscription: ${{ parameters.azureServiceConnection }}
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az deployment group create \
+                        --resource-group ${{ parameters.resourceGroupName }} \
+                        --template-file infra/main.bicep \
+                        --parameters infra/environments/${{ parameters.environmentName }}.bicepparam

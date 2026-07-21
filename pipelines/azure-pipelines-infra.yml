@@ -1,72 +1,35 @@
 # ---------------------------------------------------------------------------
-# Pipeline de infraestructura: despliega infra/main.bicep al resource group
-# del ambiente. Corre validacion (what-if) y luego el deployment.
+# Pipeline de infraestructura (targeted). Despliega infra/main.bicep al RG del
+# ambiente elegido. Manual: elegir environmentName al ejecutar.
 #
-# Requiere:
-#   - Service connection ARM con permisos de Contributor + User Access
-#     Administrator sobre el RG (las role assignments necesitan poder asignar roles).
-#   - Variable resourceGroupName por ambiente.
+# El flujo de release automatico (sprint close) usa azure-pipelines-release.yml.
+#
+# Requiere en el DevOps del cliente:
+#   - Service connection ARM 'sc-chacomer-eip-{env}' con Contributor +
+#     User Access Administrator sobre el RG (las role assignments asignan roles).
+#   - Environment '{env}-infra' con approval gate.
 # ---------------------------------------------------------------------------
 
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - infra/**
-      - pipelines/azure-pipelines-infra.yml
+trigger: none
+pr: none
+
+parameters:
+  - name: environmentName
+    type: string
+    default: inte
+    values:
+      - inte
+      - uat
+      - prod
 
 variables:
-  - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
-  - name: environmentName
-    value: 'inte'
-  - name: resourceGroupName
-    value: 'DataverseINTE'
+  - template: vars/env-config.yml
+    parameters:
+      environmentName: ${{ parameters.environmentName }}
 
-stages:
-  - stage: Validate
-    displayName: 'What-If'
-    jobs:
-      - job: WhatIf
-        pool:
-          vmImage: 'ubuntu-latest'
-        steps:
-          - task: AzureCLI@2
-            displayName: 'az deployment group what-if'
-            inputs:
-              azureSubscription: '$(azureServiceConnection)'
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                az deployment group what-if \
-                  --resource-group $(resourceGroupName) \
-                  --template-file infra/main.bicep \
-                  --parameters infra/environments/$(environmentName).bicepparam
-
-  - stage: Deploy
-    displayName: 'Deploy infra'
-    dependsOn: Validate
-    condition: succeeded()
-    jobs:
-      - deployment: DeployInfra
-        pool:
-          vmImage: 'ubuntu-latest'
-        environment: '$(environmentName)-infra'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - checkout: self
-                - task: AzureCLI@2
-                  displayName: 'az deployment group create'
-                  inputs:
-                    azureSubscription: '$(azureServiceConnection)'
-                    scriptType: 'bash'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      az deployment group create \
-                        --resource-group $(resourceGroupName) \
-                        --template-file infra/main.bicep \
-                        --parameters infra/environments/$(environmentName).bicepparam
+extends:
+  template: templates/infra-deploy.yml
+  parameters:
+    environmentName: ${{ parameters.environmentName }}
+    azureServiceConnection: 'sc-chacomer-eip-${{ parameters.environmentName }}'
+    resourceGroupName: $(resourceGroupName)

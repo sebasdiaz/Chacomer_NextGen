@@ -1,12 +1,17 @@
 # ---------------------------------------------------------------------------
 # Template compartido: build + deploy de una Function App de la EiP.
-# Reutilizado por cada pipeline de integracion (contacts, customers, ...).
+# Reutilizado por cada pipeline de integracion y por el pipeline de release.
 #
 # Build: dotnet publish del proyecto (arrastra Axxon.Eip.Core por ProjectReference).
 # Deploy: AzureFunctionApp@2 (Flex Consumption / Linux) via service connection.
+#
+# appKey hace unicos los nombres de stage cuando el template se instancia varias
+# veces en un mismo pipeline (release de las 4 apps).
 # ---------------------------------------------------------------------------
 
 parameters:
+  - name: appKey             # Clave corta para nombres de stage (contacts, customers, ...)
+    type: string
   - name: appName            # Nombre de la Function App en Azure (ej: fa-axxoncontacts-inte)
     type: string
   - name: projectPath        # Ruta al .csproj de la Function App
@@ -15,6 +20,9 @@ parameters:
     type: string
   - name: environmentName    # Ambiente de Azure DevOps (para approvals/gates)
     type: string
+  - name: extraDeployDependsOn    # stages adicionales de las que depende Deploy (ej: infra)
+    type: object
+    default: []
   - name: dotnetVersion
     type: string
     default: '10.0.x'
@@ -23,7 +31,7 @@ parameters:
     default: 'Release'
 
 stages:
-  - stage: Build
+  - stage: Build_${{ parameters.appKey }}
     displayName: 'Build ${{ parameters.appName }}'
     jobs:
       - job: Build
@@ -49,11 +57,14 @@ stages:
             displayName: 'Publicar artifact'
             inputs:
               PathtoPublish: '$(Build.ArtifactStagingDirectory)/publish'
-              ArtifactName: 'functionapp'
+              ArtifactName: 'functionapp-${{ parameters.appKey }}'
 
-  - stage: Deploy
+  - stage: Deploy_${{ parameters.appKey }}
     displayName: 'Deploy ${{ parameters.appName }}'
-    dependsOn: Build
+    dependsOn:
+      - Build_${{ parameters.appKey }}
+      - ${{ each dep in parameters.extraDeployDependsOn }}:
+          - ${{ dep }}
     condition: succeeded()
     jobs:
       - deployment: Deploy
@@ -65,7 +76,7 @@ stages:
             deploy:
               steps:
                 - download: current
-                  artifact: functionapp
+                  artifact: functionapp-${{ parameters.appKey }}
 
                 - task: AzureFunctionApp@2
                   displayName: 'Deploy a ${{ parameters.appName }}'
@@ -73,5 +84,5 @@ stages:
                     connectedServiceNameARM: ${{ parameters.azureServiceConnection }}
                     appType: 'functionAppLinux'
                     appName: ${{ parameters.appName }}
-                    package: '$(Pipeline.Workspace)/functionapp/**/*.zip'
+                    package: '$(Pipeline.Workspace)/functionapp-${{ parameters.appKey }}/**/*.zip'
                     deploymentMethod: 'auto'

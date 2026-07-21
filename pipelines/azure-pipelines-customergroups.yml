@@ -1,26 +1,23 @@
-# Pipeline de la integracion CustomerGroups.
+# Pipeline targeted de la integracion CustomerGroups (redeploy de una sola app).
+# Manual: elegir environmentName. El release completo usa azure-pipelines-release.yml.
 
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - src/integrations/customers/AxxonCustomerGroups.Functions/**
-      - src/core/**
-      - pipelines/azure-pipelines-customergroups.yml
-      - pipelines/templates/functionapp-build-deploy.yml
+trigger: none
+pr: none
 
-variables:
-  - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
+parameters:
   - name: environmentName
-    value: 'inte'
+    type: string
+    default: inte
+    values:
+      - inte
+      - uat
+      - prod
 
 extends:
   template: templates/functionapp-build-deploy.yml
   parameters:
-    appName: 'fa-axxoncustomergroups-$(environmentName)'
+    appKey: customergroups
+    appName: 'fa-axxoncustomergroups-${{ parameters.environmentName }}'
     projectPath: 'src/integrations/customers/AxxonCustomerGroups.Functions/AxxonCustomerGroups.Functions.csproj'
-    azureServiceConnection: '$(azureServiceConnection)'
-    environmentName: '$(environmentName)'
+    azureServiceConnection: 'sc-chacomer-eip-${{ parameters.environmentName }}'
+    environmentName: ${{ parameters.environmentName }}

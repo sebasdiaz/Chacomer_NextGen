@@ -1,0 +1,28 @@
+# ---------------------------------------------------------------------------
+# Config por ambiente. Variable template parametrizado por environmentName.
+#
+# Solo mapea lo que NO se puede derivar por convencion:
+#   - resourceGroupName (los nombres actuales no siguen un patron uniforme).
+#
+# El service connection se deriva por convencion en cada pipeline:
+#   sc-chacomer-eip-{environmentName}
+# environmentName y el .bicepparam se derivan del parametro directamente.
+#
+# Al entregar la release al DevOps del cliente, ajustar aca los RG reales
+# de UAT/PROD y crear los service connections sc-chacomer-eip-{env}.
+# ---------------------------------------------------------------------------
+
+parameters:
+  - name: environmentName
+    type: string
+
+variables:
+  - ${{ if eq(parameters.environmentName, 'inte') }}:
+      - name: resourceGroupName
+        value: DataverseINTE
+  - ${{ if eq(parameters.environmentName, 'uat') }}:
+      - name: resourceGroupName
+        value: rg-chacomer-eip-uat # TODO: confirmar nombre real del RG de UAT
+  - ${{ if eq(parameters.environmentName, 'prod') }}:
+      - name: resourceGroupName
+        value: rg-chacomer-eip-prod # TODO: confirmar nombre real del RG de PROD
