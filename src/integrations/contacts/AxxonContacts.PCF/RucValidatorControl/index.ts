@@ -170,12 +170,16 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             }
 
             // Actualizar campos del formulario via Xrm
-            this._updateFormFields(contribuyente);
+            const warnings = this._updateFormFields(contribuyente);
 
-            this._showStatus(
-                "success",
-                `${contribuyente.razonSocial} — ${contribuyente.estado}`
-            );
+            const resumen = `${contribuyente.razonSocial} — ${contribuyente.estado}`;
+            if (warnings.length > 0) {
+                // Se encontro el RUC pero algun campo no se pudo actualizar:
+                // avisar en vez de mostrar exito enganoso.
+                this._showStatus("warning", `${resumen}. ${warnings.join(" ")}`);
+            } else {
+                this._showStatus("success", resumen);
+            }
 
             // Persistir el valor formateado (ej: "80012345-0")
             this._currentValue = contribuyente.ruc ?? ruc;
@@ -233,13 +237,24 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
 
     // ── actualizar campos Dataverse via Xrm ─────────────────────────────────
 
-    private _updateFormFields(c: ContribuyenteDto): void {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const xrm = (window as unknown as { Xrm?: typeof Xrm }).Xrm;
-        if (!xrm) return;
+    /// <summary>
+    /// Escribe los campos del contribuyente en el formulario y devuelve la lista
+    /// de warnings (vacia si todo se actualizo). Los casos que antes fallaban en
+    /// silencio (sin Xrm/form context, estado no reconocido) ahora se reportan.
+    ///
+    /// Nota: se usa el Xrm global (Xrm.Page) porque un PCF standard control no
+    /// tiene una API soportada para escribir columnas hermanas del formulario.
+    /// Es el workaround aceptado; funciona en forms model-driven.
+    /// </summary>
+    private _updateFormFields(c: ContribuyenteDto): string[] {
+        const warnings: string[] = [];
 
-        const formContext = xrm.Page as Xrm.FormContext | undefined;
-        if (!formContext) return;
+        const xrm = (window as unknown as { Xrm?: typeof Xrm }).Xrm;
+        const formContext = xrm?.Page as Xrm.FormContext | undefined;
+        if (!formContext) {
+            warnings.push("No se pudo acceder al formulario para actualizar los campos.");
+            return warnings;
+        }
 
         // governmentid = ruc formateado (ej: "80012345-0")
         this._setTextField(formContext, FIELD_GOVERNMENT_ID, c.ruc);
@@ -248,13 +263,19 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
         this._setTextField(formContext, FIELD_DESCRIPTION, JSON.stringify(c, null, 2));
 
         // axx_fiscalstate = MultiSelectPicklist — lookup case-insensitive
-        const estadoVal = ESTADO_MAP[c.estado?.toUpperCase()];
-        if (estadoVal !== undefined) {
-            const attr = formContext.getAttribute(FIELD_FISCAL_STATE) as
-                Xrm.Attributes.MultiSelectOptionSetAttribute | null;
-            if (attr) {
-                attr.setValue([estadoVal]);
-                attr.fireOnChange();
+        if (c.estado) {
+            const estadoVal = ESTADO_MAP[c.estado.toUpperCase()];
+            if (estadoVal === undefined) {
+                warnings.push(`Estado "${c.estado}" no reconocido; ${FIELD_FISCAL_STATE} no se actualizo.`);
+            } else {
+                const attr = formContext.getAttribute(FIELD_FISCAL_STATE) as
+                    Xrm.Attributes.MultiSelectOptionSetAttribute | null;
+                if (attr) {
+                    attr.setValue([estadoVal]);
+                    attr.fireOnChange();
+                } else {
+                    warnings.push(`El campo ${FIELD_FISCAL_STATE} no esta en el formulario.`);
+                }
             }
         }
 
@@ -268,6 +289,8 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             this._setTextField(formContext, "firstname",  firstname);
             this._setTextField(formContext, "middlename", middlename);
         }
+
+        return warnings;
     }
 
     // ── parser de razonSocial ────────────────────────────────────────────────
