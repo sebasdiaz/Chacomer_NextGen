@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="AxxonContacts"
+           constructor="RucValidatorControl"
+           version="1.0.1"
+           display-name-key="RucValidatorControl_DisplayName"
+           description-key="RucValidatorControl_Desc"
+           control-type="standard">
+
+    <external-service-usage enabled="true">
+      <!-- *.azurewebsites.net NO cubre URLs con dos niveles de subdominio      -->
+      <!-- (ej: fa-xxx.eastus-01.azurewebsites.net). Se declara el dominio exacto -->
+      <!-- y el wildcard de segundo nivel como fallback.                          -->
+      <domain>fa-axxoncontacts-inte-cncparahg9eabxbh.eastus-01.azurewebsites.net</domain>
+      <domain>*.eastus-01.azurewebsites.net</domain>
+      <domain>*.azurewebsites.net</domain>
+      <domain>turuc.com.py</domain>
+    </external-service-usage>
+
+    <!-- Campo donde se coloca el control (msdyn_identificationnumber) -->
+    <property name="DocumentNumber"
+              display-name-key="DocumentNumber_DisplayName"
+              description-key="DocumentNumber_Desc"
+              of-type="SingleLine.Text"
+              usage="bound"
+              required="true" />
+
+    <!-- URL base de la Azure Function (ej: https://myfunc.azurewebsites.net) -->
+    <property name="ApiBaseUrl"
+              display-name-key="ApiBaseUrl_DisplayName"
+              description-key="ApiBaseUrl_Desc"
+              of-type="SingleLine.URL"
+              usage="input"
+              required="true" />
+
+    <!-- Function key (?code=...) — dejar vacío si no aplica -->
+    <property name="ApiKey"
+              display-name-key="ApiKey_DisplayName"
+              description-key="ApiKey_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <resources>
+      <code path="index.ts" order="1" />
+      <css path="css/RucValidatorControl.css" order="1" />
+    </resources>
+  </control>
+</manifest>

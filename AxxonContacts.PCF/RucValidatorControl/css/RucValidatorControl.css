@@ -1,0 +1,107 @@
+.ruc-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 14px;
+}
+
+/* ── Fila input + botón ─────────────────────────────────────── */
+
+.ruc-input-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ruc-input {
+    flex: 1;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid #8a8886;
+    border-radius: 2px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #201f1e;
+    background: #ffffff;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.ruc-input:focus {
+    border-color: #0078d4;
+    box-shadow: 0 0 0 1px #0078d4;
+}
+
+.ruc-input:disabled {
+    background: #f3f2f1;
+    color: #a19f9d;
+    cursor: not-allowed;
+}
+
+.ruc-btn {
+    height: 30px;
+    padding: 0 12px;
+    background: #0078d4;
+    color: #ffffff;
+    border: none;
+    border-radius: 2px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+.ruc-btn:hover:not(:disabled) {
+    background: #106ebe;
+}
+
+.ruc-btn:disabled {
+    background: #c8c6c4;
+    cursor: not-allowed;
+}
+
+/* ── Fila de estado ─────────────────────────────────────────── */
+
+.ruc-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 2px;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.ruc-status.hidden {
+    display: none;
+}
+
+.ruc-status--success {
+    background: #dff6dd;
+    color: #107c10;
+    border: 1px solid #bad80a;
+}
+
+.ruc-status--error {
+    background: #fde7e9;
+    color: #a4262c;
+    border: 1px solid #f1707b;
+}
+
+.ruc-status--warning {
+    background: #fff4ce;
+    color: #8a6914;
+    border: 1px solid #f8d04d;
+}
+
+.ruc-status-icon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.ruc-status-text {
+    flex: 1;
+}
