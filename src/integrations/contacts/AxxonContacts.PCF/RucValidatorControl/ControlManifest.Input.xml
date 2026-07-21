@@ -8,13 +8,14 @@
            control-type="standard">
 
     <external-service-usage enabled="true">
-      <!-- *.azurewebsites.net NO cubre URLs con dos niveles de subdominio      -->
-      <!-- (ej: fa-xxx.eastus-01.azurewebsites.net). Se declara el dominio exacto -->
-      <!-- y el wildcard de segundo nivel como fallback.                          -->
-      <domain>fa-axxoncontacts-inte-cncparahg9eabxbh.eastus-01.azurewebsites.net</domain>
+      <!-- Env-agnostico: NO se hardcodea el host de un entorno puntual.         -->
+      <!-- Los hostnames de Azure Functions llevan la region embebida            -->
+      <!-- ({app}.{region}-01.azurewebsites.net), que un solo nivel de wildcard  -->
+      <!-- no cubre; por eso se declara el wildcard por region + el base como    -->
+      <!-- fallback. Agregar la region correspondiente si se despliega en otra.  -->
+      <!-- (El control llama a la Azure Function via ApiBaseUrl, no a turuc.)     -->
       <domain>*.eastus-01.azurewebsites.net</domain>
       <domain>*.azurewebsites.net</domain>
-      <domain>turuc.com.py</domain>
     </external-service-usage>
 
     <!-- Campo donde se coloca el control (msdyn_identificationnumber) -->
