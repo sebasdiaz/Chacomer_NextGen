@@ -2,13 +2,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.5.11723.231
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonContacts.Functions", "AxxonContacts.Functions\AxxonContacts.Functions.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Axxon.Eip.Core", "src\core\Axxon.Eip.Core\Axxon.Eip.Core.csproj", "{D4F8B1A3-7E2C-4A95-B860-1F9E5C4D8A72}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonCustomers.Functions", "AxxonCustomers.Functions\AxxonCustomers.Functions.csproj", "{A7D9E8C2-4B31-4F56-9A78-3C2D1E0F5B64}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonContacts.Functions", "src\integrations\contacts\AxxonContacts.Functions\AxxonContacts.Functions.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonProducts.Functions", "AxxonProducts.Functions\AxxonProducts.Functions.csproj", "{E0664FF5-E4FD-0D66-268A-356FD8915446}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonCustomers.Functions", "src\integrations\customers\AxxonCustomers.Functions\AxxonCustomers.Functions.csproj", "{A7D9E8C2-4B31-4F56-9A78-3C2D1E0F5B64}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonCustomerGroups.Functions", "AxxonCustomerGroups.Functions\AxxonCustomerGroups.Functions.csproj", "{C5E1F7A9-2D48-4B63-8F91-6A0B3D2C7E15}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonProducts.Functions", "src\integrations\products\AxxonProducts.Functions\AxxonProducts.Functions.csproj", "{E0664FF5-E4FD-0D66-268A-356FD8915446}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonCustomerGroups.Functions", "src\integrations\customers\AxxonCustomerGroups.Functions\AxxonCustomerGroups.Functions.csproj", "{C5E1F7A9-2D48-4B63-8F91-6A0B3D2C7E15}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -16,6 +18,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D4F8B1A3-7E2C-4A95-B860-1F9E5C4D8A72}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D4F8B1A3-7E2C-4A95-B860-1F9E5C4D8A72}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D4F8B1A3-7E2C-4A95-B860-1F9E5C4D8A72}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D4F8B1A3-7E2C-4A95-B860-1F9E5C4D8A72}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|Any CPU.ActiveCfg = Release|Any CPU

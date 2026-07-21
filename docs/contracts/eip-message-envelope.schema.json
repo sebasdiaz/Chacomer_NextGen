@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chacomer.com/eip/contracts/eip-message-envelope/1.0",
+  "title": "EiP Message Envelope",
+  "description": "Envelope estandar de mensajes de la Enterprise Integration Platform. Agnostico a la fuente: separa routing/trazabilidad/idempotencia del payload de negocio.",
+  "type": "object",
+  "required": ["schemaVersion", "messageId", "correlationId", "source", "entityType", "operation", "occurredAt", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "description": "Version del contrato del envelope.",
+      "const": "1.0"
+    },
+    "messageId": {
+      "type": "string",
+      "description": "Identificador unico del mensaje. Base de la idempotencia en el consumer.",
+      "minLength": 1
+    },
+    "correlationId": {
+      "type": "string",
+      "description": "Correlaciona el mensaje con la operacion de negocio que lo origino. Fluye punta a punta y se usa en Application Insights.",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "description": "Sistema origen del evento.",
+      "examples": ["dataverse", "fo", "magento", "vtex", "plytix"]
+    },
+    "entityType": {
+      "type": "string",
+      "description": "Tipo de entidad de negocio.",
+      "examples": ["contact", "customer", "customergroup", "product", "productgroup"]
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operacion sobre la entidad.",
+      "enum": ["create", "update", "delete", "upsert"]
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Instante en que ocurrio el evento en el origen (UTC, ISO 8601)."
+    },
+    "partitionKey": {
+      "type": ["string", "null"],
+      "description": "Clave de particion/orden. Cuando la queue tiene sessions, se usa como SessionId."
+    },
+    "metadata": {
+      "type": ["object", "null"],
+      "description": "Metadata opcional (usuario iniciador, app origen, etc.).",
+      "additionalProperties": { "type": "string" }
+    },
+    "payload": {
+      "description": "Contenido de negocio. La forma concreta depende de source+entityType (ver catalogo de contratos).",
+      "type": "object"
+    }
+  }
+}

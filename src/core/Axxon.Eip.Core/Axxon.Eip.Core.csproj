@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Axxon.Eip.Core</RootNamespace>
+    <AssemblyName>Axxon.Eip.Core</AssemblyName>
+    <Company>Axxon Consulting</Company>
+    <Version>1.0.0</Version>
+    <Description>Componentes cross de la Enterprise Integration Platform (EiP): Key Vault, Dataverse, F&amp;O OData, resiliencia y telemetria.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Autenticacion con Managed Identity -->
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+
+    <!-- Configuration provider de Key Vault (KeyVaultUri + DefaultAzureCredential) -->
+    <PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.4.0" />
+
+    <!-- SDK de Dataverse -->
+    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.2.10" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.8" />
+
+    <!-- Resiliencia HTTP (retry 429/Retry-After contra F&O) -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
+
+    <!-- Telemetria: OpenTelemetry + Application Insights -->
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.OpenTelemetry" Version="1.2.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.7.0" />
+  </ItemGroup>
+
+</Project>

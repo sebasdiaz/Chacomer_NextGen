@@ -24,22 +24,108 @@ Chacomer_NextGen/
 ├── .gitignore
 ├── generate-snk.ps1
 │
-├── AxxonContacts.Plugins/             (.NET 4.6.2 — plugin Dataverse)
-│   ├── Constants/ContactConstants.cs
-│   ├── Models/ContactEventMessage.cs
-│   ├── Services/ServiceBusPublisher.cs
-│   └── Plugins/ContactEventPublisherPlugin.cs
+├── docs/
+│   └── contracts/                     (contratos de mensajes de la EiP)
+│       └── ServiceBusMessage.json
 │
-└── AxxonContacts.Functions/           (.NET 8 — Azure Function)
-    ├── Configuration/AppSettings.cs
-    ├── Models/ContactEventMessage.cs
-    ├── Services/DataverseClientFactory.cs
-    ├── Services/MasterMatchingService.cs
-    ├── Functions/ContactMasterMatchingFunction.cs
-    ├── Program.cs
-    ├── host.json
-    └── local.settings.json
+└── src/
+    ├── core/
+    │   └── Axxon.Eip.Core/            (.NET 10 — componentes CROSS de la EiP)
+    │       ├── Configuration/         (DataverseOptions, FoODataOptions, Key Vault)
+    │       ├── Dataverse/             (DataverseClientFactory + AddEipDataverse)
+    │       ├── FinOps/                (FoODataClient generico + AddEipFoOData + retry 429)
+    │       └── Hosting/               (AddEipCore: Key Vault + OpenTelemetry + logging)
+    │
+    ├── integrations/
+    │   ├── contacts/
+    │   │   ├── AxxonContacts.Plugins/     (.NET 4.6.2 — plugin Dataverse)
+    │   │   ├── AxxonContacts.Functions/   (.NET 10 — Azure Function)
+    │   │   └── AxxonContacts.WebResources/
+    │   ├── customers/
+    │   │   ├── AxxonCustomers.Functions/
+    │   │   └── AxxonCustomerGroups.Functions/
+    │   └── products/
+    │       └── AxxonProducts.Functions/
+    │
+    └── webresources/                  (PCF controls)
+        ├── DeviceRegistrationGrid/
+        ├── DnitResponseViewer/
+        ├── MasterAccountChildrenGrid/
+        ├── MasterContactAccountGrid/
+        └── MasterContactChildrenGrid/
 ```
+
+## Axxon.Eip.Core — componentes cross
+
+Toda Function App de la plataforma referencia `Axxon.Eip.Core` y arranca igual:
+
+```csharp
+var builder = FunctionsApplication.CreateBuilder(args);
+
+builder.AddEipCore();                                    // Key Vault + OpenTelemetry/App Insights + logging
+builder.Services.AddEipDataverse(builder.Configuration); // IOrganizationService via MI o Client Secret
+builder.Services.AddEipFoOData(builder.Configuration);   // cliente OData de F&O con retry 429/Retry-After
+
+// ... servicios propios del dominio ...
+
+builder.Build().Run();
+```
+
+Qué provee el core:
+
+| Componente | Descripción |
+|---|---|
+| `AddEipCore()` | Key Vault como fuente de secretos (si `KeyVaultUri` está seteado), OpenTelemetry exportando a App Insights, logging a consola |
+| `AddEipDataverse()` | `DataverseClientFactory` — Managed Identity en Azure, Client Secret en DESA/local |
+| `AddEipFoOData()` | `IFoODataClient` — cliente genérico de la OData API de F&O: paginación `@odata.nextLink`, `cross-company`, `$filter`/`$select`, POST tipado, y retry SOLO ante HTTP 429 respetando `Retry-After` |
+
+## Key Vault — manejo de secretos (obligatorio)
+
+Todos los secretos viven en Azure Key Vault (un vault por ambiente). Nada de secretos
+en Application Settings planos ni en el repo.
+
+### Configuración
+
+1. Crear el Key Vault (ej: `kv-chacomer-eip-{env}`) con **RBAC authorization**.
+2. Asignar a la Managed Identity de cada Function App el rol **Key Vault Secrets User**:
+
+```bash
+az role assignment create \
+  --assignee <PRINCIPAL_ID_DE_LA_MI> \
+  --role "Key Vault Secrets User" \
+  --scope /subscriptions/.../resourceGroups/.../providers/Microsoft.KeyVault/vaults/kv-chacomer-eip-prod
+```
+
+3. Agregar el Application Setting `KeyVaultUri = https://kv-chacomer-eip-{env}.vault.azure.net/`
+   en cada Function App. Con eso `AddEipCore()` carga el vault como configuration provider:
+   cada secret se expone como clave de configuración con su mismo nombre, y **pisa** cualquier
+   App Setting duplicado.
+
+### Convención de nombres de secrets
+
+| Secret en Key Vault | Usado por | Descripción |
+|---|---|---|
+| `DataverseClientSecret` | todas (solo DESA) | Client Secret del App Registration de Dataverse |
+| `FoClientSecret` | customers, products (solo DESA) | Client Secret del App Registration de F&O |
+| `SetApiKey` | contacts | API Key de la SET Paraguay |
+
+En producción las conexiones a Dataverse/F&O usan Managed Identity: no hay secreto que guardar.
+Los secrets `*ClientSecret` solo existen en el vault de DESA.
+
+### Triggers y bindings (resueltos por el host, no por el worker)
+
+Los settings que consume el **host** de Functions (ej: `ServiceBusConnection` de los triggers,
+binding expressions `%...%`) NO pasan por el configuration provider del worker. Para esos:
+
+- **Producción:** Managed Identity — `ServiceBusConnection__fullyQualifiedNamespace` (sin secreto).
+- **DESA con connection string:** Key Vault reference en el Application Setting:
+  `@Microsoft.KeyVault(SecretUri=https://kv-chacomer-eip-desa.vault.azure.net/secrets/ServiceBusConnection/)`
+
+### Desarrollo local
+
+Dos opciones:
+- `az login` + `KeyVaultUri` en `local.settings.json` → lee los secrets del vault de DESA.
+- Sin `KeyVaultUri` → los valores se toman de `local.settings.json` como siempre.
 
 ## Setup inicial
 
@@ -89,6 +175,7 @@ En Power Platform Admin Center:
 | `ServiceBusQueueName` | `contact-master-matching` |
 | `ServiceBusConnection__fullyQualifiedNamespace` | `tunamespace.servicebus.windows.net` |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | cadena de conexion de App Insights |
+| `KeyVaultUri` | `https://kv-chacomer-eip-{env}.vault.azure.net/` |
 
 > Con Managed Identity NO se configura `ServiceBusConnection` como connection string completa.
 > Se usa el formato `__fullyQualifiedNamespace` que activa la auth via MI automáticamente.
@@ -189,11 +276,11 @@ axx_ismaster eq false
 
 ```powershell
 # Plugin
-cd AxxonContacts.Plugins
+cd src\integrations\contacts\AxxonContacts.Plugins
 dotnet build -c Release
 
 # Function
-cd AxxonContacts.Functions
+cd src\integrations\contacts\AxxonContacts.Functions
 dotnet build -c Release
 dotnet publish -c Release -o ./publish
 

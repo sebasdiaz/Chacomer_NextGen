@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0",
+  "messageId": "9f1c2b7a-3e5d-4a12-9c8b-1d2e3f4a5b6c",
+  "correlationId": "57adbb64-94e1-4d11-b22c-fca7e1faf35d",
+  "source": "dataverse",
+  "entityType": "contact",
+  "operation": "update",
+  "occurredAt": "2026-07-21T13:45:07Z",
+  "partitionKey": "20230541281",
+  "metadata": {
+    "initiatingUser": "Sebastian Diaz",
+    "appName": "a365_AutomotiveSalesApp"
+  },
+  "payload": {
+    "contactId": "dfe352a1-0948-f111-bec7-7c1e5268f183",
+    "identificationNumber": "20230541281",
+    "isMaster": false,
+    "firstName": "Sebastian",
+    "middleName": "Emilio",
+    "lastName": "Diaz",
+    "mobilePhone": "(11)3387-6584",
+    "emailAddress1": "lksebas@gmail.com",
+    "customerGroupId": "8469a7ba-243f-f111-88b5-002248351bb4"
+  }
+}

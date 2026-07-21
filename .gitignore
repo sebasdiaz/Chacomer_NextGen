@@ -15,21 +15,13 @@ local.settings.json
 Thumbs.db
 /.claude/settings.local.json
 
+# Node (PCF web resources)
+node_modules/
+
+# Bicep compilado (ARM generado por az bicep build)
+infra/main.json
+
 # Deploy artifacts
 deploy.zip
 publish/
 *.pubxml.user
-
-/AxxonProductGroups.Functions/Properties/PublishProfiles/fa-axxonproducts-inte - One Deploy.pubxml
-/AxxonProductGroups.Functions/Properties/ServiceDependencies/fa-axxonproducts-inte - One Deploy/appInsights1.arm.json
-/AxxonProductGroups.Functions/Properties/ServiceDependencies/fa-axxonproducts-inte - One Deploy/storage1.arm.json
-/AxxonProductGroups.Functions/Properties/serviceDependencies.fa-axxonproducts-inte - One Deploy.json
-/AxxonProductGroups.Functions/Properties/serviceDependencies.json
-/AxxonProducts.Functions/Properties/PublishProfiles/fa-axxonproducts-inte - One Deploy.pubxml
-/AxxonProducts.Functions/Properties/serviceDependencies.fa-axxonproducts-inte - One Deploy.json
-/AxxonProducts.Functions/Properties/ServiceDependencies/fa-axxonproducts-inte - One Deploy/appInsights1.arm.json
-/AxxonProducts.Functions/Properties/ServiceDependencies/fa-axxonproducts-inte - One Deploy/storage1.arm.json
-/AxxonProducts.Functions/Properties/serviceDependencies.json
-/AxxonProducts.Functions/Properties/serviceDependencies.json
-/AxxonProductGroups.Functions/Properties/serviceDependencies.json
-/AxxonProducts.Functions/Properties/serviceDependencies.json
