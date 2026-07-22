@@ -1,29 +1,23 @@
 # ---------------------------------------------------------------------------
-# Pipeline de infraestructura: despliega infra/main.bicep al resource group
-# del ambiente. Corre validacion (what-if) y luego el deployment.
+# Pipeline de infraestructura (TEST): despliega infra/main.bicep al resource
+# group EiP_Test. Corre validacion (what-if) y luego el deployment.
 #
 # Requiere:
 #   - Service connection ARM con permisos de Contributor + User Access
 #     Administrator sobre el RG (las role assignments necesitan poder asignar roles).
-#   - Variable resourceGroupName por ambiente.
+#   - Environment 'test-infra' en DevOps (gate/aprobaciones).
 # ---------------------------------------------------------------------------
 
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - infra/**
-      - pipelines/azure-pipelines-infra.yml
+# Manual: se corre a demanda para promover infra a TEST (Run pipeline).
+trigger: none
 
 variables:
   - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
+    value: 'sc-chacomer-eip-test'
   - name: environmentName
-    value: 'inte'
+    value: 'test'
   - name: resourceGroupName
-    value: 'EiP_Inte'
+    value: 'EiP_Test'
 
 stages:
   - stage: Validate

@@ -42,7 +42,7 @@ Cada Function App recibe, vía role assignment (least privilege):
 # sobre el RG (las role assignments necesitan asignar roles).
 
 az deployment group create \
-  --resource-group DataverseINTE \
+  --resource-group EiP_Inte \
   --template-file infra/main.bicep \
   --parameters infra/environments/inte.bicepparam
 ```
@@ -51,7 +51,7 @@ Previsualizar cambios sin aplicar:
 
 ```bash
 az deployment group what-if \
-  --resource-group DataverseINTE \
+  --resource-group EiP_Inte \
   --template-file infra/main.bicep \
   --parameters infra/environments/inte.bicepparam
 ```
