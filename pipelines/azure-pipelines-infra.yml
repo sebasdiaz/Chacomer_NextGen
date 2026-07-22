@@ -1,11 +1,21 @@
 # ---------------------------------------------------------------------------
-# Pipeline de infraestructura: despliega infra/main.bicep al resource group
-# del ambiente. Corre validacion (what-if) y luego el deployment.
+# Pipeline de infraestructura (INTE): despliega infra/main.bicep al resource
+# group EiP_Inte. Corre validacion (what-if) y luego el deployment.
 #
-# Requiere:
-#   - Service connection ARM con permisos de Contributor + User Access
-#     Administrator sobre el RG (las role assignments necesitan poder asignar roles).
-#   - Variable resourceGroupName por ambiente.
+# NOTA — sin tasks in-box:
+#   El org de DevOps tiene deshabilitadas las built-in tasks (AzureCLI@2, etc.),
+#   por eso NO se usa el task de Azure ni un Service Connection. La autenticacion
+#   se hace con `az login --service-principal` sobre el az preinstalado del agente.
+#
+# Requiere estas VARIABLES del pipeline (definirlas en Edit -> Variables, o en un
+# variable group); azureClientSecret debe marcarse como SECRET:
+#   - azureClientId        (appId del SP)
+#   - azureClientSecret    (SECRET — password del SP)
+#   - azureTenantId
+#   - azureSubscriptionId
+#
+# El SP necesita Contributor + User Access Administrator sobre EiP_Inte
+# (las role assignments del Bicep requieren poder asignar roles).
 # ---------------------------------------------------------------------------
 
 trigger:
@@ -18,8 +28,6 @@ trigger:
       - pipelines/azure-pipelines-infra.yml
 
 variables:
-  - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
   - name: environmentName
     value: 'inte'
   - name: resourceGroupName
@@ -33,17 +41,26 @@ stages:
         pool:
           vmImage: 'ubuntu-latest'
         steps:
-          - task: AzureCLI@2
+          - checkout: self
+          - bash: |
+              set -euo pipefail
+              az login --service-principal \
+                -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" \
+                --output none
+              az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+            displayName: 'az login (service principal)'
+            env:
+              AZURE_CLIENT_ID: $(azureClientId)
+              AZURE_CLIENT_SECRET: $(azureClientSecret)
+              AZURE_TENANT_ID: $(azureTenantId)
+              AZURE_SUBSCRIPTION_ID: $(azureSubscriptionId)
+          - bash: |
+              set -euo pipefail
+              az deployment group what-if \
+                --resource-group "$(resourceGroupName)" \
+                --template-file infra/main.bicep \
+                --parameters infra/environments/$(environmentName).bicepparam
             displayName: 'az deployment group what-if'
-            inputs:
-              azureSubscription: '$(azureServiceConnection)'
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                az deployment group what-if \
-                  --resource-group $(resourceGroupName) \
-                  --template-file infra/main.bicep \
-                  --parameters infra/environments/$(environmentName).bicepparam
 
   - stage: Deploy
     displayName: 'Deploy infra'
@@ -59,14 +76,22 @@ stages:
             deploy:
               steps:
                 - checkout: self
-                - task: AzureCLI@2
+                - bash: |
+                    set -euo pipefail
+                    az login --service-principal \
+                      -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" \
+                      --output none
+                    az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+                  displayName: 'az login (service principal)'
+                  env:
+                    AZURE_CLIENT_ID: $(azureClientId)
+                    AZURE_CLIENT_SECRET: $(azureClientSecret)
+                    AZURE_TENANT_ID: $(azureTenantId)
+                    AZURE_SUBSCRIPTION_ID: $(azureSubscriptionId)
+                - bash: |
+                    set -euo pipefail
+                    az deployment group create \
+                      --resource-group "$(resourceGroupName)" \
+                      --template-file infra/main.bicep \
+                      --parameters infra/environments/$(environmentName).bicepparam
                   displayName: 'az deployment group create'
-                  inputs:
-                    azureSubscription: '$(azureServiceConnection)'
-                    scriptType: 'bash'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      az deployment group create \
-                        --resource-group $(resourceGroupName) \
-                        --template-file infra/main.bicep \
-                        --parameters infra/environments/$(environmentName).bicepparam
