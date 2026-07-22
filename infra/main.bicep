@@ -1,6 +1,6 @@
 // ===========================================================================
 // Enterprise Integration Platform (EiP) — infraestructura base por ambiente.
-// Scope: resourceGroup (ej: DataverseINTE).
+// Scope: resourceGroup (ej: EiP_Inte).
 //
 // Despliega lo CROSS a todas las integraciones:
 //   - Monitoring: Log Analytics + Application Insights (compartido)
@@ -9,7 +9,7 @@
 //   - Las 4 Function Apps actuales (Flex Consumption + MI + role assignments)
 //
 // Deploy:
-//   az deployment group create -g DataverseINTE \
+//   az deployment group create -g EiP_Inte \
 //     -f infra/main.bicep -p infra/environments/inte.bicepparam
 // ===========================================================================
 

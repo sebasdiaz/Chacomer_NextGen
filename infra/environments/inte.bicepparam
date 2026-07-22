@@ -1,6 +1,6 @@
 using '../main.bicep'
 
-// Ambiente de integracion (RG: DataverseINTE, eastus).
+// Ambiente de integracion (RG: EiP_Inte, eastus).
 param environmentName = 'inte'
 param dataverseUrl = 'https://chacomer-inte.crm.dynamics.com'
 param foBaseUrl = 'https://chacomer-inte.operations.dynamics.com'
