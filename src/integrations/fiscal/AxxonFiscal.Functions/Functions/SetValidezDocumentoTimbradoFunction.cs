@@ -1,88 +1,94 @@
-using AxxonContacts.Functions.Services;
+using Axxon.Eip.Core.Fiscal;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using System.Net;
 
-namespace AxxonContacts.Functions.Functions
+namespace AxxonFiscal.Functions.Functions
 {
     /// <summary>
-    /// Proxy HTTP hacia el servicio oficial de Validez de Documento de Máquina Registradora de la SET Paraguay.
-    /// Especificación técnica: §2.4 — Servicio Web Validez Documento Máquina Registradora (DNIT, enero/2024).
+    /// Proxy HTTP hacia el servicio oficial de Validez de Documento Timbrado de la SET Paraguay.
+    /// Especificación técnica: §2.3 — Servicio Web Validez Documento Timbrado (DNIT, enero/2024).
     ///
     /// Endpoint expuesto:
-    ///   GET  /api/set/validez-documento-maquina-registradora
+    ///   GET  /api/set/validez-documento-timbrado
     ///       ?ruc=valorRUC
     ///       &amp;dv=valorDV
     ///       &amp;numero_timbrado=valorNumeroTimbrado
+    ///       &amp;tipo_documento=valorTipoDocumento
+    ///       &amp;numero_documento=nnn-nnn-nnnnnnn
     ///       &amp;fecha_expedicion=DD/MM/AAAA
-    ///       &amp;medio_generacion=2
+    ///       &amp;medio_generacion=valorMedioGeneracion
     ///
     ///   OPTIONS /api/set/{*any}   (CORS preflight — manejado por SetConsultaRucFunction)
     ///
-    /// Notas del spec:
-    ///   - No requiere tipo_documento ni numero_documento (a diferencia de §2.3).
-    ///   - medio_generacion = "2" (MÁQUINAS REGISTRADORAS) es el único valor válido para este servicio.
+    /// La función inyecta el apiKey desde la variable de entorno "SetApiKey" y retorna
+    /// directamente el JSON de la SET al caller sin re-serializar.
     ///
     /// Respuesta SET:
     ///   Válido   → { "mensaje": "VALIDO",   "estado": "VALIDO"   }
     ///   Inválido → { "mensaje": "..motivo..", "estado": "INVALIDO" }
     /// </summary>
-    public class SetValidezDocumentoMaquinaRegistradoraFunction
+    public class SetValidezDocumentoTimbradoFunction
     {
-        private readonly SetApiService                                             _setApi;
-        private readonly ILogger<SetValidezDocumentoMaquinaRegistradoraFunction>  _logger;
+        private readonly SetApiService                                  _setApi;
+        private readonly ILogger<SetValidezDocumentoTimbradoFunction>  _logger;
 
-        public SetValidezDocumentoMaquinaRegistradoraFunction(
+        public SetValidezDocumentoTimbradoFunction(
             SetApiService setApi,
-            ILogger<SetValidezDocumentoMaquinaRegistradoraFunction> logger)
+            ILogger<SetValidezDocumentoTimbradoFunction> logger)
         {
             _setApi = setApi;
             _logger = logger;
         }
 
-        // ── GET /api/set/validez-documento-maquina-registradora ──────
+        // ── GET /api/set/validez-documento-timbrado ──────────────────
 
-        [Function("Set_ValidezDocumentoMaquinaRegistradora")]
-        public async Task<HttpResponseData> ValidezDocumentoMaquinaRegistradora(
+        [Function("Set_ValidezDocumentoTimbrado")]
+        public async Task<HttpResponseData> ValidezDocumentoTimbrado(
             [HttpTrigger(AuthorizationLevel.Function, "get",
-                Route = "set/validez-documento-maquina-registradora")]
+                Route = "set/validez-documento-timbrado")]
             HttpRequestData req)
         {
             var qs = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
 
-            var ruc             = qs["ruc"];
-            var dv              = qs["dv"];
-            var numeroTimbrado  = qs["numero_timbrado"];
-            var fechaExpedicion = qs["fecha_expedicion"];
-            // Según spec §2.4 el único medio válido es "2" (MÁQUINAS REGISTRADORAS).
-            // Se acepta como parámetro para no romper si la SET agrega más medios en el futuro,
-            // pero por defecto se asigna "2" si no se especifica.
-            var medioGeneracion = qs["medio_generacion"] ?? "2";
+            var ruc              = qs["ruc"];
+            var dv               = qs["dv"];
+            var numeroTimbrado   = qs["numero_timbrado"];
+            var tipoDocumento    = qs["tipo_documento"];
+            var numeroDocumento  = qs["numero_documento"];
+            var fechaExpedicion  = qs["fecha_expedicion"];
+            var medioGeneracion  = qs["medio_generacion"];
 
             _logger.LogInformation(
-                "[Set_ValidezDocumentoMaquinaRegistradora] ruc={Ruc} dv={Dv} " +
-                "timbrado={Timbrado} fecha={Fecha} medio={Medio}",
-                ruc, dv, numeroTimbrado, fechaExpedicion, medioGeneracion);
+                "[Set_ValidezDocumentoTimbrado] ruc={Ruc} dv={Dv} timbrado={Timbrado} " +
+                "tipo={Tipo} numero={Numero} fecha={Fecha} medio={Medio}",
+                ruc, dv, numeroTimbrado, tipoDocumento,
+                numeroDocumento, fechaExpedicion, medioGeneracion);
 
             // ── Validación de parámetros requeridos ──────────────────
             var missingParams = new List<string>();
             if (string.IsNullOrWhiteSpace(ruc))             missingParams.Add("ruc");
             if (string.IsNullOrWhiteSpace(dv))              missingParams.Add("dv");
             if (string.IsNullOrWhiteSpace(numeroTimbrado))  missingParams.Add("numero_timbrado");
+            if (string.IsNullOrWhiteSpace(tipoDocumento))   missingParams.Add("tipo_documento");
+            if (string.IsNullOrWhiteSpace(numeroDocumento)) missingParams.Add("numero_documento");
             if (string.IsNullOrWhiteSpace(fechaExpedicion)) missingParams.Add("fecha_expedicion");
+            if (string.IsNullOrWhiteSpace(medioGeneracion)) missingParams.Add("medio_generacion");
 
             if (missingParams.Count > 0)
                 return await BadRequest(req,
                     $"Parametros requeridos faltantes: {string.Join(", ", missingParams)}.");
 
             // ── Llamada a la SET ──────────────────────────────────────
-            var (json, status) = await _setApi.ValidezDocumentoMaquinaRegistradoraAsync(
+            var (json, status) = await _setApi.ValidezDocumentoTimbradoAsync(
                 ruc!,
                 dv!,
                 numeroTimbrado!,
+                tipoDocumento!,
+                numeroDocumento!,
                 fechaExpedicion!,
-                medioGeneracion);
+                medioGeneracion!);
 
             return await BuildResponse(req, json, status);
         }

@@ -1,3 +1,4 @@
+using Axxon.Eip.Core.Fiscal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using System.Text.Json;
