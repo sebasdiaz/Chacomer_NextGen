@@ -1,10 +1,10 @@
-using AxxonContacts.Functions.Services;
+using Axxon.Eip.Core.Fiscal;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using System.Net;
 
-namespace AxxonContacts.Functions.Functions
+namespace AxxonFiscal.Functions.Functions
 {
     /// <summary>
     /// Proxy HTTP de la API publica de TURUC (https://turuc.com.py/api/contribuyente).

@@ -160,6 +160,27 @@ module products 'modules/functionApp.bicep' = {
   }
 }
 
+// App de consultas fiscales (SET/DNIT + TURUC): solo endpoints HTTP.
+// No consume Service Bus ni Dataverse (proxies HTTP puros); superficie publica
+// separada del backbone de mensajeria. SetApiKey se resuelve desde Key Vault
+// (secret "SetApiKey", via AddEipCore) — no se pasa como app setting.
+module fiscal 'modules/functionApp.bicep' = {
+  name: 'fa-fiscal'
+  params: {
+    functionAppName: 'fa-axxonfiscal-${environmentName}'
+    appKey: 'fiscal'
+    environmentName: environmentName
+    location: location
+    tags: tags
+    runtimeVersion: dotnetIsolatedVersion
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    keyVaultName: keyVault.outputs.keyVaultName
+    keyVaultUri: keyVault.outputs.keyVaultUri
+    needsServiceBus: false
+    appSettings: []
+  }
+}
+
 output keyVaultName string = keyVault.outputs.keyVaultName
 output keyVaultUri string = keyVault.outputs.keyVaultUri
 output serviceBusNamespace string = serviceBus.outputs.namespaceName
@@ -169,4 +190,5 @@ output functionApps array = [
   customers.outputs.functionAppName
   customerGroups.outputs.functionAppName
   products.outputs.functionAppName
+  fiscal.outputs.functionAppName
 ]

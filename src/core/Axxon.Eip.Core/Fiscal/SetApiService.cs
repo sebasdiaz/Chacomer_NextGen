@@ -1,7 +1,6 @@
-using AxxonContacts.Functions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace AxxonContacts.Functions.Services
+namespace Axxon.Eip.Core.Fiscal
 {
     /// <summary>
     /// Cliente HTTP para los servicios de Consulta Pública de la SET Paraguay (DNIT).
@@ -12,20 +11,26 @@ namespace AxxonContacts.Functions.Services
     ///   ValidezDocumentoTimbradoAsync             → validezDocumentoTimbrado
     ///   ValidezDocumentoMaquinaRegistradoraAsync  → validezDocumentoMaquinaRegistradora
     ///
-    /// El API Key se obtiene de la variable de entorno "SetApiKey" (AppSettings).
-    /// La respuesta cruda de la SET se retorna sin re-serializar para que la Azure Function
-    /// la devuelva directamente al caller.
+    /// El API Key se obtiene de <see cref="SetApiOptions.ApiKey"/> (config "SetApiKey").
+    /// La respuesta cruda de la SET se retorna sin re-serializar para que el caller
+    /// (Azure Function o servicio de validación) la use directamente.
+    ///
+    /// Componente cross de la EiP: lo consumen tanto las Azure Functions HTTP fiscales
+    /// (AxxonFiscal.Functions) como el path de matching por Service Bus (AxxonContacts).
     /// </summary>
     public class SetApiService
     {
-        private readonly HttpClient  _httpClient;
-        private readonly AppSettings _settings;
-        private readonly ILogger     _logger;
+        /// <summary>Nombre del HttpClient nombrado en el IHttpClientFactory.</summary>
+        public const string HttpClientName = "SetApi";
 
-        public SetApiService(HttpClient httpClient, AppSettings settings, ILogger logger)
+        private readonly HttpClient   _httpClient;
+        private readonly SetApiOptions _options;
+        private readonly ILogger      _logger;
+
+        public SetApiService(HttpClient httpClient, SetApiOptions options, ILogger logger)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _settings   = settings   ?? throw new ArgumentNullException(nameof(settings));
+            _options    = options    ?? throw new ArgumentNullException(nameof(options));
             _logger     = logger     ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -40,7 +45,7 @@ namespace AxxonContacts.Functions.Services
         /// </returns>
         public Task<(string? json, int statusCode)> ConsultaRucAsync(string ruc, string dv)
         {
-            var apiKey = _settings.SetApiKey ?? string.Empty;
+            var apiKey = _options.ApiKey ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(apiKey))
                 _logger.LogWarning("[SetApiService] SetApiKey no esta configurado.");
@@ -81,7 +86,7 @@ namespace AxxonContacts.Functions.Services
             string fechaExpedicion,
             string medioGeneracion)
         {
-            var apiKey = _settings.SetApiKey ?? string.Empty;
+            var apiKey = _options.ApiKey ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(apiKey))
                 _logger.LogWarning("[SetApiService] SetApiKey no esta configurado.");
@@ -117,7 +122,7 @@ namespace AxxonContacts.Functions.Services
             string fechaExpedicion,
             string medioGeneracion)
         {
-            var apiKey = _settings.SetApiKey ?? string.Empty;
+            var apiKey = _options.ApiKey ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(apiKey))
                 _logger.LogWarning("[SetApiService] SetApiKey no esta configurado.");

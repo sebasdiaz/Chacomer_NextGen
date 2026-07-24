@@ -1,0 +1,27 @@
+# Pipeline de la integracion Fiscal (consultas SET/DNIT + TURUC).
+# Se dispara ante cambios en su proyecto o en el core compartido.
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/integrations/fiscal/AxxonFiscal.Functions/**
+      - src/core/**
+      - pipelines/azure-pipelines-fiscal.yml
+      - pipelines/templates/functionapp-build-deploy.yml
+
+variables:
+  - name: azureServiceConnection
+    value: 'sc-chacomer-eip-inte'
+  - name: environmentName
+    value: 'inte'
+
+extends:
+  template: templates/functionapp-build-deploy.yml
+  parameters:
+    appName: 'fa-axxonfiscal-$(environmentName)'
+    projectPath: 'src/integrations/fiscal/AxxonFiscal.Functions/AxxonFiscal.Functions.csproj'
+    azureServiceConnection: '$(azureServiceConnection)'
+    environmentName: '$(environmentName)'

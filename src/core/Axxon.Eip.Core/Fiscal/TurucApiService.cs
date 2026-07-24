@@ -1,15 +1,20 @@
 using Microsoft.Extensions.Logging;
 
-namespace AxxonContacts.Functions.Services
+namespace Axxon.Eip.Core.Fiscal
 {
     /// <summary>
     /// Wrapper del HttpClient para la API publica de TURUC (https://turuc.com.py).
     /// Actua como proxy: reenvía la solicitud y retorna la respuesta cruda (JSON string)
     /// para que las Azure Functions la devuelvan directamente al caller sin re-serializar.
     /// Los errores de red o HTTP no exitosos se registran y retornan como null.
+    ///
+    /// Componente cross de la EiP: lo consume AxxonFiscal.Functions (endpoints /api/turuc/*).
     /// </summary>
     public class TurucApiService
     {
+        /// <summary>Nombre del HttpClient nombrado en el IHttpClientFactory.</summary>
+        public const string HttpClientName = "TurucApi";
+
         private readonly HttpClient _httpClient;
         private readonly ILogger    _logger;
 

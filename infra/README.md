@@ -65,7 +65,7 @@ usan Managed Identity, así que los `*ClientSecret` solo existen en el vault de 
 ```bash
 VAULT=kv-chacomer-eip-inte
 
-# API Key de la SET Paraguay (contacts) — requerido en todos los ambientes
+# API Key de la SET Paraguay (contacts + fiscal) — requerido en todos los ambientes
 az keyvault secret set --vault-name $VAULT --name SetApiKey --value "<api-key>"
 
 # Client secrets (solo ambientes sin Managed Identity contra Dataverse/F&O)
