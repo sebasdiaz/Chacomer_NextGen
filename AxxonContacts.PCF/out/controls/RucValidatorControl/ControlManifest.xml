@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<manifest>
+  <control namespace="AxxonContacts" constructor="RucValidatorControl" version="1.0.0" display-name-key="RucValidatorControl_DisplayName" description-key="RucValidatorControl_Desc" control-type="standard" api-version="1.3.18">
+    <external-service-usage enabled="true">
+      <domain>*.azurewebsites.net</domain>
+      <domain>turuc.com.py</domain>
+    </external-service-usage>
+    <property name="DocumentNumber" display-name-key="DocumentNumber_DisplayName" description-key="DocumentNumber_Desc" of-type="SingleLine.Text" usage="bound" required="true"/>
+    <property name="ApiBaseUrl" display-name-key="ApiBaseUrl_DisplayName" description-key="ApiBaseUrl_Desc" of-type="SingleLine.URL" usage="input" required="true"/>
+    <property name="ApiKey" display-name-key="ApiKey_DisplayName" description-key="ApiKey_Desc" of-type="SingleLine.Text" usage="input" required="false"/>
+    <resources>
+      <code path="bundle.js" order="1"/>
+      <css path="css/RucValidatorControl.css" order="1"/>
+    </resources>
+    <feature-usage/>
+    <built-by name="pac" version="1.51.1"/>
+  </control>
+</manifest>
