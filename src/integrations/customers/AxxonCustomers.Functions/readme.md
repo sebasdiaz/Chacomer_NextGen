@@ -114,7 +114,13 @@ significa que el export este mal — significa que hay que mirarlo y decidir de 
 | Contact inexistente / sin `msdyn_company`            | DLQ (`DataError`)                       |
 | Campo del mapeo inexistente en F&O                   | DLQ (`DataError`)                       |
 | Contact ya sincronizado (`msdyn_contactpersonid`)    | Complete sin re-insertar (idempotencia) |
-| Error transitorio (F&O / Dataverse / red)            | Abandon -> retry de Service Bus -> DLQ tras Max Delivery Count |
+| F&O rechaza por regla de negocio (400, 404, 409, 422) | DLQ (`BusinessRuleFailed`) **sin reintentar**, con el Infolog de F&O como descripcion |
+| Error transitorio (F&O 5xx/429/timeout, Dataverse, red) | Abandon -> retry de Service Bus -> DLQ tras Max Delivery Count |
+
+> Un 400 de F&O es permanente: significa que el dato viola una regla (un customer group
+> que no existe en la compania, un party que ya existe como prospect). Reintentarlo solo
+> consume delivery count y martilla F&O. La clasificacion vive en `FoODataException.IsPermanent`.
+> Los 401/403 **si** se reintentan: suelen ser un token vencido o un permiso que no propago.
 
 ## Application Settings
 
