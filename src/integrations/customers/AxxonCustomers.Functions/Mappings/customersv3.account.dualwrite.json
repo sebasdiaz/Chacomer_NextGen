@@ -1,0 +1,258 @@
+{
+    "centerEnvironment": "",
+    "centerEnvironmentType": "CRM",
+    "centerPartitionName": null,
+    "connectionSetName": null,
+    "entityName": null,
+    "leftEnvironment": "",
+    "leftEnvironmentType": "AX",
+    "leftPartitionName": null,
+    "legs": [
+        {
+            "deleteNonMatchingData": false,
+            "destinationEnvironment": "",
+            "destinationEnvironmentType": "CRM",
+            "destinationSchema": "accounts",
+            "destinationSchemaDistinctName": null,
+            "entityFile": null,
+            "entityFileFormat": 0,
+            "entityFileInfo": null,
+            "fieldMappings": [
+                {
+                    "destinationField": "accountnumber",
+                    "isSystemGenerated": false,
+                    "sourceField": "CUSTOMERACCOUNT",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "creditlimit",
+                    "isSystemGenerated": false,
+                    "sourceField": "CREDITLIMIT",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "transactioncurrencyid.isocurrencycode",
+                    "destinationLookupFieldRelatedEntity": "transactioncurrencies",
+                    "isSystemGenerated": false,
+                    "sourceField": "SALESCURRENCYCODE",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "description",
+                    "isSystemGenerated": false,
+                    "sourceField": "SALESMEMO",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_creditlimitismandatory",
+                    "isSystemGenerated": false,
+                    "sourceField": "CREDITLIMITISMANDATORY",
+                    "syncDirection": 3,
+                    "valueTransforms": [
+                        {
+                            "createValuesOnDestination": false,
+                            "transformType": "ValueMap",
+                            "valueMap": {
+                                "no": "False",
+                                "yes": "True"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "destinationField": "msdyn_creditrating",
+                    "isSystemGenerated": false,
+                    "sourceField": "CREDITRATING",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_customergroupid.msdyn_groupid",
+                    "destinationLookupFieldRelatedEntity": "msdyn_customergroups",
+                    "isSystemGenerated": false,
+                    "sourceField": "CUSTOMERGROUPID",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_identificationnumber",
+                    "isSystemGenerated": false,
+                    "sourceField": "IDENTIFICATIONNUMBER",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_billingaccount.accountnumber",
+                    "isSystemGenerated": false,
+                    "sourceField": "INVOICEACCOUNT",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_onetimecustomer",
+                    "isSystemGenerated": false,
+                    "sourceField": "ISONETIMECUSTOMER",
+                    "syncDirection": 3,
+                    "valueTransforms": [
+                        {
+                            "createValuesOnDestination": false,
+                            "transformType": "ValueMap",
+                            "valueMap": {
+                                "no": "False",
+                                "yes": "True"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "destinationField": "msdyn_onholdstatus",
+                    "isSystemGenerated": false,
+                    "sourceField": "ONHOLDSTATUS",
+                    "syncDirection": 3,
+                    "valueTransforms": [
+                        {
+                            "createValuesOnDestination": false,
+                            "transformType": "ValueMap",
+                            "valueMap": {
+                                "all": "806380002",
+                                "invoice": "806380001",
+                                "never": "806380005",
+                                "no": "806380000",
+                                "payment": "806380003",
+                                "requisition": "806380004"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "destinationField": "msdyn_partycountry",
+                    "isSystemGenerated": false,
+                    "sourceField": "PARTYCOUNTRY",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_partystateprovince",
+                    "isSystemGenerated": false,
+                    "sourceField": "PARTYSTATE",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_paymentday.msdyn_name",
+                    "destinationLookupFieldRelatedEntity": "msdyn_paymentdays",
+                    "isSystemGenerated": false,
+                    "sourceField": "PAYMENTDAY",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_customerpaymentmethod.msdyn_name",
+                    "destinationLookupFieldRelatedEntity": "msdyn_customerpaymentmethods",
+                    "isSystemGenerated": false,
+                    "sourceField": "PAYMENTMETHOD",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_paymentschedule.msdyn_name",
+                    "destinationLookupFieldRelatedEntity": "msdyn_paymentschedules",
+                    "isSystemGenerated": false,
+                    "sourceField": "PAYMENTSCHEDULE",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_paymentterm.msdyn_name",
+                    "destinationLookupFieldRelatedEntity": "msdyn_paymentterms",
+                    "isSystemGenerated": false,
+                    "sourceField": "PAYMENTTERMS",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_paymenttermsbasedays",
+                    "isSystemGenerated": false,
+                    "sourceField": "PAYMENTTERMSBASEDAYS",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_taxexemptnumber",
+                    "isSystemGenerated": false,
+                    "sourceField": "TAXEXEMPTNUMBER",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_vendor.msdyn_vendoraccountnumber",
+                    "destinationLookupFieldRelatedEntity": "msdyn_vendors",
+                    "isSystemGenerated": false,
+                    "sourceField": "VENDORACCOUNT",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "customertypecode",
+                    "isSystemGenerated": false,
+                    "sourceField": "PARTYTYPE",
+                    "syncDirection": 3,
+                    "valueTransforms": [
+                        {
+                            "createValuesOnDestination": false,
+                            "transformType": "ValueMap",
+                            "valueMap": {
+                                "organization": "3"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "destinationField": "msdyn_partyid.msdyn_partynumber",
+                    "destinationLookupFieldRelatedEntity": "msdyn_parties",
+                    "isSystemGenerated": false,
+                    "sourceField": "PARTYNUMBER",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_primarycontact.msdyn_contactforpartynumber",
+                    "destinationLookupFieldRelatedEntity": "msdyn_contactforparties",
+                    "isSystemGenerated": false,
+                    "sourceField": "CONTACTPERSONID",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "msdyn_salestaxgroup.msdyn_name",
+                    "destinationLookupFieldRelatedEntity": "msdyn_taxgroups",
+                    "isSystemGenerated": false,
+                    "sourceField": "SALESTAXGROUP",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "a365_notes",
+                    "isSystemGenerated": false,
+                    "sourceField": "CREDMANNOTES",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "a365_defaultsite.msdyn_siteid",
+                    "destinationLookupFieldRelatedEntity": "msdyn_operationalsites",
+                    "isSystemGenerated": false,
+                    "sourceField": "SITEID",
+                    "syncDirection": 3
+                },
+                {
+                    "destinationField": "a365_defaultwarehouse.msdyn_warehouseidentifier",
+                    "destinationLookupFieldRelatedEntity": "msdyn_warehouses",
+                    "isSystemGenerated": false,
+                    "sourceField": "WAREHOUSEID",
+                    "syncDirection": 3
+                }
+            ],
+            "id": "001",
+            "isSourceFilterEditable": null,
+            "mashup": null,
+            "owningTeamId": null,
+            "owningTeamName": null,
+            "reversedSourceFilter": "customertypecode eq 3",
+            "sourceEntitySchema": null,
+            "sourceEnvironment": "",
+            "sourceEnvironmentType": "AX",
+            "sourceFilter": "((PartyType == \"Organization\"))",
+            "sourceMQuery": null,
+            "sourceProjectName": null,
+            "sourceSchema": "Customers V3",
+            "sourceSchemaDistinctName": null
+        }
+    ],
+    "name": "[Customers V3] - [accounts]",
+    "order": 0,
+    "rightEnvironmentType": "UNDEFINED"
+}

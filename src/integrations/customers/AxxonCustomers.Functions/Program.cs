@@ -1,12 +1,14 @@
 using Axxon.Eip.Core.Dataverse;
 using Axxon.Eip.Core.FinOps;
 using Axxon.Eip.Core.Hosting;
+using AxxonCustomers.Functions.Mapping;
 using AxxonCustomers.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Xrm.Sdk;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
@@ -17,15 +19,27 @@ builder.AddEipCore();
 builder.Services.AddEipDataverse(builder.Configuration);
 builder.Services.AddEipFoOData(builder.Configuration);
 
+// Una sola conexion a Dataverse por proceso: ServiceClient es thread-safe y
+// reconectar en cada mensaje solo agrega latencia.
+builder.Services.AddSingleton<IOrganizationService>(sp =>
+    sp.GetRequiredService<DataverseClientFactory>().CreateOrganizationService());
+
+// Mapeos por JSON (export de Dual Write + overlay), compilados al arranque.
+builder.Services.AddSingleton(sp => EntityMapRegistry.Load(
+    EntityMapRegistry.DefaultDirectory,
+    sp.GetRequiredService<ILogger<EntityMapRegistry>>()));
+
+builder.Services.AddSingleton<FoSchemaCache>();
+builder.Services.AddTransient<IFoSchemaProvider, FoSchemaProvider>();
+builder.Services.AddTransient<FoPayloadBuilder>();
+
 builder.Services.AddTransient<IFoCustomerService, FoCustomerService>();
+builder.Services.AddTransient<IContactCustomerSyncService, ContactCustomerSyncService>();
 
-builder.Services.AddTransient<IContactCustomerSyncService>(sp =>
-{
-    var factory           = sp.GetRequiredService<DataverseClientFactory>();
-    var orgService        = factory.CreateOrganizationService();
-    var foCustomerService = sp.GetRequiredService<IFoCustomerService>();
-    var logger            = sp.GetRequiredService<ILogger<ContactCustomerSyncService>>();
-    return new ContactCustomerSyncService(orgService, foCustomerService, logger);
-});
+var app = builder.Build();
 
-builder.Build().Run();
+// Fail fast: un mapeo que no compila voltea el host aca y no en el primer mensaje.
+// Un mapeo mal escrito no falla solo, escribe mal en F&O y nadie se entera.
+app.Services.GetRequiredService<EntityMapRegistry>();
+
+app.Run();

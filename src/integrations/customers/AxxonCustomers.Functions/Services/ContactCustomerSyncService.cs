@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AxxonCustomers.Functions.Mapping;
 using AxxonCustomers.Functions.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
@@ -6,79 +7,41 @@ using Microsoft.Xrm.Sdk;
 namespace AxxonCustomers.Functions.Services
 {
     /// <summary>
-    /// Orquesta la sincronizacion contact (Dataverse) -> CustomersV3 (F&O):
-    ///   1. Recupera el contact con los campos del mapeo CustomersV3_Contact.json.
-    ///   2. Idempotencia: se consulta CustomersV3 en F&O por PartyNumber /
-    ///      CustomerAccount dentro de la compania. msdyn_contactpersonid puede
-    ///      traer un valor que no corresponde a un customer real, asi que el
-    ///      campo de CRM por si solo no determina la existencia.
-    ///   3. Resuelve dataAreaId desde msdyn_company.cdm_companycode (sin compania -> DLQ).
-    ///   4. Resuelve los campos de los lookups relacionados (party number, grupo,
-    ///      moneda, terminos de pago, etc.) con Retrieves individuales.
-    ///   5. Inserta en F&O y escribe el CustomerAccount generado de vuelta en
-    ///      msdyn_contactpersonid del contact.
+    /// Orquesta la sincronizacion contact (Dataverse) -&gt; CustomersV3 (F&amp;O):
+    ///   1. Recupera el contact con las columnas que pide el mapeo.
+    ///   2. Evalua la guarda de sincronizacion del overlay (syncWhen).
+    ///   3. Arma el payload con <see cref="FoPayloadBuilder"/> (mapeo por JSON).
+    ///   4. Idempotencia: se consulta F&amp;O por PartyNumber / CustomerAccount dentro de
+    ///      la compania. El campo de write-back de CRM por si solo no determina la
+    ///      existencia: puede traer un valor que no corresponde a un customer real.
+    ///   5. Inserta en F&amp;O y escribe el CustomerAccount generado de vuelta en CRM.
+    ///
+    /// El mapeo de campos NO vive aca: sale de Mappings/customersv3.contact.*.json.
     /// </summary>
     public class ContactCustomerSyncService : IContactCustomerSyncService
     {
-        private const string ContactEntity = "contact";
+        private const string MapName = "contact";
 
-        // Campos propios del contact segun el mapeo
-        private static readonly string[] ContactColumns =
-        {
-            "msdyn_contactpersonid",
-            "msdyn_identificationnumber",
-            "msdyn_partycountry",
-            "msdyn_partystateprovince",
-            "description",
-            "creditlimit",
-            "a365_creditrating",
-            "a365_onholdstatus",
-            "a365_notes",
-            "msdyn_partyid",
-            "msdyn_customergroupid",
-            "transactioncurrencyid",
-            "msdyn_paymentday",
-            "msdyn_paymentschedule",
-            "msdyn_customerpaymentmethod",
-            "msdyn_salestaxgroup",
-            "msdyn_paymentterms",
-            "msdyn_primarycontact",
-            "msdyn_company"
-        };
-        // (msdyn_sellable ya no se lee: A365Sellable se fuerza a "No")
-
-        // a365_onholdstatus (OptionSet CRM) -> OnHoldStatus (enum CustVendorBlocked F&O).
-        // Inverso del valueMap de CustomersV3_Contact.json, con los nombres de
-        // miembro del enum OData de F&O (case exacto requerido por la API).
-        private static readonly Dictionary<int, string> OnHoldStatusMap = new()
-        {
-            [806380000] = "No",
-            [806380001] = "Invoice",
-            [806380002] = "All",
-            [806380003] = "Payment",
-            [806380004] = "Requisition",
-            [806380005] = "Never"
-        };
-
-        // Para loguear el payload que se envia a F&O (solo campos con valor).
-        private static readonly JsonSerializerOptions PayloadLogOptions = new()
-        {
-            WriteIndented = false,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        };
+        private static readonly JsonSerializerOptions PayloadLogOptions = new() { WriteIndented = false };
 
         private readonly IOrganizationService _orgService;
         private readonly IFoCustomerService _foCustomerService;
+        private readonly FoPayloadBuilder _payloadBuilder;
+        private readonly EntityMap _map;
         private readonly ILogger<ContactCustomerSyncService> _logger;
 
         public ContactCustomerSyncService(
             IOrganizationService orgService,
             IFoCustomerService foCustomerService,
+            FoPayloadBuilder payloadBuilder,
+            EntityMapRegistry maps,
             ILogger<ContactCustomerSyncService> logger)
         {
             _orgService        = orgService        ?? throw new ArgumentNullException(nameof(orgService));
             _foCustomerService = foCustomerService ?? throw new ArgumentNullException(nameof(foCustomerService));
+            _payloadBuilder    = payloadBuilder    ?? throw new ArgumentNullException(nameof(payloadBuilder));
             _logger            = logger            ?? throw new ArgumentNullException(nameof(logger));
+            _map               = (maps ?? throw new ArgumentNullException(nameof(maps))).Get(MapName);
         }
 
         public async Task ProcessAsync(Guid contactId, CancellationToken cancellationToken = default)
@@ -86,34 +49,43 @@ namespace AxxonCustomers.Functions.Services
             _logger.LogInformation(
                 "[ContactCustomerSyncService] Inicio. ContactId={ContactId}", contactId);
 
-            var contact    = RetrieveContact(contactId);
+            var contact = RetrieveContact(contactId);
 
             _logger.LogInformation(
                 "[ContactCustomerSyncService] Contact recuperado de Dataverse. ContactId={ContactId} | " +
                 "Atributos con valor: [{Attributes}]",
                 contactId, string.Join(", ", contact.Attributes.Keys));
 
-            var dataAreaId = ResolveDataAreaId(contact);
-            var payload    = BuildFoCustomer(contact, dataAreaId);
+            if (!_payloadBuilder.ShouldSync(contact, _map, out var reason))
+            {
+                _logger.LogInformation(
+                    "[ContactCustomerSyncService] Contact {ContactId} no cumple la guarda de " +
+                    "sincronizacion ({Reason}). No se sincroniza.",
+                    contactId, reason);
+                return;
+            }
+
+            var payload = await _payloadBuilder.BuildAsync(contact, _map, cancellationToken);
 
             _logger.LogInformation(
-                "[ContactCustomerSyncService] Payload CustomersV3 armado para {ContactId}: {Payload}",
-                contactId,
-                JsonSerializer.Serialize(payload, PayloadLogOptions));
+                "[ContactCustomerSyncService] Payload {EntitySet} armado para {ContactId}: {Payload}",
+                _map.EntitySet, contactId,
+                JsonSerializer.Serialize(payload.Fields, PayloadLogOptions));
 
-            // Idempotencia: la existencia se verifica contra F&O, no contra el
-            // campo de CRM. msdyn_contactpersonid puede tener valor sin que el
-            // customer exista (datos previos, write-back de un registro borrado).
-            var writtenBackAccount = contact.GetAttributeValue<string>("msdyn_contactpersonid");
+            // Idempotencia: la existencia se verifica contra F&O, no contra el campo de
+            // CRM. El write-back puede tener valor sin que el customer exista (datos
+            // previos, write-back de un registro borrado).
+            var writtenBackAccount = contact.GetAttributeValue<string>(_map.WriteBackAttribute);
+            var partyNumber        = payload.MatchValues.GetValueOrDefault("PartyNumber");
 
             _logger.LogInformation(
                 "[ContactCustomerSyncService] Chequeo de idempotencia contra F&O. " +
-                "DataAreaId={DataAreaId} | PartyNumber={PartyNumber} | " +
-                "msdyn_contactpersonid (CRM)={WrittenBackAccount}",
-                dataAreaId, payload.PartyNumber ?? "null", writtenBackAccount ?? "null");
+                "DataAreaId={DataAreaId} | PartyNumber={PartyNumber} | {WriteBackField} (CRM)={WrittenBackAccount}",
+                payload.DataAreaId, partyNumber ?? "null",
+                _map.WriteBackAttribute, writtenBackAccount ?? "null");
 
             var existing = await _foCustomerService.FindCustomerAsync(
-                dataAreaId, payload.PartyNumber, writtenBackAccount, cancellationToken);
+                _map.EntitySet, payload.DataAreaId, partyNumber, writtenBackAccount, cancellationToken);
 
             if (existing != null)
             {
@@ -121,7 +93,7 @@ namespace AxxonCustomers.Functions.Services
                     "[ContactCustomerSyncService] Contact {ContactId} YA EXISTE en F&O " +
                     "(CustomerAccount={CustomerAccount}, PartyNumber={PartyNumber}, DataAreaId={DataAreaId}). " +
                     "Se OMITE el insert (idempotencia).",
-                    contactId, existing.CustomerAccount, existing.PartyNumber, dataAreaId);
+                    contactId, existing.CustomerAccount, existing.PartyNumber, payload.DataAreaId);
 
                 // Re-sincroniza el campo de CRM si quedo desactualizado.
                 if (!string.Equals(existing.CustomerAccount, writtenBackAccount, StringComparison.OrdinalIgnoreCase))
@@ -131,9 +103,11 @@ namespace AxxonCustomers.Functions.Services
 
             _logger.LogInformation(
                 "[ContactCustomerSyncService] No existe customer previo en F&O. " +
-                "Se procede al insert en CustomersV3 (DataAreaId={DataAreaId}).", dataAreaId);
+                "Se procede al insert en {EntitySet} (DataAreaId={DataAreaId}).",
+                _map.EntitySet, payload.DataAreaId);
 
-            var created = await _foCustomerService.CreateCustomerAsync(payload, cancellationToken);
+            var created = await _foCustomerService.CreateCustomerAsync(
+                _map.EntitySet, payload, cancellationToken);
 
             WriteBackCustomerAccount(contactId, created.CustomerAccount);
 
@@ -149,9 +123,9 @@ namespace AxxonCustomers.Functions.Services
             try
             {
                 return _orgService.Retrieve(
-                    ContactEntity,
+                    _map.SourceEntity,
                     contactId,
-                    new Microsoft.Xrm.Sdk.Query.ColumnSet(ContactColumns));
+                    FoPayloadBuilder.ColumnsFor(_map));
             }
             catch (System.ServiceModel.FaultException<OrganizationServiceFault> ex)
                 when (ex.Detail.ErrorCode == unchecked((int)0x80040217)) // ObjectDoesNotExist
@@ -159,110 +133,6 @@ namespace AxxonCustomers.Functions.Services
                 throw new NonRetryableSyncException(
                     $"El contact {contactId} no existe en Dataverse.");
             }
-        }
-
-        private string ResolveDataAreaId(Entity contact)
-        {
-            var companyRef = contact.GetAttributeValue<EntityReference>("msdyn_company");
-            if (companyRef == null)
-                throw new NonRetryableSyncException(
-                    $"El contact {contact.Id} no tiene compania (msdyn_company). " +
-                    "No se puede determinar el dataAreaId para el insert en F&O.");
-
-            var dataAreaId = LookupField(companyRef, "cdm_companycode");
-            if (string.IsNullOrWhiteSpace(dataAreaId))
-                throw new NonRetryableSyncException(
-                    $"La compania {companyRef.Id} del contact {contact.Id} no tiene cdm_companycode.");
-
-            return dataAreaId;
-        }
-
-        // ── Mapeo CRM -> F&O (CustomersV3_Contact.json invertido) ────
-
-        private FoCustomerV3 BuildFoCustomer(Entity contact, string dataAreaId)
-        {
-            var payload = new FoCustomerV3
-            {
-                DataAreaId = dataAreaId,
-                PartyType  = "Person",
-
-                IdentificationNumber = contact.GetAttributeValue<string>("msdyn_identificationnumber"),
-                PartyCountry         = contact.GetAttributeValue<string>("msdyn_partycountry"),
-                PartyState           = contact.GetAttributeValue<string>("msdyn_partystateprovince"),
-                SalesMemo            = contact.GetAttributeValue<string>("description"),
-                CredManNotes         = contact.GetAttributeValue<string>("a365_notes"),
-                CreditLimit          = contact.GetAttributeValue<Money>("creditlimit")?.Value,
-
-                PartyNumber     = LookupField(contact, "msdyn_partyid",             "msdyn_partynumber"),
-                CustomerGroupId = LookupField(contact, "msdyn_customergroupid",     "msdyn_groupid"),
-                SalesCurrencyCode = LookupField(contact, "transactioncurrencyid",   "isocurrencycode"),
-                PaymentDay      = LookupField(contact, "msdyn_paymentday",          "msdyn_name"),
-                PaymentSchedule = LookupField(contact, "msdyn_paymentschedule",     "msdyn_name"),
-                PaymentMethod   = LookupField(contact, "msdyn_customerpaymentmethod", "msdyn_name"),
-                SalesTaxGroup   = LookupField(contact, "msdyn_salestaxgroup",       "msdyn_name"),
-                PaymentTerms    = LookupField(contact, "msdyn_paymentterms",        "msdyn_name"),
-                ContactPersonId = LookupField(contact, "msdyn_primarycontact",      "msdyn_contactforpartynumber"),
-
-                CreditRating = ResolveCreditRating(contact),
-                OnHoldStatus = ResolveOnHoldStatus(contact),
-
-                // Forzado: el customer creado desde un lead calificado nace no vendible,
-                // independientemente de msdyn_sellable en el contact.
-                A365Sellable = "No"
-            };
-
-            // CustomerAccount se omite: F&O lo genera por number sequence.
-            return payload;
-        }
-
-        private string? ResolveCreditRating(Entity contact)
-        {
-            // a365_creditrating puede ser texto u OptionSet segun el environment;
-            // para OptionSet se usa la etiqueta formateada.
-            if (!contact.Attributes.TryGetValue("a365_creditrating", out var value))
-                return null;
-
-            return value switch
-            {
-                string s         => s,
-                OptionSetValue _ => contact.FormattedValues.TryGetValue("a365_creditrating", out var label)
-                                        ? label
-                                        : null,
-                _                => null
-            };
-        }
-
-        private string? ResolveOnHoldStatus(Entity contact)
-        {
-            var osv = contact.GetAttributeValue<OptionSetValue>("a365_onholdstatus");
-            if (osv == null)
-                return null;
-
-            if (OnHoldStatusMap.TryGetValue(osv.Value, out var foValue))
-                return foValue;
-
-            _logger.LogWarning(
-                "[ContactCustomerSyncService] a365_onholdstatus={Value} sin mapeo a F&O. " +
-                "Se omite OnHoldStatus.", osv.Value);
-            return null;
-        }
-
-        // ── Resolucion de lookups ─────────────────────────────────────
-
-        private string? LookupField(Entity contact, string attribute, string relatedField)
-        {
-            var reference = contact.GetAttributeValue<EntityReference>(attribute);
-            return reference == null ? null : LookupField(reference, relatedField);
-        }
-
-        private string? LookupField(EntityReference reference, string relatedField)
-        {
-            var related = _orgService.Retrieve(
-                reference.LogicalName,
-                reference.Id,
-                new Microsoft.Xrm.Sdk.Query.ColumnSet(relatedField));
-
-            return related.GetAttributeValue<string>(relatedField);
         }
 
         // ── Write-back ────────────────────────────────────────────────
@@ -278,17 +148,17 @@ namespace AxxonCustomers.Functions.Services
                 return;
             }
 
-            var update = new Entity(ContactEntity, contactId)
+            var update = new Entity(_map.SourceEntity, contactId)
             {
-                ["msdyn_contactpersonid"] = customerAccount
+                [_map.WriteBackAttribute] = customerAccount
             };
 
             _orgService.Update(update);
 
             _logger.LogInformation(
                 "[ContactCustomerSyncService] Write-back OK. Contact={ContactId} | " +
-                "msdyn_contactpersonid={CustomerAccount}",
-                contactId, customerAccount);
+                "{WriteBackField}={CustomerAccount}",
+                contactId, _map.WriteBackAttribute, customerAccount);
         }
     }
 }

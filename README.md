@@ -28,6 +28,9 @@ Chacomer_NextGen/
 │   └── contracts/                     (contratos de mensajes de la EiP)
 │       └── ServiceBusMessage.json
 │
+├── tests/
+│   └── AxxonCustomers.Functions.Tests/   (xUnit — mapeos CRM -> F&O)
+│
 └── src/
     ├── core/
     │   └── Axxon.Eip.Core/            (.NET 10 — componentes CROSS de la EiP)

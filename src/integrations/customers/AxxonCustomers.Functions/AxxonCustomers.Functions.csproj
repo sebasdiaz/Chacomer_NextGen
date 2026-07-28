@@ -25,6 +25,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Mapeos CRM -> F&O: export de Dual Write (intacto) + overlay. Se compilan al
+         arranque, asi que tienen que viajar con el deploy. -->
+    <Content Include="Mappings\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="host.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
