@@ -8,6 +8,7 @@ trigger:
     include:
       - src/integrations/customers/AxxonCustomers.Functions/**
       - src/core/**
+      - tests/AxxonCustomers.Functions.Tests/**
       - pipelines/azure-pipelines-customers.yml
       - pipelines/templates/functionapp-build-deploy.yml
 
@@ -22,5 +23,6 @@ extends:
   parameters:
     appName: 'fa-axxoncustomers-$(environmentName)'
     projectPath: 'src/integrations/customers/AxxonCustomers.Functions/AxxonCustomers.Functions.csproj'
+    testProjectPath: 'tests/AxxonCustomers.Functions.Tests/AxxonCustomers.Functions.Tests.csproj'
     azureServiceConnection: '$(azureServiceConnection)'
     environmentName: '$(environmentName)'

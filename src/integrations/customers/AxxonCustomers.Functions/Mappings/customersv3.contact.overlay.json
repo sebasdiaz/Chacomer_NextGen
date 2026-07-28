@@ -1,0 +1,65 @@
+// Overlay del mapeo contact (Dataverse) -> CustomersV3 (F&O).
+//
+// El archivo customersv3.contact.dualwrite.json es el export de Dual Write TAL CUAL
+// lo baja el funcional (direccion AX -> CRM) y NO se edita nunca: cuando se re-exporta,
+// el diff del PR queda limpio. Todo lo que el esquema de Dual Write no puede expresar
+// para la direccion CRM -> AX vive aca.
+//
+// Precedencia: el export define la base -> "ignore" saca filas -> "fields" agrega o
+// corrige -> "constants" gana siempre.
+{
+  "target": {
+    "entitySet": "CustomersV3",
+    "sourceEntity": "contact"
+  },
+
+  // Dual Write resuelve la compania por particion, no por field mapping. Nosotros
+  // tenemos que derivar el dataAreaId del lookup a cdm_company.
+  "company": {
+    "attribute": "msdyn_company",
+    "relatedField": "cdm_companycode",
+    "targetField": "dataAreaId"
+  },
+
+  // writeBack: el CustomerAccount que genera F&O por number sequence vuelve a este
+  // campo de CRM. El compilador lo excluye del POST (no se manda en el create) y lo
+  // usa junto con matchOn para el chequeo de idempotencia contra F&O.
+  "key": {
+    "writeBack": "msdyn_contactpersonid",
+    "matchOn": [ "PartyNumber", "CustomerAccount" ]
+  },
+
+  // Guarda de sincronizacion. Vacia a proposito.
+  //
+  // El reversedSourceFilter del export es "msdyn_sellable eq true and
+  // msdyn_contactpersonid ne null". El "ne null" significa que Dual Write en direccion
+  // CRM -> AX solo ACTUALIZA customers existentes, nunca crea; nosotros si tenemos que
+  // crear, asi que no se puede usar el filtro invertido tal cual.
+  //
+  // Y "msdyn_sellable eq true" no se activa todavia porque hoy este mapeo lo consume el
+  // flujo de QualifyLead, que no tiene ninguna guarda: agregarla cambiaria el
+  // comportamiento en produccion. Habilitar cuando entre el flujo fo-sync.
+  "syncWhen": [],
+
+  // PARTYTYPE -> msdyn_sellable { "Person": "True" } no es invertible: al reves daria
+  // "si sellable=true mandá PartyType=Person, si es false no mandes nada", y PartyType
+  // siempre tiene que ser "Person" para un contact. Se descarta la fila y PartyType
+  // pasa a ser constante.
+  "ignore": [ "msdyn_sellable" ],
+
+  "constants": {
+    "PartyType": "Person",
+
+    // Nombre exacto de la propiedad OData: "A365Sellable", no "A365SELLABLE"
+    // (verificado contra el environment; ver Models/FoCustomerV3.cs).
+    // true = F&O interpreta el registro como contact.
+    "A365Sellable": "Yes"
+  },
+
+  // Sin overrides: los 15 field mappings del export se invierten sin ajustes.
+  //
+  // Nota: el export NO incluye creditlimit, a365_creditrating, a365_onholdstatus ni
+  // a365_notes, que el codigo anterior si mandaba. Se dan de baja por decision explicita
+  // (el export es la fuente de verdad). Los campos de credito viven en account.
+  "fields": {}
+}

@@ -1,0 +1,147 @@
+{
+        "centerEnvironment": "",
+        "centerEnvironmentType": "CRM",
+        "centerPartitionName": null,
+        "connectionSetName": null,
+        "entityName": null,
+        "leftEnvironment": "",
+        "leftEnvironmentType": "AX",
+        "leftPartitionName": null,
+        "legs": [
+                {
+                        "deleteNonMatchingData": false,
+                        "destinationEnvironment": "",
+                        "destinationEnvironmentType": "CRM",
+                        "destinationSchema": "contacts",
+                        "destinationSchemaDistinctName": null,
+                        "entityFile": null,
+                        "entityFileFormat": 0,
+                        "entityFileInfo": null,
+                        "fieldMappings": [
+                                {
+                                        "destinationField": "msdyn_sellable",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "PARTYTYPE",
+                                        "syncDirection": 3,
+                                        "valueTransforms": [
+                                                {
+                                                        "createValuesOnDestination": false,
+                                                        "transformType": "ValueMap",
+                                                        "valueMap": {
+                                                                "Person": "True"
+                                                        }
+                                                }
+                                        ]
+                                },
+                                {
+                                        "destinationField": "msdyn_partyid.msdyn_partynumber",
+                                        "destinationLookupFieldRelatedEntity": "msdyn_parties",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "PARTYNUMBER",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_contactpersonid",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "CUSTOMERACCOUNT",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_customergroupid.msdyn_groupid",
+                                        "destinationLookupFieldRelatedEntity": "msdyn_customergroups",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "CUSTOMERGROUPID",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_identificationnumber",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "IDENTIFICATIONNUMBER",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_partycountry",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "PARTYCOUNTRY",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_partystateprovince",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "PARTYSTATE",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "transactioncurrencyid.isocurrencycode",
+                                        "destinationLookupFieldRelatedEntity": "transactioncurrencies",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "SALESCURRENCYCODE",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "description",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "SALESMEMO",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_paymentday.msdyn_name",
+                                        "destinationLookupFieldRelatedEntity": "msdyn_paymentdays",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "PAYMENTDAY",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_paymentschedule.msdyn_name",
+                                        "destinationLookupFieldRelatedEntity": "msdyn_paymentschedules",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "PAYMENTSCHEDULE",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_customerpaymentmethod.msdyn_name",
+                                        "destinationLookupFieldRelatedEntity": "msdyn_customerpaymentmethods",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "PAYMENTMETHOD",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_salestaxgroup.msdyn_name",
+                                        "destinationLookupFieldRelatedEntity": "msdyn_taxgroups",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "SALESTAXGROUP",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_paymentterms.msdyn_name",
+                                        "destinationLookupFieldRelatedEntity": "msdyn_paymentterms",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "PAYMENTTERMS",
+                                        "syncDirection": 3
+                                },
+                                {
+                                        "destinationField": "msdyn_primarycontact.msdyn_contactforpartynumber",
+                                        "destinationLookupFieldRelatedEntity": "msdyn_contactforparties",
+                                        "isSystemGenerated": false,
+                                        "sourceField": "CONTACTPERSONID",
+                                        "syncDirection": 3
+                                }
+                        ],
+                        "id": "001",
+                        "isSourceFilterEditable": null,
+                        "mashup": null,
+                        "reversedSourceFilter": "msdyn_sellable eq true  and msdyn_contactpersonid ne null",
+                        "sourceEntitySchema": null,
+                        "sourceEnvironment": "",
+                        "sourceEnvironmentType": "AX",
+                        "sourceFilter": "((PartyType == \"Person\"))",
+                        "sourceMQuery": null,
+                        "sourceProjectName": null,
+                        "sourceSchema": "Customers V3",
+                        "sourceSchemaDistinctName": null
+                }
+        ],
+        "name": "[Customers V3] - [contacts]",
+        "order": 0,
+        "rightEnvironmentType": "UNDEFINED"
+}

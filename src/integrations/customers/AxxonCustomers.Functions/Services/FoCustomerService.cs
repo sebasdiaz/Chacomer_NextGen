@@ -1,18 +1,17 @@
 using Axxon.Eip.Core.FinOps;
+using AxxonCustomers.Functions.Mapping;
 using AxxonCustomers.Functions.Models;
 using Microsoft.Extensions.Logging;
 
 namespace AxxonCustomers.Functions.Services
 {
     /// <summary>
-    /// Inserta y busca customers en la entidad CustomersV3 de F&amp;O via el
-    /// cliente OData generico de la EiP (retry de throttling incluido).
-    /// La compania destino se determina con dataAreaId en el body del POST.
+    /// Inserta y busca customers en F&amp;O via el cliente OData generico de la EiP
+    /// (retry de throttling incluido). La compania destino se determina con dataAreaId
+    /// en el body del POST.
     /// </summary>
     public class FoCustomerService : IFoCustomerService
     {
-        private const string EntitySet = "CustomersV3";
-
         private readonly IFoODataClient _client;
         private readonly ILogger<FoCustomerService> _logger;
 
@@ -23,31 +22,33 @@ namespace AxxonCustomers.Functions.Services
         }
 
         public async Task<FoCustomerV3CreatedResponse> CreateCustomerAsync(
-            FoCustomerV3 customer,
+            string entitySet,
+            FoPayload payload,
             CancellationToken cancellationToken = default)
         {
             _logger.LogInformation(
-                "[FoCustomerService] Insertando customer en F&O. DataAreaId={DataAreaId} | Identification={Identification}",
-                customer.DataAreaId, customer.IdentificationNumber);
+                "[FoCustomerService] Insertando en {EntitySet}. DataAreaId={DataAreaId} | Campos={FieldCount}",
+                entitySet, payload.DataAreaId, payload.Fields.Count);
 
-            var created = await _client.CreateAsync<FoCustomerV3, FoCustomerV3CreatedResponse>(
-                EntitySet, customer, cancellationToken);
+            var created = await _client.CreateAsync<IDictionary<string, object?>, FoCustomerV3CreatedResponse>(
+                entitySet, payload.Fields, cancellationToken);
 
             _logger.LogInformation(
-                "[FoCustomerService] Customer creado en F&O. CustomerAccount={CustomerAccount} | DataAreaId={DataAreaId}",
+                "[FoCustomerService] Registro creado en F&O. CustomerAccount={CustomerAccount} | DataAreaId={DataAreaId}",
                 created.CustomerAccount, created.DataAreaId);
 
             return created;
         }
 
         public async Task<FoCustomerV3CreatedResponse?> FindCustomerAsync(
+            string entitySet,
             string dataAreaId,
             string? partyNumber,
             string? customerAccount,
             CancellationToken cancellationToken = default)
         {
-            // PartyNumber identifica a la persona (un party tiene a lo sumo un
-            // customer por compania); CustomerAccount cubre el write-back previo.
+            // PartyNumber identifica a la persona/organizacion (un party tiene a lo sumo
+            // un customer por compania); CustomerAccount cubre el write-back previo.
             var criteria = new List<string>();
             if (!string.IsNullOrWhiteSpace(partyNumber))
                 criteria.Add($"PartyNumber eq '{FoOData.EscapeLiteral(partyNumber)}'");
@@ -67,10 +68,10 @@ namespace AxxonCustomers.Functions.Services
                          $"and ({string.Join(" or ", criteria)})";
 
             _logger.LogInformation(
-                "[FoCustomerService] GET FindCustomer. Filter: {Filter}", filter);
+                "[FoCustomerService] GET FindCustomer en {EntitySet}. Filter: {Filter}", entitySet, filter);
 
             var found = await _client.FindFirstAsync<FoCustomerV3CreatedResponse>(
-                new FoODataQuery(EntitySet)
+                new FoODataQuery(entitySet)
                 {
                     Filter = filter,
                     Select = "CustomerAccount,PartyNumber,dataAreaId"

@@ -1,0 +1,73 @@
+// Overlay del mapeo account (Dataverse) -> CustomersV3 (F&O).
+// Ver customersv3.contact.overlay.json para la explicacion del formato.
+{
+  "target": {
+    "entitySet": "CustomersV3",
+    "sourceEntity": "account"
+  },
+
+  "company": {
+    "attribute": "msdyn_company",
+    "relatedField": "cdm_companycode",
+    "targetField": "dataAreaId"
+  },
+
+  // En account el write-back va al accountnumber OOB (export: accountnumber <- CUSTOMERACCOUNT).
+  "key": {
+    "writeBack": "accountnumber",
+    "matchOn": [ "PartyNumber", "CustomerAccount" ]
+  },
+
+  // reversedSourceFilter del export: "customertypecode eq 3". Este si es usable tal cual
+  // (3 = Organization); solo sincronizamos accounts que son organizaciones.
+  "syncWhen": [
+    { "attribute": "customertypecode", "equals": 3 }
+  ],
+
+  "ignore": [],
+
+  "constants": {},
+
+  "fields": {
+    // Los value maps del export estan en minuscula porque en la direccion AX -> CRM el
+    // destino es un int de OptionSet y el case da igual. En nuestra direccion el destino
+    // es un literal de enum de la API OData de F&O, que es case-sensitive.
+    // Los cuatro overrides de abajo son solo correccion de case.
+
+    "customertypecode": {
+      "target": "PartyType",
+      "kind": "valueMap",
+      "map": { "3": "Organization" }
+    },
+
+    "msdyn_onholdstatus": {
+      "kind": "valueMap",
+      "map": {
+        "806380000": "No",
+        "806380001": "Invoice",
+        "806380002": "All",
+        "806380003": "Payment",
+        "806380004": "Requisition",
+        "806380005": "Never"
+      }
+    },
+
+    "msdyn_creditlimitismandatory": {
+      "kind": "valueMap",
+      "map": { "True": "Yes", "False": "No" }
+    },
+
+    "msdyn_onetimecustomer": {
+      "kind": "valueMap",
+      "map": { "True": "Yes", "False": "No" }
+    },
+
+    // El export no lleva tipo. Si msdyn_creditrating es OptionSet hay que mandar la
+    // etiqueta, no el int — mismo criterio que ya usaba el codigo para a365_creditrating
+    // en contact. "label" devuelve el texto si el atributo es string, o la etiqueta
+    // formateada si es OptionSet.
+    "msdyn_creditrating": {
+      "kind": "label"
+    }
+  }
+}

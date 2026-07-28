@@ -11,6 +11,9 @@ parameters:
     type: string
   - name: projectPath        # Ruta al .csproj de la Function App
     type: string
+  - name: testProjectPath    # Ruta al .csproj de tests. Vacio = la integracion no tiene
+    type: string
+    default: ''
   - name: azureServiceConnection  # Service connection de Azure DevOps (ARM)
     type: string
   - name: environmentName    # Ambiente de Azure DevOps (para approvals/gates)
@@ -35,6 +38,16 @@ stages:
             inputs:
               packageType: 'sdk'
               version: ${{ parameters.dotnetVersion }}
+
+          # Antes del publish: si los tests caen, no se genera artifact.
+          - ${{ if ne(parameters.testProjectPath, '') }}:
+            - task: DotNetCoreCLI@2
+              displayName: 'dotnet test'
+              inputs:
+                command: 'test'
+                projects: '${{ parameters.testProjectPath }}'
+                arguments: '-c ${{ parameters.buildConfiguration }} --logger trx --results-directory $(Agent.TempDirectory)/testresults'
+                publishTestResults: true
 
           - task: DotNetCoreCLI@2
             displayName: 'dotnet publish'
