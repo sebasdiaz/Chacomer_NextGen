@@ -107,11 +107,15 @@ namespace Axxon.Eip.Core.FinOps
 
             if (!httpResponse.IsSuccessStatusCode)
             {
+                var failure = FoODataException.FromResponse(httpResponse.StatusCode, entitySet, content);
+
                 _logger.LogError(
-                    "[FoODataClient] Error HTTP {Status} al insertar en {EntitySet}. Body={Body}",
-                    httpResponse.StatusCode, entitySet, content);
-                throw new HttpRequestException(
-                    $"F&O OData respondio con HTTP {(int)httpResponse.StatusCode}: {content}");
+                    "[FoODataClient] Error HTTP {Status} al insertar en {EntitySet} " +
+                    "(permanente={IsPermanent}). F&O dijo: {FoMessage} | Body={Body}",
+                    httpResponse.StatusCode, entitySet, failure.IsPermanent,
+                    failure.FoMessage ?? "(sin mensaje de negocio)", content);
+
+                throw failure;
             }
 
             return JsonSerializer.Deserialize<TResponse>(content)
@@ -133,12 +137,15 @@ namespace Axxon.Eip.Core.FinOps
 
             if (!httpResponse.IsSuccessStatusCode)
             {
-                var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
+                var body    = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
+                var failure = FoODataException.FromResponse(httpResponse.StatusCode, url, body);
+
                 _logger.LogError(
-                    "[FoODataClient] Error HTTP {Status} al consultar F&O. Body={Body}",
-                    httpResponse.StatusCode, body);
-                throw new HttpRequestException(
-                    $"F&O OData respondio con HTTP {(int)httpResponse.StatusCode}: {body}");
+                    "[FoODataClient] Error HTTP {Status} al consultar F&O " +
+                    "(permanente={IsPermanent}). Body={Body}",
+                    httpResponse.StatusCode, failure.IsPermanent, body);
+
+                throw failure;
             }
 
             var content = await httpResponse.Content.ReadAsStringAsync(cancellationToken);

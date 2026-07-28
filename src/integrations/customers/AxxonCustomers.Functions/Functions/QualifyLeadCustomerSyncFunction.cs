@@ -1,3 +1,5 @@
+using Axxon.Eip.Core.FinOps;
+using Axxon.Eip.Core.Messaging;
 using AxxonCustomers.Functions.Models;
 using AxxonCustomers.Functions.Services;
 using Azure.Messaging.ServiceBus;
@@ -135,6 +137,21 @@ namespace AxxonCustomers.Functions.Functions
                     message,
                     deadLetterReason: "DataError",
                     deadLetterErrorDescription: ex.Message);
+            }
+            catch (FoODataException ex) when (ex.IsPermanent)
+            {
+                // F&O responde 400 ante violaciones de reglas de negocio (customer group
+                // inexistente en la compania, party que ya existe como prospect).
+                // Reintentar no cambia nada: solo consume delivery count y martilla F&O.
+                _logger.LogError(ex,
+                    "[QualifyLeadCustomerSyncFunction] F&O rechazo el mensaje {MessageId} " +
+                    "con HTTP {Status}. Enviando a DLQ sin reintentar. F&O dijo: {FoMessage}",
+                    messageId, (int)ex.Status, ex.Detail);
+
+                await messageActions.DeadLetterMessageAsync(
+                    message,
+                    deadLetterReason: EipDeadLetterReason.BusinessRuleFailed,
+                    deadLetterErrorDescription: ex.Detail);
             }
             catch (Exception ex)
             {
