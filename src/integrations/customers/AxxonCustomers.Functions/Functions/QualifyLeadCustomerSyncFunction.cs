@@ -1,3 +1,4 @@
+using System.Net;
 using Axxon.Eip.Core.FinOps;
 using Axxon.Eip.Core.Messaging;
 using AxxonCustomers.Functions.Models;
@@ -152,6 +153,22 @@ namespace AxxonCustomers.Functions.Functions
                     message,
                     deadLetterReason: EipDeadLetterReason.BusinessRuleFailed,
                     deadLetterErrorDescription: ex.Detail);
+            }
+            catch (FoODataException ex) when (ex.Status == HttpStatusCode.TooManyRequests)
+            {
+                // Se agoto el backoff del resilience handler y F&O sigue throttleando.
+                // No es un problema del mensaje: se devuelve a la cola. Se loguea aparte
+                // porque la causa (saturacion del entorno F&O) y la accion correctiva no
+                // tienen nada que ver con las de un error de proceso.
+                _logger.LogWarning(ex,
+                    "[QualifyLeadCustomerSyncFunction] F&O sigue throttleando (429) despues de " +
+                    "agotar los reintentos. Mensaje {MessageId} vuelve a la cola " +
+                    "(DeliveryCount={DeliveryCount}). Si se repite, revisar la utilizacion de " +
+                    "recursos del entorno F&O. F&O dijo: {FoMessage}",
+                    messageId, deliveryCount, ex.Detail);
+
+                await messageActions.AbandonMessageAsync(message);
+                throw;
             }
             catch (Exception ex)
             {
