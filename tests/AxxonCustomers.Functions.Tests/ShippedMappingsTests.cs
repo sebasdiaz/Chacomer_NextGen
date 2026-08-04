@@ -73,11 +73,33 @@ namespace AxxonCustomers.Functions.Tests
         }
 
         [Fact]
-        public void Contact_no_tiene_guarda_de_sincronizacion()
+        public void Contact_solo_sincroniza_los_sellable()
         {
-            // Hoy este mapeo lo consume QualifyLead, que nunca tuvo guarda. Cuando entre
-            // fo-sync hay que activar msdyn_sellable eq true y actualizar este test.
-            Assert.Empty(Contact.SyncWhen);
+            // Para F&O un party que no es sellable es un PROSPECTO: mandar un contact no
+            // sellable no da error, lo crea como prospect, y despues el alta real del
+            // customer falla con 400 ("el party ya existe como prospect").
+            var condition = Assert.Single(Contact.SyncWhen);
+
+            Assert.Equal("msdyn_sellable", condition.Attribute);
+            Assert.Equal("True", condition.ExpectedValue);
+        }
+
+        [Fact]
+        public void Contact_lee_msdyn_sellable_aunque_no_lo_mande()
+        {
+            // 'ignore' saca el campo del payload; la guarda igual necesita leerlo.
+            Assert.Contains("msdyn_sellable", Contact.Columns);
+            Assert.DoesNotContain(Contact.Fields, f => f.Attribute == "msdyn_sellable");
+        }
+
+        [Fact]
+        public void Contact_no_cambia_la_identidad_del_customer_al_actualizar()
+        {
+            // PartyType define que clase de party es: F&O no lo deja cambiar despues del
+            // alta. PartyNumber y CustomerAccount son la identidad del registro.
+            Assert.True(Contact.Field("PartyType").ExcludeFromUpdate);
+            Assert.True(Contact.Field("PARTYNUMBER").ExcludeFromUpdate);
+            Assert.True(Contact.Field("CUSTOMERACCOUNT").ExcludeFromUpdate);
         }
 
         // ── account ───────────────────────────────────────────────────
@@ -102,6 +124,14 @@ namespace AxxonCustomers.Functions.Tests
         public void Account_manda_partytype_organization()
         {
             Assert.Equal("Organization", Account.Field("PartyType").ValueMap!["3"]);
+        }
+
+        [Fact]
+        public void Account_no_cambia_la_identidad_del_customer_al_actualizar()
+        {
+            Assert.True(Account.Field("PartyType").ExcludeFromUpdate);
+            Assert.True(Account.Field("PARTYNUMBER").ExcludeFromUpdate);
+            Assert.True(Account.Field("CUSTOMERACCOUNT").ExcludeFromUpdate);
         }
 
         [Fact]

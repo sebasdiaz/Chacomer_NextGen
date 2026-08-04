@@ -31,5 +31,18 @@ namespace Axxon.Eip.Core.FinOps
             string entitySet,
             TEntity entity,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Actualiza (PATCH) un registro existente. Solo se mandan los campos presentes
+        /// en <paramref name="entity"/>: F&amp;O deja intacto todo lo que no viaja en el body.
+        ///
+        /// <paramref name="entityKey"/> es el segmento de clave ya armado con
+        /// <see cref="FoOData.EntityKey"/>, ej: <c>(dataAreaId='cha',CustomerAccount='C0001')</c>.
+        /// </summary>
+        Task UpdateAsync<TEntity>(
+            string entitySet,
+            string entityKey,
+            TEntity entity,
+            CancellationToken cancellationToken = default);
     }
 }

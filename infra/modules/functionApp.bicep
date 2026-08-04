@@ -6,6 +6,7 @@
 //     (AzureWebJobsStorage y deployment container, todo por identidad).
 //   - Key Vault Secrets User sobre el vault de la EiP.
 //   - Azure Service Bus Data Receiver sobre el namespace (solo si consume SB).
+//   - Azure Service Bus Data Sender sobre el namespace (solo si publica en SB).
 // ---------------------------------------------------------------------------
 
 @description('Nombre de la Function App. Ej: fa-axxoncontacts-inte')
@@ -51,6 +52,9 @@ param serviceBusNamespaceName string = ''
 @description('True si esta app consume Service Bus (agrega el role assignment Data Receiver).')
 param needsServiceBus bool = false
 
+@description('True si esta app publica en Service Bus (agrega el role assignment Data Sender).')
+param publishesToServiceBus bool = false
+
 @description('App settings propios de la integracion (array de { name, value }).')
 param appSettings array = []
 
@@ -60,6 +64,7 @@ var roleIds = {
   storageQueueDataContributor: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
   keyVaultSecretsUser: '4633458b-17de-408a-b874-0445c86b69e6'
   serviceBusDataReceiver: '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0'
+  serviceBusDataSender: '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'
 }
 
 var deploymentContainerName = 'deploymentpackage'
@@ -208,7 +213,7 @@ resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-0
   }
 }
 
-resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = if (needsServiceBus) {
+resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = if (needsServiceBus || publishesToServiceBus) {
   name: serviceBusNamespaceName
 }
 
@@ -217,6 +222,18 @@ resource serviceBusReceiverRole 'Microsoft.Authorization/roleAssignments@2022-04
   scope: serviceBusNamespace
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleIds.serviceBusDataReceiver)
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Send va separado de Receive a proposito: una app que solo publica no tiene por que
+// poder leer las colas de las demas.
+resource serviceBusSenderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (publishesToServiceBus) {
+  name: guid(resourceGroup().id, serviceBusNamespaceName, functionApp.id, roleIds.serviceBusDataSender)
+  scope: serviceBusNamespace
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleIds.serviceBusDataSender)
     principalId: functionApp.identity.principalId
     principalType: 'ServicePrincipal'
   }

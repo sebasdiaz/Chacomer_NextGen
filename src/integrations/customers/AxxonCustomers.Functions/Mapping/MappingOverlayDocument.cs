@@ -71,6 +71,14 @@ namespace AxxonCustomers.Functions.Mapping
         /// <summary>Campos de F&amp;O con los que se busca el registro existente.</summary>
         [JsonPropertyName("matchOn")]
         public List<string> MatchOn { get; set; } = new();
+
+        /// <summary>
+        /// Campos de F&amp;O que no viajan en el PATCH. Los de <see cref="MatchOn"/> y el
+        /// <c>dataAreaId</c> ya se excluyen solos (son la clave del registro); aca van los
+        /// que F&amp;O no deja cambiar una vez creado el customer, ej: <c>PartyType</c>.
+        /// </summary>
+        [JsonPropertyName("immutable")]
+        public List<string> Immutable { get; set; } = new();
     }
 
     public sealed class OverlayCondition

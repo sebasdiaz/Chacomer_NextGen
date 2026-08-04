@@ -52,6 +52,12 @@ namespace AxxonCustomers.Functions.Mapping
         /// aporta el valor con el que se busca el registro existente.
         /// </summary>
         public bool ExcludeFromCreate { get; init; }
+
+        /// <summary>
+        /// El campo no viaja en el PATCH: o es parte de la clave del registro en F&amp;O,
+        /// o esta declarado en <c>key.immutable</c> del overlay.
+        /// </summary>
+        public bool ExcludeFromUpdate { get; init; }
     }
 
     /// <summary>Condicion que el registro de Dataverse debe cumplir para sincronizarse.</summary>

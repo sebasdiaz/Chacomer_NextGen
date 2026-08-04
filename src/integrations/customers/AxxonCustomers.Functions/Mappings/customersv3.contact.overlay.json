@@ -24,27 +24,40 @@
   // writeBack: el CustomerAccount que genera F&O por number sequence vuelve a este
   // campo de CRM. El compilador lo excluye del POST (no se manda en el create) y lo
   // usa junto con matchOn para el chequeo de idempotencia contra F&O.
+  // immutable: campos que no viajan en el PATCH de la modificacion. Los de matchOn y el
+  // dataAreaId ya se excluyen solos (son la clave del registro en F&O). PartyType define
+  // que clase de party es el customer: F&O no lo deja cambiar despues del alta.
   "key": {
     "writeBack": "msdyn_contactpersonid",
-    "matchOn": [ "PartyNumber", "CustomerAccount" ]
+    "matchOn": [ "PartyNumber", "CustomerAccount" ],
+    "immutable": [ "PartyType" ]
   },
 
-  // Guarda de sincronizacion. Vacia a proposito.
+  // Guarda de sincronizacion.
   //
   // El reversedSourceFilter del export es "msdyn_sellable eq true and
-  // msdyn_contactpersonid ne null". El "ne null" significa que Dual Write en direccion
-  // CRM -> AX solo ACTUALIZA customers existentes, nunca crea; nosotros si tenemos que
-  // crear, asi que no se puede usar el filtro invertido tal cual.
+  // msdyn_contactpersonid ne null". Se toma la primera mitad y se descarta la segunda:
+  // el "ne null" significa que Dual Write en direccion CRM -> AX solo ACTUALIZA customers
+  // existentes, nunca crea, y nosotros si tenemos que crear.
   //
-  // Y "msdyn_sellable eq true" no se activa todavia porque hoy este mapeo lo consume el
-  // flujo de QualifyLead, que no tiene ninguna guarda: agregarla cambiaria el
-  // comportamiento en produccion. Habilitar cuando entre el flujo fo-sync.
-  "syncWhen": [],
+  // "msdyn_sellable eq true" no es opcional: para F&O un party que no es sellable es un
+  // PROSPECTO. Mandar un contact no sellable no lo rechaza — lo crea como prospect, y
+  // despues el alta real del customer falla con 400 ("el party ya existe como prospect").
+  // La guarda evita ensuciar el ERP con prospectos que despues hay que limpiar a mano.
+  //
+  // Ojo: la guarda la comparten los dos flujos que usan este mapeo (QualifyLead y
+  // fo-sync). Un contact sin msdyn_sellable = true deja de sincronizarse por los dos.
+  "syncWhen": [
+    { "attribute": "msdyn_sellable", "equals": true }
+  ],
 
   // PARTYTYPE -> msdyn_sellable { "Person": "True" } no es invertible: al reves daria
   // "si sellable=true mandá PartyType=Person, si es false no mandes nada", y PartyType
   // siempre tiene que ser "Person" para un contact. Se descarta la fila y PartyType
   // pasa a ser constante.
+  //
+  // ignore saca el campo del PAYLOAD, no de la lectura: msdyn_sellable se sigue trayendo
+  // de Dataverse porque lo pide el syncWhen de arriba.
   "ignore": [ "msdyn_sellable" ],
 
   "constants": {

@@ -18,6 +18,10 @@
     <!-- Configuration provider de Key Vault (KeyVaultUri + DefaultAzureCredential) -->
     <PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.4.0" />
 
+    <!-- Backbone asincronico: publicacion de mensajes en Service Bus (el consumo lo
+         hace el trigger de Functions, que trae su propia extension) -->
+    <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
+
     <!-- SDK de Dataverse -->
     <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.2.10" />
     <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.8" />

@@ -8,8 +8,14 @@ namespace AxxonCustomers.Functions.Mapping
     /// <summary>Payload listo para el POST a F&amp;O mas lo que hace falta para la idempotencia.</summary>
     public sealed class FoPayload
     {
-        /// <summary>Campos con el nombre de propiedad OData ya resuelto.</summary>
+        /// <summary>Campos del POST, con el nombre de propiedad OData ya resuelto.</summary>
         public required IDictionary<string, object?> Fields { get; init; }
+
+        /// <summary>
+        /// Campos del PATCH: <see cref="Fields"/> menos el <c>dataAreaId</c> y todo lo
+        /// marcado como <see cref="FieldMap.ExcludeFromUpdate"/> (clave e inmutables).
+        /// </summary>
+        public required IDictionary<string, object?> UpdateFields { get; init; }
 
         public required string DataAreaId { get; init; }
 
@@ -71,8 +77,11 @@ namespace AxxonCustomers.Functions.Mapping
             var dataAreaId = ResolveDataAreaId(record, map);
 
             var fields = new Dictionary<string, object?>(StringComparer.Ordinal);
+            var updateFields = new Dictionary<string, object?>(StringComparer.Ordinal);
             var matchValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
+            // El dataAreaId va en el body del POST, pero en el PATCH viaja en la clave de
+            // la URL: mandarlo tambien en el body es cambiar la compania del registro.
             var companyTarget = await ResolveTargetAsync(map, map.CompanyTargetField, cancellationToken);
             fields[companyTarget] = dataAreaId;
 
@@ -83,22 +92,33 @@ namespace AxxonCustomers.Functions.Mapping
                 if (IsMatchTarget(map, field.TargetField))
                     matchValues[field.TargetField] = CrmValue.RenderCanonical(value);
 
-                if (field.ExcludeFromCreate)
+                if (field.ExcludeFromCreate && field.ExcludeFromUpdate)
                     continue;
 
-                // Los nulls se omiten para que F&O aplique sus defaults.
+                // Los nulls se omiten para que F&O aplique sus defaults en el alta.
+                //
+                // En la modificacion la consecuencia es que vaciar un campo en CRM no lo
+                // vacia en F&O. Es a proposito: el mapeo no sabe distinguir "el usuario
+                // borro el dato" de "el campo nunca se completo", y mandar null por las
+                // dudas pisa datos que pueden venir de otra fuente dentro del ERP.
                 if (value is null || (value is string s && string.IsNullOrWhiteSpace(s)))
                     continue;
 
                 var target = await ResolveTargetAsync(map, field.TargetField, cancellationToken);
-                fields[target] = value;
+
+                if (!field.ExcludeFromCreate)
+                    fields[target] = value;
+
+                if (!field.ExcludeFromUpdate)
+                    updateFields[target] = value;
             }
 
             return new FoPayload
             {
-                Fields      = fields,
-                DataAreaId  = dataAreaId,
-                MatchValues = matchValues
+                Fields       = fields,
+                UpdateFields = updateFields,
+                DataAreaId   = dataAreaId,
+                MatchValues  = matchValues
             };
         }
 

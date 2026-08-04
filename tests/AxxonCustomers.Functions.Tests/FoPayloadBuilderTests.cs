@@ -88,6 +88,65 @@ namespace AxxonCustomers.Functions.Tests
             Assert.DoesNotContain("IdentificationNumber", payload.Fields.Keys);
         }
 
+        // ── Payload de la modificacion ────────────────────────────────
+
+        [Fact]
+        public async Task La_modificacion_no_manda_el_dataareaid_en_el_body()
+        {
+            // En el PATCH la compania viaja en la clave de la URL: mandarla tambien en el
+            // body es pedirle a F&O que mueva el customer de legal entity.
+            var record = new Entity("account", RecordId)
+            {
+                ["msdyn_company"] = GivenCompany("cne"),
+                ["name"]          = "Chacomer SA"
+            };
+
+            var payload = await Builder(new FakeFoSchemaProvider("dataAreaId", "CustomerAccount", "Name"))
+                .BuildAsync(record, MapWith(Given.Row("name", "NAME")));
+
+            Assert.Equal("cne", payload.Fields["dataAreaId"]);
+            Assert.DoesNotContain("dataAreaId", payload.UpdateFields.Keys);
+            Assert.Equal("Chacomer SA", payload.UpdateFields["Name"]);
+        }
+
+        [Fact]
+        public async Task La_modificacion_no_manda_los_campos_inmutables()
+        {
+            var overlay = Given.Overlay();
+            overlay.Key.Immutable.Add("PARTYTYPE");
+
+            var map = Given.Compile(
+                Given.ExportWith(Given.Row("customertypecode", "PARTYTYPE"), Given.Row("name", "NAME")),
+                overlay);
+
+            var record = new Entity("account", RecordId)
+            {
+                ["msdyn_company"]    = GivenCompany(),
+                ["customertypecode"] = new OptionSetValue(3),
+                ["name"]             = "Chacomer SA"
+            };
+
+            var payload = await Builder(new FakeFoSchemaProvider("dataAreaId", "CustomerAccount", "PartyType", "Name"))
+                .BuildAsync(record, map);
+
+            Assert.Contains("PartyType", payload.Fields.Keys);
+            Assert.DoesNotContain("PartyType", payload.UpdateFields.Keys);
+            Assert.Contains("Name", payload.UpdateFields.Keys);
+        }
+
+        [Fact]
+        public async Task La_modificacion_omite_los_nulls_y_no_vacia_lo_que_ya_esta_en_fo()
+        {
+            // Decision explicita: el mapeo no distingue "el usuario borro el dato" de "el
+            // campo nunca se completo". Vaciar un campo en CRM no lo vacia en F&O.
+            var record = new Entity("account", RecordId) { ["msdyn_company"] = GivenCompany() };
+
+            var payload = await Builder().BuildAsync(
+                record, MapWith(Given.Row("msdyn_identificationnumber", "IDENTIFICATIONNUMBER")));
+
+            Assert.DoesNotContain("IdentificationNumber", payload.UpdateFields.Keys);
+        }
+
         [Fact]
         public async Task No_manda_el_write_back_en_el_post()
         {

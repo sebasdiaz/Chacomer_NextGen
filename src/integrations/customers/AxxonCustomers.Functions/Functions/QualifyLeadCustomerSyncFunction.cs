@@ -1,3 +1,4 @@
+using Axxon.Eip.Core.Dataverse;
 using Axxon.Eip.Core.FinOps;
 using Axxon.Eip.Core.Messaging;
 using AxxonCustomers.Functions.Models;
@@ -17,26 +18,38 @@ namespace AxxonCustomers.Functions.Functions
     ///      InputParameters.OpportunityCustomerId o, en su defecto, desde
     ///      OutputParameters.CreatedEntities (flujo estandar de la UI).
     ///   2. Si hay contact, lo lee de Dataverse y lo inserta en CustomersV3 de F&O
-    ///      segun el mapeo CustomersV3_Contact.json.
+    ///      segun el mapeo customersv3.contact.*.json.
     ///   3. Escribe el CustomerAccount generado en msdyn_contactpersonid del contact.
+    ///
+    /// Alcance: legal entities que SI sincroniza Dual Write. Dual Write en direccion
+    /// CRM -> AX solo actualiza customers existentes (su filtro pide
+    /// msdyn_contactpersonid ne null), nunca crea: este flujo cubre justamente ese alta.
+    /// Las legal entities que NO estan en Dual Write las toma CustomerFoSyncFunction de
+    /// punta a punta, y aca se saltean.
     ///
     /// Manejo de mensajes (autoComplete = false en host.json):
     ///   - Parse invalido o error de datos no reintentables -> DLQ con motivo.
     ///   - QualifyLead sin contact (ej. customer es un account) -> se completa sin procesar.
+    ///   - Contact de una legal entity fuera de Dual Write -> se completa sin procesar.
     ///   - Errores transitorios (F&O/Dataverse caidos, timeouts) -> Abandon para que
     ///     Service Bus reintente; tras Max Delivery Count el mensaje va al DLQ.
     /// </summary>
     public class QualifyLeadCustomerSyncFunction
     {
-        private readonly IContactCustomerSyncService _syncService;
+        private const string MapName = "contact";
+
+        private readonly ICustomerSyncService _syncService;
+        private readonly IDualWriteCompanyResolver _companyResolver;
         private readonly ILogger<QualifyLeadCustomerSyncFunction> _logger;
 
         public QualifyLeadCustomerSyncFunction(
-            IContactCustomerSyncService syncService,
+            ICustomerSyncService syncService,
+            IDualWriteCompanyResolver companyResolver,
             ILogger<QualifyLeadCustomerSyncFunction> logger)
         {
-            _syncService = syncService;
-            _logger      = logger;
+            _syncService     = syncService;
+            _companyResolver = companyResolver;
+            _logger          = logger;
         }
 
         [Function(nameof(QualifyLeadCustomerSyncFunction))]
@@ -111,14 +124,38 @@ namespace AxxonCustomers.Functions.Functions
                 return;
             }
 
+            // Reparto excluyente con CustomerFoSyncFunction: las legal entities que NO
+            // estan en Dual Write las sincroniza fo-sync de punta a punta (alta y
+            // modificacion). Si las procesaramos las dos, el alta saldria por duplicado y
+            // F&O rechazaria la segunda con un 400.
+            //
+            // Solo se saltea cuando la company dice explicitamente que no esta en Dual
+            // Write. Indeterminada (flag sin setear) sigue el camino de siempre: mientras
+            // cdm_isenabledfordualwrite no este poblado, este flujo se comporta como antes.
+            var company = await _companyResolver.ResolveForRecordAsync(
+                MapName, context.ContactId.Value, cancellationToken: cancellationToken);
+
+            if (company.Handling == CompanySyncHandling.Api)
+            {
+                _logger.LogInformation(
+                    "[QualifyLeadCustomerSyncFunction] El contact {ContactId} es de la legal entity " +
+                    "{DataAreaId}, que no esta en Dual Write: lo sincroniza CustomerFoSyncFunction. " +
+                    "Se completa sin procesar.",
+                    context.ContactId, company.DataAreaId ?? "sin codigo");
+
+                await messageActions.CompleteMessageAsync(message);
+                return;
+            }
+
             try
             {
                 _logger.LogInformation(
                     "[QualifyLeadCustomerSyncFunction] Procesando contact {ContactId} " +
-                    "(Lead={LeadId}, Message={MessageName}).",
-                    context.ContactId, context.LeadId, context.MessageName);
+                    "(Lead={LeadId}, Message={MessageName}, legal entity={DataAreaId}/{Handling}).",
+                    context.ContactId, context.LeadId, context.MessageName,
+                    company.DataAreaId ?? "sin codigo", company.Handling);
 
-                await _syncService.ProcessAsync(context.ContactId.Value, cancellationToken);
+                await _syncService.ProcessAsync(MapName, context.ContactId.Value, cancellationToken);
 
                 await messageActions.CompleteMessageAsync(message);
 

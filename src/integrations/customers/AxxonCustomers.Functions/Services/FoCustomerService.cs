@@ -40,6 +40,38 @@ namespace AxxonCustomers.Functions.Services
             return created;
         }
 
+        public async Task UpdateCustomerAsync(
+            string entitySet,
+            string customerAccount,
+            FoPayload payload,
+            CancellationToken cancellationToken = default)
+        {
+            if (payload.UpdateFields.Count == 0)
+            {
+                _logger.LogInformation(
+                    "[FoCustomerService] Nada para actualizar en {EntitySet} " +
+                    "(CustomerAccount={CustomerAccount}, DataAreaId={DataAreaId}): el payload " +
+                    "solo tenia campos de clave o inmutables. Se omite el PATCH.",
+                    entitySet, customerAccount, payload.DataAreaId);
+                return;
+            }
+
+            var key = FoOData.EntityKey(
+                ("dataAreaId", payload.DataAreaId),
+                ("CustomerAccount", customerAccount));
+
+            _logger.LogInformation(
+                "[FoCustomerService] Actualizando {EntitySet}{Key}. Campos={FieldCount}",
+                entitySet, key, payload.UpdateFields.Count);
+
+            await _client.UpdateAsync(entitySet, key, payload.UpdateFields, cancellationToken);
+
+            _logger.LogInformation(
+                "[FoCustomerService] Registro actualizado en F&O. CustomerAccount={CustomerAccount} | " +
+                "DataAreaId={DataAreaId}",
+                customerAccount, payload.DataAreaId);
+        }
+
         public async Task<FoCustomerV3CreatedResponse?> FindCustomerAsync(
             string entitySet,
             string dataAreaId,

@@ -1,24 +1,78 @@
 # AxxonCustomers.Functions
 
-Azure Function (.NET 10 isolated) que sincroniza contacts de Dataverse hacia la entidad
-**CustomersV3** de Finance & Operations cuando se califica un lead.
+Azure Functions (.NET 10 isolated) que sincronizan contacts y accounts de Dataverse hacia
+la entidad **CustomersV3** de Finance & Operations.
 
-## Flujo
+## Las dos funciones, y por que son dos
+
+El reparto lo decide **una sola cosa**: `cdm_isenabledfordualwrite` de la `cdm_company`
+del registro.
+
+| Legal entity | Alta | Modificacion |
+|---|---|---|
+| En Dual Write (`= true`) | `QualifyLeadCustomerSyncFunction` | Dual Write |
+| Fuera de Dual Write (`= false`) | `CustomerFoSyncFunction` | `CustomerFoSyncFunction` |
+| Indeterminada (flag sin setear) | `QualifyLeadCustomerSyncFunction` | — |
+
+Dual Write en direccion CRM -> AX **solo actualiza customers existentes, nunca crea** (su
+filtro pide `msdyn_contactpersonid ne null`). Por eso hace falta el flujo de QualifyLead
+incluso en las companias que si sincroniza. Y por eso las legal entities que Dual Write no
+cubre necesitan alguien que haga las dos cosas: eso es `CustomerFoSyncFunction`.
+
+El reparto es **excluyente a proposito**. Si los dos flujos procesaran el mismo contact,
+el alta saldria por duplicado y F&O rechazaria la segunda con un 400.
+
+> **La polaridad del flag importa.** Lo que mandamos por API es la company con el flag en
+> `false`. En Dataverse un Yes/No que nunca se seteo no viene en el Retrieve, y
+> `GetAttributeValue<bool>` lo leeria como `false` — o sea "mandalo". Por eso el flag
+> ausente es `Unknown` y **no se sincroniza**: con el campo despoblado, lo contrario
+> mandaria el maestro de clientes entero a F&O. Vive en
+> `Axxon.Eip.Core/Dataverse/DualWriteCompanyResolver.cs`.
+
+### QualifyLead (legal entities en Dual Write)
 
 1. Un Service Endpoint de Dataverse publica el `RemoteExecutionContext` del mensaje
-   **QualifyLead** en la cola **`leadcontacts`** del namespace de Service Bus
-   **`dataverseinte`**.
+   **QualifyLead** en la cola **`leadcontacts`**.
 2. `QualifyLeadCustomerSyncFunction` parsea el mensaje y extrae el Id del contact de
    `InputParameters -> OpportunityCustomerId` (solo cuando `LogicalName == "contact"`;
    si el customer es un account, el mensaje se completa sin procesar).
-3. `ContactCustomerSyncService` recupera el contact (`contactid == Id`) con las columnas
-   que pide el mapeo y `FoPayloadBuilder` arma el payload resolviendo los lookups
-   relacionados (party number, grupo de clientes, moneda, terminos de pago, etc.).
-4. `FoCustomerService` hace `POST {FoBaseUrl}/data/CustomersV3` con el payload mapeado.
-   La compania destino viaja en `dataAreaId` (tomado de `msdyn_company.cdm_companycode`).
-5. El `CustomerAccount` generado por F&O (number sequence) se escribe de vuelta en
-   `msdyn_contactpersonid` del contact (write-back). Esto ademas da **idempotencia**:
-   si el contact ya tiene `msdyn_contactpersonid`, el insert se omite.
+3. Si la legal entity del contact **no** esta en Dual Write, se completa sin procesar:
+   ese contact lo toma `CustomerFoSyncFunction`.
+4. `CustomerSyncService` hace el resto (ver abajo).
+
+### fo-sync (legal entities fuera de Dual Write)
+
+1. `AxxonContacts.Functions`, despues del master matching, resuelve la legal entity del
+   raw y —si esta fuera de Dual Write— publica un envelope EiP en la cola
+   **`customer-fo-sync`** (sessions por id de registro, para que dos modificaciones del
+   mismo cliente no se procesen fuera de orden).
+2. `CustomerFoSyncFunction` lee el envelope. El `entityType` es el nombre del mapeo
+   (`account` o `contact`) y el payload trae solo el `recordId`: **es una referencia, no
+   un snapshot**. El consumidor relee Dataverse porque el snapshot de un evento Update
+   llega parcial (es un delta) y mapear desde ahi escribe mal en el ERP.
+
+### Lo que hacen las dos (`CustomerSyncService`)
+
+1. Recupera el registro con las columnas que pide el mapeo; `FoPayloadBuilder` arma el
+   payload resolviendo los lookups (party number, grupo de clientes, moneda, terminos de
+   pago, etc.).
+2. Busca el customer en F&O por `PartyNumber` / `CustomerAccount` dentro de la compania.
+   **La existencia se verifica contra F&O, no contra el campo de CRM**: el write-back
+   puede tener valor sin que el customer exista.
+3. Si no existe: `POST {FoBaseUrl}/data/CustomersV3`. El `CustomerAccount` que genera F&O
+   por number sequence vuelve al campo de write-back de CRM (`msdyn_contactpersonid` en
+   contact, `accountnumber` en account).
+4. Si existe: `PATCH {FoBaseUrl}/data/CustomersV3(dataAreaId='cha',CustomerAccount='...')`.
+
+**En la modificacion, vaciar un campo en CRM no lo vacia en F&O.** Los nulls se omiten
+igual que en el alta: el mapeo no sabe distinguir "el usuario borro el dato" de "el campo
+nunca se completo", y mandar null por las dudas pisa datos que pueden venir de otra fuente
+dentro del ERP.
+
+> Para que las modificaciones lleguen, los **filtering attributes** del step del Service
+> Endpoint en Dataverse tienen que cubrir las columnas del mapeo (`map.Columns`). Esa
+> config vive en Dataverse, no en el repo. Si falta un campo, el update no dispara y no
+> hay error en ningun lado — es la falla mas silenciosa de todo el flujo.
 
 ## Mapeo (por JSON, no hardcodeado)
 
@@ -39,8 +93,8 @@ es lo que permite que un re-export sea un diff limpio en el PR.
 |---|---|
 | `target` | Entity set de F&O y logical name de Dataverse |
 | `company` | `dataAreaId` — Dual Write lo resuelve por particion, no por field mapping |
-| `key` | Campo de write-back y campos con los que se busca el registro existente |
-| `syncWhen` | Guarda: condiciones que el registro debe cumplir para sincronizarse |
+| `key` | Campo de write-back, campos con los que se busca el registro existente, y los que no viajan en el PATCH |
+| `syncWhen` | Guarda: condiciones que el registro debe cumplir para sincronizarse. Hoy: contact `msdyn_sellable eq true`, account `customertypecode eq 3` |
 | `ignore` | Filas del export que no aplican en nuestra direccion |
 | `constants` | Valores fijos (ej. `PartyType`), ganan sobre el export |
 | `fields` | Corrige o agrega mapeos |
@@ -81,6 +135,8 @@ todos los errores y se reportan juntos. Se valida que:
 - ningun `valueMap` sea ambiguo al invertirse (dos valores de AX cayendo en el mismo de CRM),
 - el campo de `key.writeBack` este mapeado,
 - todos los `key.matchOn` tengan un campo que los alimente,
+- todos los `key.immutable` apunten a un campo que exista en el mapeo (excluir de la
+  actualizacion algo que nunca se manda es una declaracion muerta, casi siempre un typo),
 - ningun campo de F&O quede mapeado dos veces,
 - los `kind` existan y traigan lo que necesitan (`map`, `related`, `value`).
 
@@ -100,20 +156,23 @@ dotnet test tests/AxxonCustomers.Functions.Tests/AxxonCustomers.Functions.Tests.
 Corren en el pipeline antes del publish: si caen, no se genera artifact.
 
 `ShippedMappingsTests` compila los JSON reales y afirma las decisiones que tomamos
-(`PartyType` constante, `A365Sellable = Yes`, contact sin campos de credito, account solo
-organizaciones, literales de enum capitalizados). **Que fallen despues de un re-export no
-significa que el export este mal — significa que hay que mirarlo y decidir de nuevo.**
+(`PartyType` constante e inmutable, `A365Sellable = Yes`, contact solo sellable y sin
+campos de credito, account solo organizaciones, literales de enum capitalizados).
+**Que fallen despues de un re-export no significa que el export este mal — significa que
+hay que mirarlo y decidir de nuevo.**
 
 ## Manejo de errores (autoComplete = false)
 
 | Situacion                                            | Accion                                  |
 |------------------------------------------------------|-----------------------------------------|
-| Body no parseable como RemoteExecutionContext        | DLQ (`ParseFailed`)                     |
+| Body no parseable (RemoteExecutionContext / envelope EiP) | DLQ (`ParseFailed` / `DeserializationFailed`) |
+| Envelope sin `entityType` o sin `recordId`           | DLQ (`ContractViolation`)               |
 | QualifyLead sin contact (customer = account o nulo)  | Complete sin procesar                   |
+| QualifyLead sobre una legal entity fuera de Dual Write | Complete sin procesar (lo toma fo-sync) |
 | El registro no cumple `syncWhen`                     | Complete sin procesar                   |
-| Contact inexistente / sin `msdyn_company`            | DLQ (`DataError`)                       |
-| Campo del mapeo inexistente en F&O                   | DLQ (`DataError`)                       |
-| Contact ya sincronizado (`msdyn_contactpersonid`)    | Complete sin re-insertar (idempotencia) |
+| Registro inexistente / sin `msdyn_company`           | DLQ (`DataError` / `ContractViolation`) |
+| Campo del mapeo inexistente en F&O                   | DLQ (`DataError` / `ContractViolation`) |
+| El customer ya existe en F&O                         | PATCH (antes: se omitia el insert)      |
 | F&O rechaza por regla de negocio (400, 404, 409, 422) | DLQ (`BusinessRuleFailed`) **sin reintentar**, con el Infolog de F&O como descripcion |
 | Error transitorio (F&O 5xx/429/timeout, Dataverse, red) | Abandon -> retry de Service Bus -> DLQ tras Max Delivery Count |
 
@@ -126,8 +185,9 @@ significa que el export este mal — significa que hay que mirarlo y decidir de 
 
 | Setting                 | Descripcion                                                       |
 |-------------------------|-------------------------------------------------------------------|
-| `ServiceBusConnection`  | Connection string (o config de identity) del namespace `dataverseinte` |
+| `ServiceBusConnection`  | Connection string (o config de identity) del namespace de Service Bus |
 | `ServiceBusQueueName`   | `leadcontacts`                                                    |
+| `FoSyncServiceBusQueueName` | `customer-fo-sync`                                            |
 | `DataverseUrl`          | URL del environment de Dataverse                                  |
 | `DataverseClientId`     | (DESA) Client Id del app registration; vacio => Managed Identity  |
 | `DataverseClientSecret` | (DESA) Secret del app registration                                |
@@ -139,3 +199,9 @@ significa que el export este mal — significa que hay que mirarlo y decidir de 
 > En produccion usar Managed Identity de la Function App tanto para Dataverse
 > (application user) como para F&O (registrar el client id en
 > *System administration > Microsoft Entra applications*).
+
+> **Las dos colas comparten `ServiceBusConnection`**, asi que `leadcontacts` y
+> `customer-fo-sync` tienen que vivir en el **mismo namespace**. `customer-fo-sync` la
+> crea `infra/modules/servicebus.bicep` en el namespace de la EiP
+> (`sb-chacomer-eip-{env}`); si `leadcontacts` sigue en otro namespace, hay que unificar
+> antes de deployar.
