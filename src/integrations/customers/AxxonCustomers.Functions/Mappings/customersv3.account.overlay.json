@@ -13,9 +13,11 @@
   },
 
   // En account el write-back va al accountnumber OOB (export: accountnumber <- CUSTOMERACCOUNT).
+  // immutable: ver el overlay de contact. PartyType no se puede cambiar despues del alta.
   "key": {
     "writeBack": "accountnumber",
-    "matchOn": [ "PartyNumber", "CustomerAccount" ]
+    "matchOn": [ "PartyNumber", "CustomerAccount" ],
+    "immutable": [ "PartyType" ]
   },
 
   // reversedSourceFilter del export: "customertypecode eq 3". Este si es usable tal cual

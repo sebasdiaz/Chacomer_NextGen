@@ -276,6 +276,60 @@ namespace AxxonCustomers.Functions.Tests
             Assert.Equal("True", map.SyncWhen.Single().ExpectedValue);
         }
 
+        // ── Campos excluidos del PATCH ────────────────────────────────
+
+        [Fact]
+        public void Los_campos_de_matchon_no_viajan_en_la_modificacion()
+        {
+            // PartyNumber y CustomerAccount son la identidad del registro en F&O:
+            // mandarlos en un PATCH es pedir que el customer pase a ser otro.
+            var overlay = Given.Overlay();
+            overlay.Key.MatchOn.Add("PARTYNUMBER");
+
+            var map = Given.Compile(
+                Given.ExportWith(Given.Row("msdyn_partyid.msdyn_partynumber", "PARTYNUMBER")),
+                overlay);
+
+            Assert.True(map.Field("PARTYNUMBER").ExcludeFromUpdate);
+            Assert.True(map.Field(Given.WriteBackTarget).ExcludeFromUpdate);
+        }
+
+        [Fact]
+        public void Un_campo_declarado_inmutable_no_viaja_en_la_modificacion()
+        {
+            var overlay = Given.Overlay();
+            overlay.Key.Immutable.Add("PARTYTYPE");
+
+            var map = Given.Compile(
+                Given.ExportWith(Given.Row("customertypecode", "PARTYTYPE")),
+                overlay);
+
+            Assert.True(map.Field("PARTYTYPE").ExcludeFromUpdate);
+            // Sigue yendo en el alta: inmutable es "no se cambia", no "no se manda".
+            Assert.False(map.Field("PARTYTYPE").ExcludeFromCreate);
+        }
+
+        [Fact]
+        public void El_resto_de_los_campos_viaja_en_la_modificacion()
+        {
+            var map = Given.Compile(Given.ExportWith(Given.Row("name", "NAME")), Given.Overlay());
+
+            Assert.False(map.Field("NAME").ExcludeFromUpdate);
+        }
+
+        [Fact]
+        public void Un_inmutable_que_no_esta_mapeado_no_compila()
+        {
+            // Excluir de la actualizacion algo que nunca se manda es una declaracion
+            // muerta: casi siempre es un nombre mal escrito.
+            var overlay = Given.Overlay();
+            overlay.Key.Immutable.Add("CAMPO_QUE_NO_EXISTE");
+
+            var errors = Given.CompileErrors(Given.ExportWith(), overlay);
+
+            Assert.Contains(errors, e => e.Contains("CAMPO_QUE_NO_EXISTE"));
+        }
+
         // ── Reporte de errores ────────────────────────────────────────
 
         [Fact]

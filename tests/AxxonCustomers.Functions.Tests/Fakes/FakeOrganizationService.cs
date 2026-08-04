@@ -14,6 +14,9 @@ namespace AxxonCustomers.Functions.Tests.Fakes
 
         public List<Entity> Updates { get; } = new();
 
+        /// <summary>Cada Retrieve resuelto, para verificar caches.</summary>
+        public List<(string LogicalName, Guid Id)> Retrieves { get; } = new();
+
         /// <summary>Registra una entidad recuperable y devuelve la referencia para usarla como lookup.</summary>
         public EntityReference Add(string logicalName, Guid id, params (string Attribute, object? Value)[] attributes)
         {
@@ -29,6 +32,8 @@ namespace AxxonCustomers.Functions.Tests.Fakes
 
         public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
         {
+            Retrieves.Add((entityName, id));
+
             if (!_records.TryGetValue((entityName, id), out var entity))
                 throw new InvalidOperationException($"El fake no tiene ningun {entityName} con id {id}.");
 

@@ -86,11 +86,14 @@ module contacts 'modules/functionApp.bicep' = {
     keyVaultUri: keyVault.outputs.keyVaultUri
     serviceBusNamespaceName: serviceBus.outputs.namespaceName
     needsServiceBus: true
+    // Publica en customer-fo-sync los raws de legal entities fuera de Dual Write.
+    publishesToServiceBus: true
     appSettings: [
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'ServiceBusConnection__fullyQualifiedNamespace', value: serviceBus.outputs.fullyQualifiedNamespace }
       { name: 'ServiceBusQueueName', value: 'contact-master-matching' }
       { name: 'AccountServiceBusQueueName', value: 'account-master-matching' }
+      { name: 'FoSyncServiceBusQueueName', value: 'customer-fo-sync' }
       // SetApiKey NO va aca: se resuelve desde Key Vault (secret "SetApiKey").
     ]
   }
@@ -114,6 +117,7 @@ module customers 'modules/functionApp.bicep' = {
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
       { name: 'ServiceBusConnection__fullyQualifiedNamespace', value: serviceBus.outputs.fullyQualifiedNamespace }
+      { name: 'FoSyncServiceBusQueueName', value: 'customer-fo-sync' }
     ]
   }
 }

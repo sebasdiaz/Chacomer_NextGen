@@ -34,6 +34,13 @@ param queues array = [
     name: 'account-master-matching'
     requiresSession: true
   }
+  {
+    // Accounts y contacts de legal entities que Dual Write no sincroniza: van a F&O
+    // por API con el mismo mapeo. Sessions por id de registro, para que dos
+    // modificaciones del mismo cliente no se procesen fuera de orden.
+    name: 'customer-fo-sync'
+    requiresSession: true
+  }
 ]
 
 var namespaceName = 'sb-chacomer-eip-${environmentName}'

@@ -33,8 +33,13 @@ builder.Services.AddSingleton<FoSchemaCache>();
 builder.Services.AddTransient<IFoSchemaProvider, FoSchemaProvider>();
 builder.Services.AddTransient<FoPayloadBuilder>();
 
+// Estado de las legal entities respecto de Dual Write (cdm_isenabledfordualwrite).
+// El cache es singleton; el resolver, transient (depende de IOrganizationService).
+builder.Services.AddSingleton<DualWriteCompanyCache>();
+builder.Services.AddTransient<IDualWriteCompanyResolver, DualWriteCompanyResolver>();
+
 builder.Services.AddTransient<IFoCustomerService, FoCustomerService>();
-builder.Services.AddTransient<IContactCustomerSyncService, ContactCustomerSyncService>();
+builder.Services.AddTransient<ICustomerSyncService, CustomerSyncService>();
 
 var app = builder.Build();
 

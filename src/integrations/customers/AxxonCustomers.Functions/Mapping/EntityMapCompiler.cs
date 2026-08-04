@@ -32,6 +32,7 @@ namespace AxxonCustomers.Functions.Mapping
             var writeBackTarget = ResolveWriteBack(drafts, overlay, errors);
             ValidateMatchOn(drafts, overlay, errors);
             ValidateNoDuplicateTargets(drafts, errors);
+            MarkImmutable(drafts, overlay, errors);
 
             var syncWhen = BuildSyncConditions(overlay, errors);
 
@@ -47,7 +48,8 @@ namespace AxxonCustomers.Functions.Mapping
                     Kind              = d.Kind,
                     ValueMap          = d.ValueMap,
                     ConstantValue     = d.ConstantValue,
-                    ExcludeFromCreate = d.ExcludeFromCreate
+                    ExcludeFromCreate = d.ExcludeFromCreate,
+                    ExcludeFromUpdate = d.ExcludeFromUpdate
                 })
                 .ToList();
 
@@ -363,6 +365,46 @@ namespace AxxonCustomers.Functions.Mapping
             }
         }
 
+        /// <summary>
+        /// Marca los campos que no viajan en el PATCH: los de <c>key.matchOn</c> (son la
+        /// identidad del registro en F&amp;O) mas los declarados en <c>key.immutable</c>.
+        /// El <c>dataAreaId</c> no hace falta marcarlo: no sale de ningun draft, lo agrega
+        /// <see cref="FoPayloadBuilder"/> y solo al payload de create.
+        /// </summary>
+        private static void MarkImmutable(
+            Dictionary<string, DraftField> drafts,
+            MappingOverlayDocument overlay,
+            List<string> errors)
+        {
+            var immutable = new HashSet<string>(overlay.Key.MatchOn, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var target in overlay.Key.Immutable)
+            {
+                if (string.IsNullOrWhiteSpace(target))
+                {
+                    errors.Add("key.immutable: hay una entrada vacia.");
+                    continue;
+                }
+
+                var mapped = drafts.Values.Any(d =>
+                    string.Equals(d.TargetField, target, StringComparison.OrdinalIgnoreCase));
+
+                if (!mapped)
+                {
+                    errors.Add(
+                        $"key.immutable '{target}': ningun campo del mapeo apunta a ese campo de F&O. " +
+                        "Excluir de la actualizacion algo que nunca se manda es una declaracion muerta.");
+                    continue;
+                }
+
+                immutable.Add(target.Trim());
+            }
+
+            foreach (var draft in drafts.Values)
+                if (immutable.Contains(draft.TargetField))
+                    draft.ExcludeFromUpdate = true;
+        }
+
         private static void ValidateNoDuplicateTargets(
             Dictionary<string, DraftField> drafts,
             List<string> errors)
@@ -470,6 +512,7 @@ namespace AxxonCustomers.Functions.Mapping
             public Dictionary<string, string>? ValueMap;
             public object? ConstantValue;
             public bool ExcludeFromCreate;
+            public bool ExcludeFromUpdate;
         }
     }
 }

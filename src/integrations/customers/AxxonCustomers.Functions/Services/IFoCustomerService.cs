@@ -19,6 +19,17 @@ namespace AxxonCustomers.Functions.Services
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Actualiza (PATCH) un customer existente. Solo viajan los campos de
+        /// <see cref="FoPayload.UpdateFields"/>: la clave (dataAreaId + CustomerAccount)
+        /// va en la URL.
+        /// </summary>
+        Task UpdateCustomerAsync(
+            string entitySet,
+            string customerAccount,
+            FoPayload payload,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Busca un customer existente dentro de la compania indicada, por PartyNumber
         /// y/o CustomerAccount (el que tenga valor).
         /// Devuelve null si no existe o si no se paso ningun criterio.

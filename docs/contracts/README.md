@@ -75,6 +75,7 @@ Constantes en `Axxon.Eip.Core/Messaging/EipConstants.cs` (`EipDeadLetterReason`)
 | Contacts (master matching) | dataverse | contact | Queue `contact-master-matching` (sessions) | **Interino**: formato nativo, ver abajo |
 | Accounts (master matching) | dataverse | account | Queue `account-master-matching` (sessions) | **Interino**: formato nativo |
 | Customers (qualify lead → F&O) | dataverse | customer | Queue (SB trigger) | **Interino** |
+| Customers (legal entities fuera de Dual Write → F&O) | dataverse | account / contact | Queue `customer-fo-sync` (sessions por id de registro) | **Envelope EiP** — payload `CustomerSyncPayload` |
 | CustomerGroups (F&O → Dataverse) | fo | customergroup | Timer (sin SB) | Pull batch, sin envelope |
 | Products (F&O → Dataverse) | fo | product / productgroup | Timer/HTTP (sin SB) | Pull batch, sin envelope |
 
@@ -102,7 +103,11 @@ Además, en el repo conviven **dos diseños del lado emisor** que hoy no coincid
 **Objetivo:** que todos los productores (incluido Dataverse, vía el plugin thin)
 emitan el **envelope EiP** con el DTO de dominio en `payload`. Camino sugerido:
 
-1. Nuevos satélites nacen ya con el envelope (source-agnostic) — sin deuda.
+1. Nuevos satélites nacen ya con el envelope (source-agnostic) — sin deuda. El primero
+   que lo cumple es `customer-fo-sync`: productor y consumidor son nuestros, así que no
+   arrastra el formato nativo. Su payload es **una referencia, no un snapshot** — solo
+   `recordId` y `dataAreaId`; el consumidor relee Dataverse. Un snapshot de un evento
+   Update llega parcial (es un delta) y mapear desde ahí escribe mal en el ERP.
 2. Unificar el lado Dataverse en **un** mecanismo: el plugin thin publica
    `EipMessage<ContactPayload>` (reusando el DTO limpio que ya existe) en lugar del
    Service Endpoint nativo.

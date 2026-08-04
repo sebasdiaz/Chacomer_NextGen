@@ -1,6 +1,7 @@
 using Axxon.Eip.Core.Dataverse;
 using Axxon.Eip.Core.Fiscal;
 using Axxon.Eip.Core.Hosting;
+using Axxon.Eip.Core.Messaging;
 using AxxonContacts.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
@@ -49,20 +50,56 @@ builder.Services.AddTransient<SetRucValidationService>(sp =>
     return new SetRucValidationService(setApi, orgService, logger);
 });
 
+// Sincronizacion hacia F&O de las legal entities que Dual Write no cubre: se resuelve
+// cdm_isenabledfordualwrite y, si corresponde, se publica en la cola de fo-sync (que
+// consume AxxonCustomers.Functions, donde vive el motor de mapeo).
+builder.Services.AddEipServiceBusPublisher(builder.Configuration);
+builder.Services.AddSingleton<DualWriteCompanyCache>();
+
+builder.Services.AddTransient<IDualWriteCompanyResolver>(sp =>
+{
+    var factory    = sp.GetRequiredService<DataverseClientFactory>();
+    var orgService = factory.CreateOrganizationService();
+    var cache      = sp.GetRequiredService<DualWriteCompanyCache>();
+    var logger     = sp.GetRequiredService<ILogger<DualWriteCompanyResolver>>();
+    return new DualWriteCompanyResolver(orgService, cache, logger);
+});
+
+// Fail fast: si falta el nombre de la cola, el host no levanta. Resolverlo recien al
+// procesar un mensaje dejaria caido tambien el master matching, que no tiene nada que ver.
+var foSyncQueueName = builder.Configuration["FoSyncServiceBusQueueName"];
+
+if (string.IsNullOrWhiteSpace(foSyncQueueName))
+    throw new InvalidOperationException(
+        "La variable de entorno 'FoSyncServiceBusQueueName' no esta configurada.");
+
+builder.Services.AddTransient<FoSyncDispatcher>(sp =>
+{
+    var queueName = foSyncQueueName;
+    var publisher = sp.GetRequiredService<IEipMessagePublisher>();
+    var resolver  = sp.GetRequiredService<IDualWriteCompanyResolver>();
+    var logger    = sp.GetRequiredService<ILogger<FoSyncDispatcher>>();
+    return new FoSyncDispatcher(publisher, resolver, queueName, logger);
+});
+
 builder.Services.AddTransient<ContactProcessingService>(sp =>
 {
     var masterMatchingService   = sp.GetRequiredService<MasterMatchingService>();
     var setRucValidationService = sp.GetRequiredService<SetRucValidationService>();
+    var foSyncDispatcher        = sp.GetRequiredService<FoSyncDispatcher>();
     var logger                  = sp.GetRequiredService<ILogger<ContactProcessingService>>();
-    return new ContactProcessingService(masterMatchingService, setRucValidationService, logger);
+    return new ContactProcessingService(
+        masterMatchingService, setRucValidationService, foSyncDispatcher, logger);
 });
 
 builder.Services.AddTransient<AccountProcessingService>(sp =>
 {
     var matchingService         = sp.GetRequiredService<AccountMasterMatchingService>();
     var setRucValidationService = sp.GetRequiredService<SetRucValidationService>();
+    var foSyncDispatcher        = sp.GetRequiredService<FoSyncDispatcher>();
     var logger                  = sp.GetRequiredService<ILogger<AccountProcessingService>>();
-    return new AccountProcessingService(matchingService, setRucValidationService, logger);
+    return new AccountProcessingService(
+        matchingService, setRucValidationService, foSyncDispatcher, logger);
 });
 
 builder.Build().Run();

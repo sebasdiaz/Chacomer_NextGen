@@ -92,14 +92,58 @@ namespace Axxon.Eip.Core.FinOps
             TEntity entity,
             CancellationToken cancellationToken = default)
         {
-            var url   = $"{BaseUrl()}/data/{entitySet}";
+            var content = await SendWithBodyAsync(
+                HttpMethod.Post,
+                $"{BaseUrl()}/data/{entitySet}",
+                entitySet,
+                entity,
+                ifMatch: false,
+                cancellationToken);
+
+            return JsonSerializer.Deserialize<TResponse>(content)
+                ?? throw new InvalidOperationException(
+                    $"F&O devolvio una respuesta vacia al crear el registro en {entitySet}.");
+        }
+
+        public async Task UpdateAsync<TEntity>(
+            string entitySet,
+            string entityKey,
+            TEntity entity,
+            CancellationToken cancellationToken = default)
+        {
+            // F&O exige If-Match en PATCH. No usamos ETags optimistas: el ultimo evento
+            // procesado es el que vale, y el orden ya lo garantiza la session de la queue.
+            await SendWithBodyAsync(
+                HttpMethod.Patch,
+                $"{BaseUrl()}/data/{entitySet}{entityKey}",
+                entitySet,
+                entity,
+                ifMatch: true,
+                cancellationToken);
+        }
+
+        /// <summary>
+        /// POST/PATCH con el manejo de errores comun: extrae el mensaje de negocio de
+        /// F&amp;O y lo sube como <see cref="FoODataException"/> (que ya distingue
+        /// permanente de transitorio).
+        /// </summary>
+        private async Task<string> SendWithBodyAsync<TEntity>(
+            HttpMethod method,
+            string url,
+            string entitySet,
+            TEntity entity,
+            bool ifMatch,
+            CancellationToken cancellationToken)
+        {
             var token = await GetAccessTokenAsync(cancellationToken);
             var body  = JsonSerializer.Serialize(entity, SerializerOptions);
 
-            _logger.LogInformation("[FoODataClient] POST {Url}.", url);
+            _logger.LogInformation("[FoODataClient] {Method} {Url}.", method.Method, url);
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            using var request = new HttpRequestMessage(method, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            if (ifMatch)
+                request.Headers.TryAddWithoutValidation("If-Match", "*");
             request.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
             using var httpResponse = await _httpClient.SendAsync(request, cancellationToken);
@@ -110,17 +154,15 @@ namespace Axxon.Eip.Core.FinOps
                 var failure = FoODataException.FromResponse(httpResponse.StatusCode, entitySet, content);
 
                 _logger.LogError(
-                    "[FoODataClient] Error HTTP {Status} al insertar en {EntitySet} " +
+                    "[FoODataClient] Error HTTP {Status} en {Method} sobre {EntitySet} " +
                     "(permanente={IsPermanent}). F&O dijo: {FoMessage} | Body={Body}",
-                    httpResponse.StatusCode, entitySet, failure.IsPermanent,
+                    httpResponse.StatusCode, method.Method, entitySet, failure.IsPermanent,
                     failure.FoMessage ?? "(sin mensaje de negocio)", content);
 
                 throw failure;
             }
 
-            return JsonSerializer.Deserialize<TResponse>(content)
-                ?? throw new InvalidOperationException(
-                    $"F&O devolvio una respuesta vacia al crear el registro en {entitySet}.");
+            return content;
         }
 
         private async Task<FoODataResponse<T>?> FetchPageAsync<T>(
