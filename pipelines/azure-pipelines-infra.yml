@@ -1,6 +1,11 @@
 # ---------------------------------------------------------------------------
-# Pipeline de infraestructura: despliega infra/main.bicep al resource group
-# del ambiente. Corre validacion (what-if) y luego el deployment.
+# Pipeline de infraestructura (INTE): despliega infra/main.bicep al resource
+# group DataverseINTE. Corre validacion (what-if) y luego el deployment.
+#
+# OJO: DataverseINTE tiene 4 Function Apps vivas creadas a mano, con secretos
+# en app settings planos y auth por connection string. Por eso inte.bicepparam
+# va con deployFunctionApps = false: este pipeline administra hoy SOLO los
+# recursos compartidos. Ver infra/README, "Cutover de INTE".
 #
 # Requiere:
 #   - Service connection ARM con permisos de Contributor + User Access
@@ -23,7 +28,7 @@ variables:
   - name: environmentName
     value: 'inte'
   - name: resourceGroupName
-    value: 'EiP_Inte'
+    value: 'DataverseINTE'
 
 stages:
   - stage: Validate

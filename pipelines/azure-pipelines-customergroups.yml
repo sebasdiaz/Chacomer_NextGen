@@ -17,3 +17,6 @@ extends:
   parameters:
     appBaseName: 'fa-axxoncustomergroups'
     projectPath: 'src/integrations/customers/AxxonCustomerGroups.Functions/AxxonCustomerGroups.Functions.csproj'
+    # En INTE la app se creo a mano como 'fa-axxoncustomergroup', sin la "s"
+    # final que usa main.bicep. Se normaliza en el cutover de INTE.
+    inteAppName: 'fa-axxoncustomergroup'

@@ -22,19 +22,56 @@ infra/
 
 ## Ambientes
 
-Un despliegue por ambiente, cada uno sobre su resource group. Todos en la
-suscripción `AZURE_DYNAMICS` (`09592883-…`), tenant `d0e6feed-…`, región `eastus`.
+**Son dos resource groups, y sólo dos.** Ambos en la suscripción
+`AZURE_DYNAMICS` (`09592883-…`), tenant `d0e6feed-…`, región `eastus`.
 
-| Ambiente | Resource group | Dataverse | F&O | Service connection |
-|---|---|---|---|---|
-| `inte` | `EiP_Inte` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` |
-| `test` | `dataversetest` | `operations-b1-chacomer-test` | `b1-chacomer-test.sandbox` | `sc-chacomer-eip-test` |
-| `uat` | *(sin crear)* | — | — | — |
-| `prod` | *(sin crear)* | — | — | — |
+| Ambiente | Resource group | Dataverse | F&O | Service connection | Function Apps |
+|---|---|---|---|---|---|
+| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover) |
+| `test` | `dataversetest` | `operations-b1-chacomer-test` | `b1-chacomer-test.sandbox` | `sc-chacomer-eip-test` | administradas por el Bicep |
+| `uat` | *(sin crear)* | — | — | — | — |
+| `prod` | *(sin crear)* | — | — | — | — |
 
-`dataversetest` ya contenía recursos legacy hechos a mano (`appinsightstest`,
-`keyvaultchacomertest`). No colisionan con los nombres del Bicep
-(`appi-eip-test`, `kv-chacomer-eip-test`) y quedan fuera de este template.
+Los RG `EiP_Inte` y `EiP_Test` fueron un intento anterior y se descartan.
+
+Ambos RG ya contenían recursos legacy hechos a mano (`appinsightstest` y
+`keyvaultchacomertest` en test; `keyvaultinte`, `appinsightsdataverseinte` y
+otros en INTE). No colisionan con los nombres del Bicep (`appi-eip-{env}`,
+`kv-chacomer-eip-{env}`) y quedan fuera de este template.
+
+## Cutover de INTE
+
+`dataversetest` arranca en verde: no tiene Function Apps, así que el Bicep corre
+completo. `DataverseINTE` no: tiene 4 apps vivas creadas a mano, y por eso
+`inte.bicepparam` va con **`deployFunctionApps = false`**. Hoy el Bicep
+administra en INTE sólo los recursos compartidos.
+
+Las apps existentes ya son **FC1 / Flex Consumption Linux**, igual que las que
+crea el template — la diferencia no es la infraestructura sino la configuración:
+
+| Aspecto | Hoy en `DataverseINTE` | Lo que declara el Bicep |
+|---|---|---|
+| Storage | `AzureWebJobsStorage` + `DEPLOYMENT_STORAGE_CONNECTION_STRING` (connection string) | `AzureWebJobsStorage__blobServiceUri` + MI |
+| Service Bus | `ServiceBusConnection` (connection string) | `__fullyQualifiedNamespace` + MI |
+| Managed Identity | sólo `fa-axxoncontacts-inte` la tiene | System-Assigned en las 5 |
+| Secretos | `DataverseClientSecret`, `FoClientSecret`, `SetApiKey` en app settings planos | Key Vault |
+| App Service Plan | `ASP-DataverseINTE-*` (uno por app) | `asp-{functionAppName}` |
+| Settings extra | `Schedules*`, `DataverseClientId`, `FoClientId`, `FoTenantId` | no contemplados |
+
+El template declara la **colección completa** de app settings, así que poner
+`deployFunctionApps = true` sin preparar el terreno **borra los secretos y deja
+las 4 apps caídas**. El orden del cutover, por app:
+
+1. Cargar los secrets en `kv-chacomer-eip-inte` y habilitar System-Assigned MI.
+2. Dar de alta la MI como Application User en Dataverse y como usuario S2S en F&O.
+3. Agregar los settings faltantes (`Schedules*`) al `appSettings` del módulo.
+4. Resolver `fa-axxoncustomergroup` → `fa-axxoncustomergroups-inte`, y el plan
+   (una app Flex no se mueve entre planes: hay que recrearla o adoptar el plan
+   existente en el template).
+5. Recién ahí, `deployFunctionApps = true`.
+
+Mientras tanto los pipelines de integración siguen deployando código a las apps
+de INTE tal como están, vía los overrides `inteAppName` / `deployToInte`.
 
 ## Qué despliega
 

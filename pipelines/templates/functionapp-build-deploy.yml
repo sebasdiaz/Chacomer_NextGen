@@ -19,9 +19,20 @@ parameters:
   - name: testProjectPath    # Ruta al .csproj de tests. Vacio = la integracion no tiene
     type: string
     default: ''
+  - name: deployToInte       # false si la app todavia no existe en INTE
+    type: boolean
+    default: true
   - name: deployToTest       # false para dejar una integracion fuera de la promocion a TEST
     type: boolean
     default: true
+  # Overrides de nombre. Vacio = {appBaseName}-{env}. Sirven para los ambientes
+  # cuya app se creo a mano con otro nombre que el que genera main.bicep.
+  - name: inteAppName
+    type: string
+    default: ''
+  - name: testAppName
+    type: string
+    default: ''
   - name: inteServiceConnection
     type: string
     default: 'sc-chacomer-eip-inte'
@@ -74,19 +85,30 @@ stages:
               PathtoPublish: '$(Build.ArtifactStagingDirectory)/publish'
               ArtifactName: 'functionapp'
 
-  - template: functionapp-deploy-stage.yml
-    parameters:
-      stageName: 'Deploy_inte'
-      dependsOn: 'Build'
-      appName: '${{ parameters.appBaseName }}-inte'
-      environmentName: 'inte'
-      azureServiceConnection: ${{ parameters.inteServiceConnection }}
+  - ${{ if parameters.deployToInte }}:
+    - template: functionapp-deploy-stage.yml
+      parameters:
+        stageName: 'Deploy_inte'
+        dependsOn: 'Build'
+        ${{ if ne(parameters.inteAppName, '') }}:
+          appName: ${{ parameters.inteAppName }}
+        ${{ else }}:
+          appName: '${{ parameters.appBaseName }}-inte'
+        environmentName: 'inte'
+        azureServiceConnection: ${{ parameters.inteServiceConnection }}
 
   - ${{ if parameters.deployToTest }}:
     - template: functionapp-deploy-stage.yml
       parameters:
         stageName: 'Deploy_test'
-        dependsOn: 'Deploy_inte'
-        appName: '${{ parameters.appBaseName }}-test'
+        # Si la integracion no pasa por INTE, TEST cuelga directo de Build.
+        ${{ if parameters.deployToInte }}:
+          dependsOn: 'Deploy_inte'
+        ${{ else }}:
+          dependsOn: 'Build'
+        ${{ if ne(parameters.testAppName, '') }}:
+          appName: ${{ parameters.testAppName }}
+        ${{ else }}:
+          appName: '${{ parameters.appBaseName }}-test'
         environmentName: 'test'
         azureServiceConnection: ${{ parameters.testServiceConnection }}

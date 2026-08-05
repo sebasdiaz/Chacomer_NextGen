@@ -18,3 +18,6 @@ extends:
   parameters:
     appBaseName: 'fa-axxonfiscal'
     projectPath: 'src/integrations/fiscal/AxxonFiscal.Functions/AxxonFiscal.Functions.csproj'
+    # fa-axxonfiscal-inte todavia no existe: la integracion es nueva (#50) y en
+    # INTE el Bicep no crea Function Apps. Estrena directo en TEST.
+    deployToInte: false
