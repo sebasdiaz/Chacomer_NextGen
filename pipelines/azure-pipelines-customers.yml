@@ -11,18 +11,11 @@ trigger:
       - tests/AxxonCustomers.Functions.Tests/**
       - pipelines/azure-pipelines-customers.yml
       - pipelines/templates/functionapp-build-deploy.yml
-
-variables:
-  - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
-  - name: environmentName
-    value: 'inte'
+      - pipelines/templates/functionapp-deploy-stage.yml
 
 extends:
   template: templates/functionapp-build-deploy.yml
   parameters:
-    appName: 'fa-axxoncustomers-$(environmentName)'
+    appBaseName: 'fa-axxoncustomers'
     projectPath: 'src/integrations/customers/AxxonCustomers.Functions/AxxonCustomers.Functions.csproj'
     testProjectPath: 'tests/AxxonCustomers.Functions.Tests/AxxonCustomers.Functions.Tests.csproj'
-    azureServiceConnection: '$(azureServiceConnection)'
-    environmentName: '$(environmentName)'

@@ -10,17 +10,13 @@ trigger:
       - src/core/**
       - pipelines/azure-pipelines-customergroups.yml
       - pipelines/templates/functionapp-build-deploy.yml
-
-variables:
-  - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
-  - name: environmentName
-    value: 'inte'
+      - pipelines/templates/functionapp-deploy-stage.yml
 
 extends:
   template: templates/functionapp-build-deploy.yml
   parameters:
-    appName: 'fa-axxoncustomergroups-$(environmentName)'
+    appBaseName: 'fa-axxoncustomergroups'
     projectPath: 'src/integrations/customers/AxxonCustomerGroups.Functions/AxxonCustomerGroups.Functions.csproj'
-    azureServiceConnection: '$(azureServiceConnection)'
-    environmentName: '$(environmentName)'
+    # En INTE la app se creo a mano como 'fa-axxoncustomergroup', sin la "s"
+    # final que usa main.bicep. Se normaliza en el cutover de INTE.
+    inteAppName: 'fa-axxoncustomergroup'

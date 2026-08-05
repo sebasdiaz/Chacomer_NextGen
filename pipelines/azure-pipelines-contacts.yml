@@ -11,17 +11,10 @@ trigger:
       - src/core/**
       - pipelines/azure-pipelines-contacts.yml
       - pipelines/templates/functionapp-build-deploy.yml
-
-variables:
-  - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
-  - name: environmentName
-    value: 'inte'
+      - pipelines/templates/functionapp-deploy-stage.yml
 
 extends:
   template: templates/functionapp-build-deploy.yml
   parameters:
-    appName: 'fa-axxoncontacts-$(environmentName)'
+    appBaseName: 'fa-axxoncontacts'
     projectPath: 'src/integrations/contacts/AxxonContacts.Functions/AxxonContacts.Functions.csproj'
-    azureServiceConnection: '$(azureServiceConnection)'
-    environmentName: '$(environmentName)'

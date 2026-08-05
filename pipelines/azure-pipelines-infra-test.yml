@@ -1,6 +1,10 @@
 # ---------------------------------------------------------------------------
 # Pipeline de infraestructura (TEST): despliega infra/main.bicep al resource
-# group EiP_Test. Corre validacion (what-if) y luego el deployment.
+# group dataversetest. Corre validacion (what-if) y luego el deployment.
+#
+# Nota: dataversetest ya contiene recursos legacy hechos a mano
+# (appinsightstest, keyvaultchacomertest). No colisionan con los que crea el
+# Bicep (appi-eip-test, kv-chacomer-eip-test) y quedan fuera de este template.
 #
 # Requiere:
 #   - Service connection ARM con permisos de Contributor + User Access
@@ -17,7 +21,7 @@ variables:
   - name: environmentName
     value: 'test'
   - name: resourceGroupName
-    value: 'EiP_Test'
+    value: 'dataversetest'
 
 stages:
   - stage: Validate

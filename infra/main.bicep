@@ -1,16 +1,17 @@
 // ===========================================================================
 // Enterprise Integration Platform (EiP) — infraestructura base por ambiente.
-// Scope: resourceGroup (ej: EiP_Inte).
+// Scope: resourceGroup. Hoy son dos: DataverseINTE (inte) y dataversetest (test).
 //
 // Despliega lo CROSS a todas las integraciones:
 //   - Monitoring: Log Analytics + Application Insights (compartido)
 //   - Key Vault (secretos de la plataforma)
 //   - Service Bus (backbone asincronico)
-//   - Las 4 Function Apps actuales (Flex Consumption + MI + role assignments)
+//   - Las 5 Function Apps (Flex Consumption + MI + role assignments), salvo que
+//     deployFunctionApps sea false
 //
 // Deploy:
-//   az deployment group create -g EiP_Inte \
-//     -f infra/main.bicep -p infra/environments/inte.bicepparam
+//   az deployment group create -g dataversetest \
+//     -f infra/main.bicep -p infra/environments/test.bicepparam
 // ===========================================================================
 
 targetScope = 'resourceGroup'
@@ -32,6 +33,27 @@ param dualWriteLegalEntities string = ''
 
 @description('Version del runtime .NET isolated (8.0, 9.0, 10.0).')
 param dotnetIsolatedVersion string = '10.0'
+
+@description('''
+Maximo de instancias para las apps que llaman a F&O (contacts, customers,
+customergroups, products). maxConcurrentCalls en host.json es POR INSTANCIA:
+sin este techo la concurrencia real contra F&O se multiplica por N instancias
+y se exceden sus limites de API.
+''')
+param foBoundMaxInstanceCount int = 1
+
+@description('Maximo de instancias para las apps que no pegan a F&O (fiscal).')
+param maxInstanceCount int = 40
+
+@description('''
+False para desplegar SOLO los recursos compartidos (monitoring, Key Vault,
+Service Bus) sin tocar las Function Apps. Necesario en ambientes donde las apps
+ya existen creadas a mano: este template declara la coleccion completa de
+appSettings, asi que adoptarlas de golpe les borraria los secretos en texto
+plano (DataverseClientSecret, FoClientSecret, Schedules*) y las dejaria caidas
+hasta completar el cutover a Managed Identity + Key Vault.
+''')
+param deployFunctionApps bool = true
 
 var tags = {
   platform: 'EiP'
@@ -72,7 +94,7 @@ module serviceBus 'modules/servicebus.bicep' = {
 // Cada entrada define una integracion. Las role assignments (Key Vault,
 // Storage, Service Bus) las resuelve el modulo functionApp.
 
-module contacts 'modules/functionApp.bicep' = {
+module contacts 'modules/functionApp.bicep' = if (deployFunctionApps) {
   name: 'fa-contacts'
   params: {
     functionAppName: 'fa-axxoncontacts-${environmentName}'
@@ -81,6 +103,7 @@ module contacts 'modules/functionApp.bicep' = {
     location: location
     tags: tags
     runtimeVersion: dotnetIsolatedVersion
+    maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
@@ -99,7 +122,7 @@ module contacts 'modules/functionApp.bicep' = {
   }
 }
 
-module customers 'modules/functionApp.bicep' = {
+module customers 'modules/functionApp.bicep' = if (deployFunctionApps) {
   name: 'fa-customers'
   params: {
     functionAppName: 'fa-axxoncustomers-${environmentName}'
@@ -108,6 +131,7 @@ module customers 'modules/functionApp.bicep' = {
     location: location
     tags: tags
     runtimeVersion: dotnetIsolatedVersion
+    maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
@@ -122,7 +146,7 @@ module customers 'modules/functionApp.bicep' = {
   }
 }
 
-module customerGroups 'modules/functionApp.bicep' = {
+module customerGroups 'modules/functionApp.bicep' = if (deployFunctionApps) {
   name: 'fa-customergroups'
   params: {
     functionAppName: 'fa-axxoncustomergroups-${environmentName}'
@@ -131,6 +155,7 @@ module customerGroups 'modules/functionApp.bicep' = {
     location: location
     tags: tags
     runtimeVersion: dotnetIsolatedVersion
+    maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
@@ -143,7 +168,7 @@ module customerGroups 'modules/functionApp.bicep' = {
   }
 }
 
-module products 'modules/functionApp.bicep' = {
+module products 'modules/functionApp.bicep' = if (deployFunctionApps) {
   name: 'fa-products'
   params: {
     functionAppName: 'fa-axxonproducts-${environmentName}'
@@ -152,6 +177,7 @@ module products 'modules/functionApp.bicep' = {
     location: location
     tags: tags
     runtimeVersion: dotnetIsolatedVersion
+    maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
@@ -168,7 +194,7 @@ module products 'modules/functionApp.bicep' = {
 // No consume Service Bus ni Dataverse (proxies HTTP puros); superficie publica
 // separada del backbone de mensajeria. SetApiKey se resuelve desde Key Vault
 // (secret "SetApiKey", via AddEipCore) — no se pasa como app setting.
-module fiscal 'modules/functionApp.bicep' = {
+module fiscal 'modules/functionApp.bicep' = if (deployFunctionApps) {
   name: 'fa-fiscal'
   params: {
     functionAppName: 'fa-axxonfiscal-${environmentName}'
@@ -177,6 +203,8 @@ module fiscal 'modules/functionApp.bicep' = {
     location: location
     tags: tags
     runtimeVersion: dotnetIsolatedVersion
+    // Proxy HTTP puro: no llama a F&O, escala libre.
+    maximumInstanceCount: maxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
@@ -189,10 +217,6 @@ output keyVaultName string = keyVault.outputs.keyVaultName
 output keyVaultUri string = keyVault.outputs.keyVaultUri
 output serviceBusNamespace string = serviceBus.outputs.namespaceName
 output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
-output functionApps array = [
-  contacts.outputs.functionAppName
-  customers.outputs.functionAppName
-  customerGroups.outputs.functionAppName
-  products.outputs.functionAppName
-  fiscal.outputs.functionAppName
-]
+// Sin output agregado de functionApps: con deployFunctionApps=false los modulos
+// no existen y referenciar sus outputs solo agrega warnings BCP318. Los nombres
+// son deterministicos (fa-axxon{dominio}-{env}) y nadie consume ese output.
