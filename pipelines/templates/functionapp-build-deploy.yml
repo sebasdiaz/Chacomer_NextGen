@@ -1,23 +1,33 @@
 # ---------------------------------------------------------------------------
-# Template compartido: build + deploy de una Function App de la EiP.
+# Template compartido: build + promocion de una Function App de la EiP.
 # Reutilizado por cada pipeline de integracion (contacts, customers, ...).
 #
 # Build: dotnet publish del proyecto (arrastra Axxon.Eip.Core por ProjectReference).
-# Deploy: AzureFunctionApp@2 (Flex Consumption / Linux) via service connection.
+# Deploy: un stage por ambiente, en cadena INTE -> TEST. Se compila una sola vez
+#         y se promueve el mismo artifact; el gate a TEST es el approval del
+#         environment 'test' en Azure DevOps.
+#
+# El nombre de la Function App se arma como {appBaseName}-{env}, que es la
+# convencion de infra/main.bicep (fa-axxon{dominio}-{env}).
 # ---------------------------------------------------------------------------
 
 parameters:
-  - name: appName            # Nombre de la Function App en Azure (ej: fa-axxoncontacts-inte)
+  - name: appBaseName        # Nombre de la app SIN sufijo de ambiente (ej: fa-axxoncontacts)
     type: string
   - name: projectPath        # Ruta al .csproj de la Function App
     type: string
   - name: testProjectPath    # Ruta al .csproj de tests. Vacio = la integracion no tiene
     type: string
     default: ''
-  - name: azureServiceConnection  # Service connection de Azure DevOps (ARM)
+  - name: deployToTest       # false para dejar una integracion fuera de la promocion a TEST
+    type: boolean
+    default: true
+  - name: inteServiceConnection
     type: string
-  - name: environmentName    # Ambiente de Azure DevOps (para approvals/gates)
+    default: 'sc-chacomer-eip-inte'
+  - name: testServiceConnection
     type: string
+    default: 'sc-chacomer-eip-test'
   - name: dotnetVersion
     type: string
     default: '10.0.x'
@@ -27,7 +37,7 @@ parameters:
 
 stages:
   - stage: Build
-    displayName: 'Build ${{ parameters.appName }}'
+    displayName: 'Build ${{ parameters.appBaseName }}'
     jobs:
       - job: Build
         pool:
@@ -64,27 +74,19 @@ stages:
               PathtoPublish: '$(Build.ArtifactStagingDirectory)/publish'
               ArtifactName: 'functionapp'
 
-  - stage: Deploy
-    displayName: 'Deploy ${{ parameters.appName }}'
-    dependsOn: Build
-    condition: succeeded()
-    jobs:
-      - deployment: Deploy
-        pool:
-          vmImage: 'ubuntu-latest'
-        environment: ${{ parameters.environmentName }}
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - download: current
-                  artifact: functionapp
+  - template: functionapp-deploy-stage.yml
+    parameters:
+      stageName: 'Deploy_inte'
+      dependsOn: 'Build'
+      appName: '${{ parameters.appBaseName }}-inte'
+      environmentName: 'inte'
+      azureServiceConnection: ${{ parameters.inteServiceConnection }}
 
-                - task: AzureFunctionApp@2
-                  displayName: 'Deploy a ${{ parameters.appName }}'
-                  inputs:
-                    connectedServiceNameARM: ${{ parameters.azureServiceConnection }}
-                    appType: 'functionAppLinux'
-                    appName: ${{ parameters.appName }}
-                    package: '$(Pipeline.Workspace)/functionapp/**/*.zip'
-                    deploymentMethod: 'auto'
+  - ${{ if parameters.deployToTest }}:
+    - template: functionapp-deploy-stage.yml
+      parameters:
+        stageName: 'Deploy_test'
+        dependsOn: 'Deploy_inte'
+        appName: '${{ parameters.appBaseName }}-test'
+        environmentName: 'test'
+        azureServiceConnection: ${{ parameters.testServiceConnection }}

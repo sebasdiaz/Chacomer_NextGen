@@ -11,17 +11,10 @@ trigger:
       - src/core/**
       - pipelines/azure-pipelines-fiscal.yml
       - pipelines/templates/functionapp-build-deploy.yml
-
-variables:
-  - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
-  - name: environmentName
-    value: 'inte'
+      - pipelines/templates/functionapp-deploy-stage.yml
 
 extends:
   template: templates/functionapp-build-deploy.yml
   parameters:
-    appName: 'fa-axxonfiscal-$(environmentName)'
+    appBaseName: 'fa-axxonfiscal'
     projectPath: 'src/integrations/fiscal/AxxonFiscal.Functions/AxxonFiscal.Functions.csproj'
-    azureServiceConnection: '$(azureServiceConnection)'
-    environmentName: '$(environmentName)'

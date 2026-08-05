@@ -33,6 +33,17 @@ param dualWriteLegalEntities string = ''
 @description('Version del runtime .NET isolated (8.0, 9.0, 10.0).')
 param dotnetIsolatedVersion string = '10.0'
 
+@description('''
+Maximo de instancias para las apps que llaman a F&O (contacts, customers,
+customergroups, products). maxConcurrentCalls en host.json es POR INSTANCIA:
+sin este techo la concurrencia real contra F&O se multiplica por N instancias
+y se exceden sus limites de API.
+''')
+param foBoundMaxInstanceCount int = 1
+
+@description('Maximo de instancias para las apps que no pegan a F&O (fiscal).')
+param maxInstanceCount int = 40
+
 var tags = {
   platform: 'EiP'
   environment: environmentName
@@ -81,6 +92,7 @@ module contacts 'modules/functionApp.bicep' = {
     location: location
     tags: tags
     runtimeVersion: dotnetIsolatedVersion
+    maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
@@ -108,6 +120,7 @@ module customers 'modules/functionApp.bicep' = {
     location: location
     tags: tags
     runtimeVersion: dotnetIsolatedVersion
+    maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
@@ -131,6 +144,7 @@ module customerGroups 'modules/functionApp.bicep' = {
     location: location
     tags: tags
     runtimeVersion: dotnetIsolatedVersion
+    maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
@@ -152,6 +166,7 @@ module products 'modules/functionApp.bicep' = {
     location: location
     tags: tags
     runtimeVersion: dotnetIsolatedVersion
+    maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
@@ -177,6 +192,8 @@ module fiscal 'modules/functionApp.bicep' = {
     location: location
     tags: tags
     runtimeVersion: dotnetIsolatedVersion
+    // Proxy HTTP puro: no llama a F&O, escala libre.
+    maximumInstanceCount: maxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri

@@ -1,0 +1,46 @@
+# ---------------------------------------------------------------------------
+# Template de un stage de deploy: publica el artifact de Build en la Function
+# App del ambiente indicado. Lo usa functionapp-build-deploy.yml una vez por
+# ambiente de la cadena de promocion (inte -> test).
+#
+# El artifact se construye UNA sola vez (stage Build) y se promueve tal cual:
+# el binario que se valida en INTE es exactamente el que llega a TEST.
+# ---------------------------------------------------------------------------
+
+parameters:
+  - name: stageName        # Nombre del stage (debe ser unico en el pipeline)
+    type: string
+  - name: dependsOn        # Stage previo de la cadena de promocion
+    type: string
+  - name: appName          # Nombre de la Function App en Azure
+    type: string
+  - name: environmentName  # Environment de Azure DevOps (approvals/gates)
+    type: string
+  - name: azureServiceConnection
+    type: string
+
+stages:
+  - stage: ${{ parameters.stageName }}
+    displayName: 'Deploy ${{ parameters.appName }}'
+    dependsOn: ${{ parameters.dependsOn }}
+    condition: succeeded()
+    jobs:
+      - deployment: Deploy
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: ${{ parameters.environmentName }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: functionapp
+
+                - task: AzureFunctionApp@2
+                  displayName: 'Deploy a ${{ parameters.appName }}'
+                  inputs:
+                    connectedServiceNameARM: ${{ parameters.azureServiceConnection }}
+                    appType: 'functionAppLinux'
+                    appName: ${{ parameters.appName }}
+                    package: '$(Pipeline.Workspace)/functionapp/**/*.zip'
+                    deploymentMethod: 'auto'
