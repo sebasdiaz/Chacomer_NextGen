@@ -1,17 +1,11 @@
 {
   "version": "2.0",
+  "telemetryMode": "OpenTelemetry",
   "logging": {
-    "applicationInsights": {
-      "samplingSettings": {
-        "isEnabled": true,
-        "excludedTypes": "Request"
-      }
-    },
     "logLevel": {
-      "AxxonCustomers": "Information",
-      "Microsoft.PowerPlatform": "Warning",
-      "Azure.Messaging.ServiceBus": "Warning",
-      "default": "Warning"
+      "default": "Information",
+      "Host.General": "Warning",
+      "Host.Startup": "Warning"
     }
   },
   "extensions": {
