@@ -54,6 +54,8 @@ por nombre. Si no existe, el campo se omite y se loguea Warning (el mapeo tiene
 | `FoTenantId`                  | (DESA) Tenant para client-credentials contra F&O                 |
 | `FoClientId`                  | (DESA) Client Id; vacio => Managed Identity                      |
 | `FoClientSecret`              | (DESA) Secret                                                    |
+| `KeyVaultUri`                 | Vault del que se leen los secretos. En INTE: `https://keyvaultinte.vault.azure.net/` |
+| `DataverseClientSecretName` / `FoClientSecretName` | Nombre del secret en el vault cuando no coincide con la clave. En INTE ambos: `SecretNextGenDynamics365Inte` |
 
 > En produccion usar Managed Identity de la Function App tanto para Dataverse
 > (application user) como para F&O (registrar el client id en

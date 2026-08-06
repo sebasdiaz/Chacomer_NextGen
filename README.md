@@ -106,14 +106,36 @@ az role assignment create \
 
 ### Convención de nombres de secrets
 
-| Secret en Key Vault | Usado por | Descripción |
+| Clave de configuración | Usada por | Descripción |
 |---|---|---|
-| `DataverseClientSecret` | todas (solo DESA) | Client Secret del App Registration de Dataverse |
-| `FoClientSecret` | customers, products (solo DESA) | Client Secret del App Registration de F&O |
-| `SetApiKey` | contacts | API Key de la SET Paraguay |
+| `DataverseClientSecret` | todas (DESA/INTE) | Client Secret del App Registration de Dataverse |
+| `FoClientSecret` | customers, customergroups, products (DESA/INTE) | Client Secret del App Registration de F&O |
+| `SetApiKey` | contacts, fiscal | API Key de la SET Paraguay |
 
 En producción las conexiones a Dataverse/F&O usan Managed Identity: no hay secreto que guardar.
-Los secrets `*ClientSecret` solo existen en el vault de DESA.
+Los secrets `*ClientSecret` solo existen en los vaults de DESA/INTE.
+
+#### Cuando el secret del vault se llama distinto
+
+Por defecto el secret del Key Vault se llama igual que la clave de arriba. Los vaults legacy
+no siguen esa convención: nombran los secrets por app registration y ambiente. Para eso está
+la indirección `{clave}Name` — un Application Setting con el nombre real del secret:
+
+| Application Setting | Valor en INTE |
+|---|---|
+| `KeyVaultUri` | `https://keyvaultinte.vault.azure.net/` |
+| `DataverseClientSecretName` | `SecretNextGenDynamics365Inte` |
+| `FoClientSecretName` | `SecretNextGenDynamics365Inte` |
+
+Con eso, `AddEipDataverse()` resuelve `DataverseClientSecret` leyendo el secret
+`SecretNextGenDynamics365Inte` del vault. Sin `{clave}Name`, el comportamiento es el de
+siempre: se busca el secret con el nombre de la clave.
+
+Si `{clave}Name` apunta a un secret que no resuelve, **el host no levanta**: es intencional.
+Devolver `null` dejaría `UseClientSecretAuth` en `false` y la app caería en silencio a Managed
+Identity, fallando más adelante con un error que no menciona el secreto mal configurado.
+
+Ver [`EipSecretResolver`](src/core/Axxon.Eip.Core/Configuration/EipSecretResolver.cs).
 
 ### Triggers y bindings (resueltos por el host, no por el worker)
 
@@ -127,7 +149,21 @@ binding expressions `%...%`) NO pasan por el configuration provider del worker. 
 ### Desarrollo local
 
 Dos opciones:
-- `az login` + `KeyVaultUri` en `local.settings.json` → lee los secrets del vault de DESA.
+- `az login` + `KeyVaultUri` en `local.settings.json` → lee los secrets del vault. Con el vault
+  de INTE, agregando también los `*SecretName`:
+
+  ```json
+  {
+    "Values": {
+      "KeyVaultUri": "https://keyvaultinte.vault.azure.net/",
+      "DataverseClientSecretName": "SecretNextGenDynamics365Inte",
+      "FoClientSecretName": "SecretNextGenDynamics365Inte"
+    }
+  }
+  ```
+
+  `DefaultAzureCredential` usa la sesión de `az login`, así que el usuario necesita
+  **Key Vault Secrets User** sobre el vault.
 - Sin `KeyVaultUri` → los valores se toman de `local.settings.json` como siempre.
 
 ## Setup inicial
