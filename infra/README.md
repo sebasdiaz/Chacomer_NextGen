@@ -13,11 +13,13 @@ infra/
 │   ├── keyvault.bicep         # Key Vault (RBAC)
 │   ├── servicebus.bicep       # namespace + queues (sessions)
 │   └── functionApp.bicep      # Flex Consumption + MI + role assignments
-└── environments/
-    ├── inte.bicepparam
-    ├── test.bicepparam
-    ├── uat.bicepparam
-    └── prod.bicepparam
+├── environments/
+│   ├── inte.bicepparam
+│   ├── test.bicepparam
+│   ├── uat.bicepparam
+│   └── prod.bicepparam
+└── scripts/
+    └── Set-InteKeyVaultAuth.ps1   # cutover de INTE a Key Vault + MI (apps fuera del Bicep)
 ```
 
 ## Ambientes
@@ -54,24 +56,60 @@ crea el template — la diferencia no es la infraestructura sino la configuraci�
 | Storage | `AzureWebJobsStorage` + `DEPLOYMENT_STORAGE_CONNECTION_STRING` (connection string) | `AzureWebJobsStorage__blobServiceUri` + MI |
 | Service Bus | `ServiceBusConnection` (connection string) | `__fullyQualifiedNamespace` + MI |
 | Managed Identity | sólo `fa-axxoncontacts-inte` la tiene | System-Assigned en las 5 |
-| Secretos | `DataverseClientSecret`, `FoClientSecret`, `SetApiKey` en app settings planos | Key Vault |
+| Secretos | Key Vault `keyvaultinte` (ver abajo) | Key Vault `kv-chacomer-eip-inte` |
 | App Service Plan | `ASP-DataverseINTE-*` (uno por app) | `asp-{functionAppName}` |
 | Settings extra | `Schedules*`, `DataverseClientId`, `FoClientId`, `FoTenantId` | no contemplados |
 
 El template declara la **colección completa** de app settings, así que poner
-`deployFunctionApps = true` sin preparar el terreno **borra los secretos y deja
-las 4 apps caídas**. El orden del cutover, por app:
+`deployFunctionApps = true` sin preparar el terreno **deja las 4 apps caídas**.
+El orden del cutover, por app:
 
-1. Cargar los secrets en `kv-chacomer-eip-inte` y habilitar System-Assigned MI.
+1. ✅ **Secretos a Key Vault + System-Assigned MI** — `scripts/Set-InteKeyVaultAuth.ps1`.
 2. Dar de alta la MI como Application User en Dataverse y como usuario S2S en F&O.
 3. Agregar los settings faltantes (`Schedules*`) al `appSettings` del módulo.
 4. Resolver `fa-axxoncustomergroup` → `fa-axxoncustomergroups-inte`, y el plan
    (una app Flex no se mueve entre planes: hay que recrearla o adoptar el plan
    existente en el template).
-5. Recién ahí, `deployFunctionApps = true`.
+5. Apuntar `KeyVaultUri` a `keyvaultinte` en el módulo (ver abajo).
+6. Recién ahí, `deployFunctionApps = true`.
 
 Mientras tanto los pipelines de integración siguen deployando código a las apps
 de INTE tal como están, vía los overrides `inteAppName` / `deployToInte`.
+
+### Secretos de INTE: `keyvaultinte`, no `kv-chacomer-eip-inte`
+
+INTE lee sus secretos del vault legacy **`keyvaultinte`**, que ya existía en el RG y ya
+tiene cargado el client secret del app registration `NextGen_Dynamics365_Inte`
+(`145fd64d-…`) bajo el nombre `SecretNextGenDynamics365Inte`. Se usa ese y no
+`kv-chacomer-eip-inte` para no duplicar el mismo secreto en dos vaults.
+
+Como el nombre del secret no coincide con la clave de configuración, las apps llevan la
+indirección `DataverseClientSecretName` / `FoClientSecretName` (ver README raíz, sección
+"Cuando el secret del vault se llama distinto").
+
+El cutover lo aplica un script idempotente — las apps de INTE están fuera del Bicep, así
+que su configuración no puede versionarse en el template:
+
+```powershell
+# 1. Dry run
+./scripts/Set-InteKeyVaultAuth.ps1 -WhatIf
+
+# 2. App por app: MI + rol sobre el vault + los *SecretName, sin borrar nada
+./scripts/Set-InteKeyVaultAuth.ps1 -Apps fa-axxoncontacts-inte
+
+# 3. Validada la app, se borran los secretos planos
+./scripts/Set-InteKeyVaultAuth.ps1 -Apps fa-axxoncontacts-inte -RemovePlainSecrets
+```
+
+> **Antes del paso 2 en `fa-axxoncustomergroup`:** esa app venía con otro app registration
+> (`NextGenInte`, `adcf4b4d-…`) y el script la unifica en `NextGen_Dynamics365_Inte`. Hay que
+> confirmar primero que ese registration esté dado de alta como Application User en
+> Dataverse INTE y como usuario S2S en F&O con permisos sobre customer groups. Si no,
+> correrla con `-SkipClientIdUnification`.
+
+Cuando INTE pase a `deployFunctionApps = true`, `functionApp.bicep` cablea el
+`keyVaultUri` del vault que crea el propio template: hay que parametrizarlo para que INTE
+siga apuntando a `keyvaultinte`, o migrar los secretos a `kv-chacomer-eip-inte`.
 
 ## Qué despliega
 
@@ -155,8 +193,9 @@ az keyvault secret set --vault-name $VAULT --name FoClientSecret --value "<secre
 ```
 
 El nombre del secret coincide con la clave de configuración que lee el código
-(`AddEipKeyVault` monta el vault como configuration provider). Ver README raíz,
-sección "Key Vault".
+(`AddEipKeyVault` monta el vault como configuration provider). Cuando no coincide —el caso
+de `keyvaultinte` en INTE— se declara el nombre real en el Application Setting
+`{clave}Name`. Ver README raíz, sección "Key Vault".
 
 ## Promoción del código a un ambiente nuevo
 

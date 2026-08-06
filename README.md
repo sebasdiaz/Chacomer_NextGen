@@ -78,7 +78,7 @@ Qué provee el core:
 
 | Componente | Descripción |
 |---|---|
-| `AddEipCore()` | Key Vault como fuente de secretos (si `KeyVaultUri` está seteado), OpenTelemetry exportando a App Insights, logging a consola |
+| `AddEipCore()` | Key Vault como fuente de secretos (si `KeyVaultUri` está seteado), OpenTelemetry exportando a App Insights, niveles de log del worker |
 | `AddEipDataverse()` | `DataverseClientFactory` — Managed Identity en Azure, Client Secret en DESA/local |
 | `AddEipFoOData()` | `IFoODataClient` — cliente genérico de la OData API de F&O: paginación `@odata.nextLink`, `cross-company`, `$filter`/`$select`, POST tipado, y retry SOLO ante HTTP 429 respetando `Retry-After` |
 
@@ -106,14 +106,36 @@ az role assignment create \
 
 ### Convención de nombres de secrets
 
-| Secret en Key Vault | Usado por | Descripción |
+| Clave de configuración | Usada por | Descripción |
 |---|---|---|
-| `DataverseClientSecret` | todas (solo DESA) | Client Secret del App Registration de Dataverse |
-| `FoClientSecret` | customers, products (solo DESA) | Client Secret del App Registration de F&O |
-| `SetApiKey` | contacts | API Key de la SET Paraguay |
+| `DataverseClientSecret` | todas (DESA/INTE) | Client Secret del App Registration de Dataverse |
+| `FoClientSecret` | customers, customergroups, products (DESA/INTE) | Client Secret del App Registration de F&O |
+| `SetApiKey` | contacts, fiscal | API Key de la SET Paraguay |
 
 En producción las conexiones a Dataverse/F&O usan Managed Identity: no hay secreto que guardar.
-Los secrets `*ClientSecret` solo existen en el vault de DESA.
+Los secrets `*ClientSecret` solo existen en los vaults de DESA/INTE.
+
+#### Cuando el secret del vault se llama distinto
+
+Por defecto el secret del Key Vault se llama igual que la clave de arriba. Los vaults legacy
+no siguen esa convención: nombran los secrets por app registration y ambiente. Para eso está
+la indirección `{clave}Name` — un Application Setting con el nombre real del secret:
+
+| Application Setting | Valor en INTE |
+|---|---|
+| `KeyVaultUri` | `https://keyvaultinte.vault.azure.net/` |
+| `DataverseClientSecretName` | `SecretNextGenDynamics365Inte` |
+| `FoClientSecretName` | `SecretNextGenDynamics365Inte` |
+
+Con eso, `AddEipDataverse()` resuelve `DataverseClientSecret` leyendo el secret
+`SecretNextGenDynamics365Inte` del vault. Sin `{clave}Name`, el comportamiento es el de
+siempre: se busca el secret con el nombre de la clave.
+
+Si `{clave}Name` apunta a un secret que no resuelve, **el host no levanta**: es intencional.
+Devolver `null` dejaría `UseClientSecretAuth` en `false` y la app caería en silencio a Managed
+Identity, fallando más adelante con un error que no menciona el secreto mal configurado.
+
+Ver [`EipSecretResolver`](src/core/Axxon.Eip.Core/Configuration/EipSecretResolver.cs).
 
 ### Triggers y bindings (resueltos por el host, no por el worker)
 
@@ -127,8 +149,61 @@ binding expressions `%...%`) NO pasan por el configuration provider del worker. 
 ### Desarrollo local
 
 Dos opciones:
-- `az login` + `KeyVaultUri` en `local.settings.json` → lee los secrets del vault de DESA.
+- `az login` + `KeyVaultUri` en `local.settings.json` → lee los secrets del vault. Con el vault
+  de INTE, agregando también los `*SecretName`:
+
+  ```json
+  {
+    "Values": {
+      "KeyVaultUri": "https://keyvaultinte.vault.azure.net/",
+      "DataverseClientSecretName": "SecretNextGenDynamics365Inte",
+      "FoClientSecretName": "SecretNextGenDynamics365Inte"
+    }
+  }
+  ```
+
+  `DefaultAzureCredential` usa la sesión de `az login`, así que el usuario necesita
+  **Key Vault Secrets User** sobre el vault.
 - Sin `KeyVaultUri` → los valores se toman de `local.settings.json` como siempre.
+
+## Telemetría
+
+Las 5 apps exportan por **OpenTelemetry** a Application Insights. Son **dos procesos que
+loguean por separado**, y confundirlos es la causa habitual de "no llega nada":
+
+| | Qué emite | Dónde se configura |
+|---|---|---|
+| **Host** | inicio de la app, triggers, la tabla `requests` (una fila por invocación), salud del runtime | `logging.logLevel` de `host.json` |
+| **Worker** | todo lo que loguea el código de las Functions y del core | `AddEipCore()` → `builder.Logging` |
+
+Tres cosas que hay que tener presentes, las tres documentadas por Microsoft en
+[Use OpenTelemetry with Azure Functions](https://learn.microsoft.com/azure/azure-functions/opentelemetry-howto):
+
+1. **Los filtros de `host.json` no llegan al worker.** Poner ahí el namespace de la app
+   (`"AxxonContacts": "Information"`) no hace nada; por eso los niveles del código viven
+   en `AddEipCore()`.
+2. **`logLevel.default` en `Warning` apaga la tabla `requests`.** El host escribe la
+   telemetría de ejecución en nivel Information bajo `Host.Results`/`Function.<Nombre>`.
+   Con `Warning` se filtra antes de salir, y quedás sin registro de las invocaciones.
+   Por eso los 5 `host.json` van en `Information`.
+3. **Con `telemetryMode: OpenTelemetry`, el bloque `logging.applicationInsights` se
+   ignora** — sampling incluido. No tiene sentido configurarlo ahí; si hace falta
+   samplear, va del lado de OTel.
+
+Además, el host captura stdout y lo reenvía al pipeline: un `AddConsole()` en Azure
+duplica cada log. `AddEipCore()` lo registra sólo fuera de Azure (`WEBSITE_INSTANCE_ID`
+sin setear), donde es la única forma de ver la salida del worker.
+
+> Con OpenTelemetry activo, el portal **no** soporta log streaming. Para ver qué está
+> pasando se consulta App Insights.
+
+### Dónde mirar
+
+Un componente por ambiente, `appi-eip-{env}`, creado por el Bicep; las apps se distinguen
+por `cloud_RoleName`. **No** hay que apuntarlas al App Insights de Dataverse
+(`appinsightsdataverseinte` en INTE): ahí la plataforma escribe miles de
+`Web API Request`/`Organization Service Request` por hora y la señal de las Functions
+queda enterrada.
 
 ## Setup inicial
 

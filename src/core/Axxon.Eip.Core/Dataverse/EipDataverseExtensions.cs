@@ -7,7 +7,9 @@ namespace Axxon.Eip.Core.Dataverse
     /// <summary>
     /// Registra la conexion a Dataverse en el contenedor de DI.
     /// Claves de configuracion: DataverseUrl (obligatoria), DataverseClientId,
-    /// DataverseClientSecret (solo DESA — en Key Vault como secret "DataverseClientSecret").
+    /// DataverseClientSecret (solo DESA/INTE — en Key Vault). Si el secret del vault
+    /// se llama distinto, indicarlo en el app setting "DataverseClientSecretName"
+    /// (ver <see cref="EipSecretResolver"/>).
     /// </summary>
     public static class EipDataverseExtensions
     {
@@ -19,7 +21,7 @@ namespace Axxon.Eip.Core.Dataverse
             {
                 Url          = configuration["DataverseUrl"] ?? string.Empty,
                 ClientId     = configuration["DataverseClientId"],
-                ClientSecret = configuration["DataverseClientSecret"]
+                ClientSecret = configuration.ResolveSecret("DataverseClientSecret")
             };
 
             if (string.IsNullOrWhiteSpace(options.Url))

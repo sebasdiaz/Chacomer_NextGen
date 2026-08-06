@@ -12,7 +12,9 @@ namespace Axxon.Eip.Core.FinOps
     /// Registra el cliente OData de F&amp;O en el contenedor de DI, con el
     /// HttpClient nombrado "FoOData" (headers OData + retry de throttling).
     /// Claves de configuracion: FoBaseUrl (obligatoria), FoTenantId, FoClientId,
-    /// FoClientSecret (solo DESA — en Key Vault como secret "FoClientSecret").
+    /// FoClientSecret (solo DESA/INTE — en Key Vault). Si el secret del vault se llama
+    /// distinto, indicarlo en el app setting "FoClientSecretName"
+    /// (ver <see cref="EipSecretResolver"/>).
     /// </summary>
     public static class EipFoODataExtensions
     {
@@ -25,7 +27,7 @@ namespace Axxon.Eip.Core.FinOps
                 BaseUrl      = configuration["FoBaseUrl"] ?? string.Empty,
                 TenantId     = configuration["FoTenantId"],
                 ClientId     = configuration["FoClientId"],
-                ClientSecret = configuration["FoClientSecret"]
+                ClientSecret = configuration.ResolveSecret("FoClientSecret")
             };
 
             if (string.IsNullOrWhiteSpace(options.BaseUrl))

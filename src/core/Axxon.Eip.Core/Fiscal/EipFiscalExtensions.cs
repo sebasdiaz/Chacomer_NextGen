@@ -1,3 +1,4 @@
+using Axxon.Eip.Core.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -15,7 +16,9 @@ namespace Axxon.Eip.Core.Fiscal
         /// <summary>
         /// Registra <see cref="SetApiService"/> con el HttpClient nombrado "SetApi"
         /// apuntando a la API oficial de la SET Paraguay. El API Key se lee de la
-        /// clave de configuracion "SetApiKey" (en Azure: secret de Key Vault).
+        /// clave de configuracion "SetApiKey" (en Azure: secret de Key Vault). Si el
+        /// secret del vault se llama distinto, indicarlo en el app setting
+        /// "SetApiKeyName" (ver <see cref="EipSecretResolver"/>).
         /// </summary>
         public static IServiceCollection AddEipSetApi(
             this IServiceCollection services,
@@ -23,7 +26,7 @@ namespace Axxon.Eip.Core.Fiscal
         {
             var options = new SetApiOptions
             {
-                ApiKey = configuration["SetApiKey"]
+                ApiKey = configuration.ResolveSecret("SetApiKey")
             };
 
             services.AddSingleton(options);
