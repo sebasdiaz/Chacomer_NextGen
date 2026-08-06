@@ -25,12 +25,12 @@ infra/
 **Son dos resource groups, y sólo dos.** Ambos en la suscripción
 `AZURE_DYNAMICS` (`09592883-…`), tenant `d0e6feed-…`, región `eastus`.
 
-| Ambiente | Resource group | Dataverse | F&O | Service connection | Function Apps |
-|---|---|---|---|---|---|
-| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover) |
-| `test` | `dataversetest` | `operations-b1-chacomer-test` | `b1-chacomer-test.sandbox` | `sc-chacomer-eip-test` | administradas por el Bicep |
-| `uat` | *(sin crear)* | — | — | — | — |
-| `prod` | *(sin crear)* | — | — | — | — |
+| Ambiente | Resource group | Dataverse | F&O | Function Apps |
+|---|---|---|---|---|
+| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | fuera del Bicep (ver cutover) |
+| `test` | `dataversetest` | `operations-b1-chacomer-test` | `b1-chacomer-test.sandbox` | administradas por el Bicep |
+| `uat` | *(sin crear)* | — | — | — |
+| `prod` | *(sin crear)* | — | — | — |
 
 Los RG `EiP_Inte` y `EiP_Test` fueron un intento anterior y se descartan.
 
@@ -123,7 +123,7 @@ az deployment group what-if \
   --parameters infra/environments/test.bicepparam
 ```
 
-> **El error #1 al estrenar un ambiente.** Si la service connection solo tiene
+> **El error #1 al estrenar un ambiente.** Si el service principal solo tiene
 > `Contributor`, los 3 módulos compartidos entran pero las 5 Function Apps
 > fallan con `Authorization failed … roleAssignments/write` — y el RG queda a
 > medias. Hace falta también **User Access Administrator** (o RBAC
@@ -131,7 +131,7 @@ az deployment group what-if \
 > deploy de `EiP_Inte` el 2026-07-23.
 
 ```bash
-# Otorgar ambos roles a la SP de la service connection (requiere Owner sobre el RG)
+# Otorgar ambos roles al SP de los pipelines (requiere Owner sobre el RG)
 RG=/subscriptions/09592883-de3a-4c93-944c-222b3c88e832/resourceGroups/dataversetest
 az role assignment create --assignee <OBJECT_ID_SP> --role "Contributor" --scope $RG
 az role assignment create --assignee <OBJECT_ID_SP> --role "User Access Administrator" --scope $RG
@@ -158,6 +158,32 @@ El nombre del secret coincide con la clave de configuración que lee el código
 (`AddEipKeyVault` monta el vault como configuration provider). Ver README raíz,
 sección "Key Vault".
 
+## Autenticación de los pipelines
+
+**El org de Azure DevOps tiene deshabilitadas las built-in tasks.** `AzureCLI@2`,
+`UseDotNet@2`, `DotNetCoreCLI@2`, `PublishBuildArtifacts@1`, `AzureFunctionApp@2`
+y hasta el atajo `- download:` fallan al parsear con *"A task is missing"*. Por eso
+los 7 pipelines son steps `bash` planos, **sin service connections**: se autentican
+con `az login --service-principal` usando variables del pipeline.
+
+Variables a definir en cada pipeline (*Edit → Variables*) o en un variable group
+compartido. Las `*Secret*` van marcadas como **secret**:
+
+| Variable | Usada por |
+|---|---|
+| `azureTenantId` | los 7 |
+| `azureClientIdInte` / `azureClientSecretInte` / `azureSubscriptionIdInte` | infra (INTE) + los 5 de integración |
+| `azureClientIdTest` / `azureClientSecretTest` / `azureSubscriptionIdTest` | infra-test + los 5 de integración |
+
+Consecuencias de no tener tasks, por si hay que tocar los templates:
+
+- El SDK se instala con `dotnet-install.sh` (`dotnetChannel`, default `10.0`).
+- El artifact se publica con el logging command `##vso[artifact.upload]` y se baja
+  en el stage de deploy por la REST API de builds con `$(System.AccessToken)`.
+- El deploy va por `az functionapp deployment source config-zip`, que es el camino
+  soportado para Flex Consumption (One Deploy). Como el comando pide resource group,
+  `functionapp-build-deploy.yml` lo recibe en `inteResourceGroup` / `testResourceGroup`.
+
 ## Promoción del código a un ambiente nuevo
 
 La infra crea las Function Apps vacías; el código lo pone el pipeline de cada
@@ -176,8 +202,8 @@ recompila. Para dejar una integración fuera de la promoción, pasarle
 
 Alta de un ambiente nuevo, en orden:
 
-1. RG creado y con `Contributor` + `User Access Administrator` para la SP de la SC.
-2. Service connection `sc-chacomer-eip-{env}` en Azure DevOps.
+1. RG creado y con `Contributor` + `User Access Administrator` para el SP del ambiente.
+2. Variables del SP en los pipelines (ver "Autenticación de los pipelines").
 3. Environments `{env}` y `{env}-infra` en Azure DevOps, con approvals.
 4. Correr el pipeline de infra → crea recursos compartidos + las 5 apps vacías.
 5. Cargar los secrets del Key Vault (sección anterior).

@@ -5,6 +5,12 @@
 #
 # El artifact se construye UNA sola vez (stage Build) y se promueve tal cual:
 # el binario que se valida en INTE es exactamente el que llega a TEST.
+#
+# NOTA — sin tasks in-box:
+#   `- download: current` resuelve a DownloadPipelineArtifact@2, que es un task
+#   in-box y el org lo tiene deshabilitado. Por eso el artifact se baja por la
+#   REST API de builds con $(System.AccessToken), y el deploy va por az CLI
+#   (`config-zip` es el camino soportado para Flex Consumption / One Deploy).
 # ---------------------------------------------------------------------------
 
 parameters:
@@ -16,7 +22,17 @@ parameters:
     type: string
   - name: environmentName  # Environment de Azure DevOps (approvals/gates)
     type: string
-  - name: azureServiceConnection
+  - name: resourceGroupName
+    type: string
+  # Credenciales del service principal del ambiente. Llegan como referencias a
+  # variables del pipeline (ej: '$(azureClientIdInte)'), que se resuelven en runtime.
+  - name: azureClientId
+    type: string
+  - name: azureClientSecret
+    type: string
+  - name: azureTenantId
+    type: string
+  - name: azureSubscriptionId
     type: string
 
 stages:
@@ -33,14 +49,60 @@ stages:
           runOnce:
             deploy:
               steps:
-                - download: current
-                  artifact: functionapp
+                - bash: |
+                    set -euo pipefail
+                    dest="$AGENT_TEMPDIRECTORY/artifact"
+                    rm -rf "$dest"; mkdir -p "$dest"
 
-                - task: AzureFunctionApp@2
+                    # $format=zip devuelve el container completo: functionapp/functionapp.zip
+                    curl -sSfL \
+                      -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+                      "${SYSTEM_COLLECTIONURI}${SYSTEM_TEAMPROJECTID}/_apis/build/builds/${BUILD_BUILDID}/artifacts?artifactName=functionapp&api-version=7.1&%24format=zip" \
+                      -o "$AGENT_TEMPDIRECTORY/artifact.zip"
+                    unzip -q -o "$AGENT_TEMPDIRECTORY/artifact.zip" -d "$dest"
+
+                    pkg=$(find "$dest" -name '*.zip' | head -n1)
+                    if [ -z "$pkg" ]; then
+                      echo "##vso[task.logissue type=error]No se encontro el paquete .zip dentro del artifact 'functionapp'."
+                      exit 1
+                    fi
+                    echo "$pkg" > "$AGENT_TEMPDIRECTORY/pkg-path"
+                    ls -lh "$pkg"
+                  displayName: 'Descargar artifact functionapp'
+                  env:
+                    AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
+                    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+                    SYSTEM_COLLECTIONURI: $(System.CollectionUri)
+                    SYSTEM_TEAMPROJECTID: $(System.TeamProjectId)
+                    BUILD_BUILDID: $(Build.BuildId)
+
+                - bash: |
+                    set -euo pipefail
+                    az login --service-principal \
+                      -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" \
+                      --output none
+                    az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+                    az account show --query '{subscription:name, subscriptionId:id}' -o table
+                  displayName: 'az login (service principal)'
+                  env:
+                    AZURE_CLIENT_ID: ${{ parameters.azureClientId }}
+                    AZURE_CLIENT_SECRET: ${{ parameters.azureClientSecret }}
+                    AZURE_TENANT_ID: ${{ parameters.azureTenantId }}
+                    AZURE_SUBSCRIPTION_ID: ${{ parameters.azureSubscriptionId }}
+
+                - bash: |
+                    set -euo pipefail
+                    pkg=$(cat "$AGENT_TEMPDIRECTORY/pkg-path")
+
+                    if ! az functionapp show -g '${{ parameters.resourceGroupName }}' -n '${{ parameters.appName }}' -o none 2>/dev/null; then
+                      echo "##vso[task.logissue type=error]La Function App '${{ parameters.appName }}' no existe en el resource group '${{ parameters.resourceGroupName }}', o el service principal no tiene acceso."
+                      exit 1
+                    fi
+
+                    az functionapp deployment source config-zip \
+                      -g '${{ parameters.resourceGroupName }}' \
+                      -n '${{ parameters.appName }}' \
+                      --src "$pkg"
                   displayName: 'Deploy a ${{ parameters.appName }}'
-                  inputs:
-                    connectedServiceNameARM: ${{ parameters.azureServiceConnection }}
-                    appType: 'functionAppLinux'
-                    appName: ${{ parameters.appName }}
-                    package: '$(Pipeline.Workspace)/functionapp/**/*.zip'
-                    deploymentMethod: 'auto'
+                  env:
+                    AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)

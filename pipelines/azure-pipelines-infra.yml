@@ -7,10 +7,20 @@
 # va con deployFunctionApps = false: este pipeline administra hoy SOLO los
 # recursos compartidos. Ver infra/README, "Cutover de INTE".
 #
-# Requiere:
-#   - Service connection ARM con permisos de Contributor + User Access
-#     Administrator sobre el RG (las role assignments necesitan poder asignar roles).
-#   - Variable resourceGroupName por ambiente.
+# NOTA — sin tasks in-box:
+#   El org de DevOps tiene deshabilitadas las built-in tasks (AzureCLI@2, etc.),
+#   por eso NO se usa el task de Azure ni un Service Connection. La autenticacion
+#   se hace con `az login --service-principal` sobre el az preinstalado del agente.
+#
+# Requiere estas VARIABLES del pipeline (Edit -> Variables, o un variable group);
+# azureClientSecretInte debe marcarse como SECRET:
+#   - azureClientIdInte        (appId del SP)
+#   - azureClientSecretInte    (SECRET — password del SP)
+#   - azureTenantId
+#   - azureSubscriptionIdInte
+#
+# El SP necesita Contributor + User Access Administrator sobre DataverseINTE
+# (las role assignments del Bicep requieren poder asignar roles).
 # ---------------------------------------------------------------------------
 
 trigger:
@@ -23,8 +33,6 @@ trigger:
       - pipelines/azure-pipelines-infra.yml
 
 variables:
-  - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
   - name: environmentName
     value: 'inte'
   - name: resourceGroupName
@@ -38,54 +46,58 @@ stages:
         pool:
           vmImage: 'ubuntu-latest'
         steps:
-          # Preflight: si el RG no existe o la SC apunta a otra suscripcion, ARM
-          # rechaza el what-if con un 404/403 que az CLI muestra como
-          # "The content for this response was already consumed" (bug conocido,
-          # el body del error se consume antes de formatearlo). Chequeamos aca
-          # para fallar con un mensaje entendible.
-          - task: AzureCLI@2
+          - checkout: self
+
+          - bash: |
+              set -euo pipefail
+              az login --service-principal \
+                -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" \
+                --output none
+              az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+            displayName: 'az login (service principal)'
+            env:
+              AZURE_CLIENT_ID: $(azureClientIdInte)
+              AZURE_CLIENT_SECRET: $(azureClientSecretInte)
+              AZURE_TENANT_ID: $(azureTenantId)
+              AZURE_SUBSCRIPTION_ID: $(azureSubscriptionIdInte)
+
+          # Preflight: si el RG no existe o el SP no lo ve, ARM rechaza el what-if
+          # con un 404/403 que az CLI muestra como "The content for this response
+          # was already consumed" (bug conocido: consume el body del error antes
+          # de formatearlo). Chequeamos aca para fallar con un mensaje entendible.
+          - bash: |
+              set -euo pipefail
+              az account show --query '{subscription:name, subscriptionId:id, tenantId:tenantId}' -o table
+
+              if ! az group show -n '$(resourceGroupName)' -o none 2>/dev/null; then
+                echo "##vso[task.logissue type=error]El resource group '$(resourceGroupName)' no existe, o el service principal no tiene acceso a el en la suscripcion configurada en azureSubscriptionIdInte."
+                exit 1
+              fi
+              az group show -n '$(resourceGroupName)' --query '{name:name, location:location}' -o table
+
+              # main.bicep necesita estos RP registrados en la suscripcion.
+              for rp in Microsoft.Web Microsoft.Storage Microsoft.KeyVault Microsoft.ServiceBus Microsoft.OperationalInsights Microsoft.Insights; do
+                state=$(az provider show -n "$rp" --query registrationState -o tsv)
+                echo "$rp: $state"
+                if [ "$state" != "Registered" ]; then
+                  echo "##vso[task.logissue type=warning]$rp no esta registrado en la suscripcion; el deployment va a fallar."
+                fi
+              done
             displayName: 'Preflight: suscripcion, RG y resource providers'
-            inputs:
-              azureSubscription: '$(azureServiceConnection)'
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                set -euo pipefail
-                az account show --query '{subscription:name, subscriptionId:id, tenantId:tenantId}' -o table
 
-                if ! az group show -n '$(resourceGroupName)' -o none 2>/dev/null; then
-                  echo "##vso[task.logissue type=error]El resource group '$(resourceGroupName)' no existe, o la service connection '$(azureServiceConnection)' no tiene acceso a el en esta suscripcion."
-                  exit 1
-                fi
-                az group show -n '$(resourceGroupName)' --query '{name:name, location:location}' -o table
-
-                # main.bicep necesita estos RP registrados en la suscripcion.
-                for rp in Microsoft.Web Microsoft.Storage Microsoft.KeyVault Microsoft.ServiceBus Microsoft.OperationalInsights Microsoft.Insights; do
-                  state=$(az provider show -n "$rp" --query registrationState -o tsv)
-                  echo "$rp: $state"
-                  if [ "$state" != "Registered" ]; then
-                    echo "##vso[task.logissue type=warning]$rp no esta registrado en la suscripcion; el deployment va a fallar."
-                  fi
-                done
-
-          - task: AzureCLI@2
+          - bash: |
+              whatif() {
+                az deployment group what-if \
+                  --resource-group '$(resourceGroupName)' \
+                  --template-file infra/main.bicep \
+                  --parameters infra/environments/$(environmentName).bicepparam "$@"
+              }
+              if ! whatif; then
+                echo '----- what-if fallo; reintento con --debug para ver la respuesta cruda de ARM -----'
+                whatif --debug || true
+                exit 1
+              fi
             displayName: 'az deployment group what-if'
-            inputs:
-              azureSubscription: '$(azureServiceConnection)'
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                whatif() {
-                  az deployment group what-if \
-                    --resource-group '$(resourceGroupName)' \
-                    --template-file infra/main.bicep \
-                    --parameters infra/environments/$(environmentName).bicepparam "$@"
-                }
-                if ! whatif; then
-                  echo '----- what-if fallo; reintento con --debug para ver la respuesta cruda de ARM -----'
-                  whatif --debug || true
-                  exit 1
-                fi
 
   - stage: Deploy
     displayName: 'Deploy infra'
@@ -101,14 +113,24 @@ stages:
             deploy:
               steps:
                 - checkout: self
-                - task: AzureCLI@2
+
+                - bash: |
+                    set -euo pipefail
+                    az login --service-principal \
+                      -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" \
+                      --output none
+                    az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+                  displayName: 'az login (service principal)'
+                  env:
+                    AZURE_CLIENT_ID: $(azureClientIdInte)
+                    AZURE_CLIENT_SECRET: $(azureClientSecretInte)
+                    AZURE_TENANT_ID: $(azureTenantId)
+                    AZURE_SUBSCRIPTION_ID: $(azureSubscriptionIdInte)
+
+                - bash: |
+                    set -euo pipefail
+                    az deployment group create \
+                      --resource-group '$(resourceGroupName)' \
+                      --template-file infra/main.bicep \
+                      --parameters infra/environments/$(environmentName).bicepparam
                   displayName: 'az deployment group create'
-                  inputs:
-                    azureSubscription: '$(azureServiceConnection)'
-                    scriptType: 'bash'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      az deployment group create \
-                        --resource-group $(resourceGroupName) \
-                        --template-file infra/main.bicep \
-                        --parameters infra/environments/$(environmentName).bicepparam
