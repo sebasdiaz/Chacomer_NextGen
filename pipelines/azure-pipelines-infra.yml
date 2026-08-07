@@ -7,10 +7,17 @@
 # va con deployFunctionApps = false: este pipeline administra hoy SOLO los
 # recursos compartidos. Ver infra/README, "Cutover de INTE".
 #
-# Requiere:
-#   - Service connection ARM con permisos de Contributor + User Access
-#     Administrator sobre el RG (las role assignments necesitan poder asignar roles).
-#   - Variable resourceGroupName por ambiente.
+# NOTA — sin tasks in-box y sin secretos:
+#   El org de DevOps tiene deshabilitadas las built-in tasks (AzureCLI@2, etc.),
+#   asi que la service connection no se puede consumir con el task de Azure. Pero
+#   `sc-chacomer-eip-inte` es de Workload Identity Federation, y eso permite pedir
+#   un token OIDC por REST desde un step bash y canjearlo con
+#   `az login --federated-token`. No hace falta ningun secreto: no hay client
+#   secret en variables del pipeline ni en Key Vault. Ver templates/steps-az-login.yml.
+#
+# El SP de la SC necesita Contributor + User Access Administrator sobre
+# DataverseINTE (las role assignments del Bicep requieren poder asignar roles),
+# y la SC tiene que estar autorizada para este pipeline.
 # ---------------------------------------------------------------------------
 
 trigger:
@@ -23,12 +30,20 @@ trigger:
       - pipelines/azure-pipelines-infra.yml
 
 variables:
-  - name: azureServiceConnection
-    value: 'sc-chacomer-eip-inte'
   - name: environmentName
     value: 'inte'
   - name: resourceGroupName
     value: 'DataverseINTE'
+  # Identificadores de la service connection federada. NO son secretos: son GUIDs
+  # publicos. El unico "credential" es el token OIDC que emite DevOps por job.
+  - name: serviceConnectionId          # sc-chacomer-eip-inte
+    value: 'c7600511-119a-4ba0-aeb5-cc2e5d7ff1a1'
+  - name: azureClientId
+    value: 'b391d418-ef2a-4d83-afcc-310ec4d8ae52'
+  - name: azureTenantId
+    value: 'd0e6feed-3ca5-4438-bca3-09cb8ba9814a'
+  - name: azureSubscriptionId          # AZURE_DYNAMICS
+    value: '09592883-de3a-4c93-944c-222b3c88e832'
 
 stages:
   - stage: Validate
@@ -38,54 +53,50 @@ stages:
         pool:
           vmImage: 'ubuntu-latest'
         steps:
-          # Preflight: si el RG no existe o la SC apunta a otra suscripcion, ARM
-          # rechaza el what-if con un 404/403 que az CLI muestra como
-          # "The content for this response was already consumed" (bug conocido,
-          # el body del error se consume antes de formatearlo). Chequeamos aca
-          # para fallar con un mensaje entendible.
-          - task: AzureCLI@2
+          - checkout: self
+
+          - template: templates/steps-az-login.yml
+            parameters:
+              serviceConnectionId: '$(serviceConnectionId)'
+              clientId: '$(azureClientId)'
+              tenantId: '$(azureTenantId)'
+              subscriptionId: '$(azureSubscriptionId)'
+
+          # Preflight: si el RG no existe o el SP no lo ve, ARM rechaza el what-if
+          # con un 404/403 que az CLI muestra como "The content for this response
+          # was already consumed" (bug conocido: consume el body del error antes
+          # de formatearlo). Chequeamos aca para fallar con un mensaje entendible.
+          - bash: |
+              set -euo pipefail
+              if ! az group show -n '$(resourceGroupName)' -o none 2>/dev/null; then
+                echo "##vso[task.logissue type=error]El resource group '$(resourceGroupName)' no existe, o el SP de sc-chacomer-eip-inte no tiene acceso a el en la suscripcion $(azureSubscriptionId)."
+                exit 1
+              fi
+              az group show -n '$(resourceGroupName)' --query '{name:name, location:location}' -o table
+
+              # main.bicep necesita estos RP registrados en la suscripcion.
+              for rp in Microsoft.Web Microsoft.Storage Microsoft.KeyVault Microsoft.ServiceBus Microsoft.OperationalInsights Microsoft.Insights; do
+                state=$(az provider show -n "$rp" --query registrationState -o tsv)
+                echo "$rp: $state"
+                if [ "$state" != "Registered" ]; then
+                  echo "##vso[task.logissue type=warning]$rp no esta registrado en la suscripcion; el deployment va a fallar."
+                fi
+              done
             displayName: 'Preflight: suscripcion, RG y resource providers'
-            inputs:
-              azureSubscription: '$(azureServiceConnection)'
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                set -euo pipefail
-                az account show --query '{subscription:name, subscriptionId:id, tenantId:tenantId}' -o table
 
-                if ! az group show -n '$(resourceGroupName)' -o none 2>/dev/null; then
-                  echo "##vso[task.logissue type=error]El resource group '$(resourceGroupName)' no existe, o la service connection '$(azureServiceConnection)' no tiene acceso a el en esta suscripcion."
-                  exit 1
-                fi
-                az group show -n '$(resourceGroupName)' --query '{name:name, location:location}' -o table
-
-                # main.bicep necesita estos RP registrados en la suscripcion.
-                for rp in Microsoft.Web Microsoft.Storage Microsoft.KeyVault Microsoft.ServiceBus Microsoft.OperationalInsights Microsoft.Insights; do
-                  state=$(az provider show -n "$rp" --query registrationState -o tsv)
-                  echo "$rp: $state"
-                  if [ "$state" != "Registered" ]; then
-                    echo "##vso[task.logissue type=warning]$rp no esta registrado en la suscripcion; el deployment va a fallar."
-                  fi
-                done
-
-          - task: AzureCLI@2
+          - bash: |
+              whatif() {
+                az deployment group what-if \
+                  --resource-group '$(resourceGroupName)' \
+                  --template-file infra/main.bicep \
+                  --parameters infra/environments/$(environmentName).bicepparam "$@"
+              }
+              if ! whatif; then
+                echo '----- what-if fallo; reintento con --debug para ver la respuesta cruda de ARM -----'
+                whatif --debug || true
+                exit 1
+              fi
             displayName: 'az deployment group what-if'
-            inputs:
-              azureSubscription: '$(azureServiceConnection)'
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                whatif() {
-                  az deployment group what-if \
-                    --resource-group '$(resourceGroupName)' \
-                    --template-file infra/main.bicep \
-                    --parameters infra/environments/$(environmentName).bicepparam "$@"
-                }
-                if ! whatif; then
-                  echo '----- what-if fallo; reintento con --debug para ver la respuesta cruda de ARM -----'
-                  whatif --debug || true
-                  exit 1
-                fi
 
   - stage: Deploy
     displayName: 'Deploy infra'
@@ -101,14 +112,18 @@ stages:
             deploy:
               steps:
                 - checkout: self
-                - task: AzureCLI@2
+
+                - template: templates/steps-az-login.yml
+                  parameters:
+                    serviceConnectionId: '$(serviceConnectionId)'
+                    clientId: '$(azureClientId)'
+                    tenantId: '$(azureTenantId)'
+                    subscriptionId: '$(azureSubscriptionId)'
+
+                - bash: |
+                    set -euo pipefail
+                    az deployment group create \
+                      --resource-group '$(resourceGroupName)' \
+                      --template-file infra/main.bicep \
+                      --parameters infra/environments/$(environmentName).bicepparam
                   displayName: 'az deployment group create'
-                  inputs:
-                    azureSubscription: '$(azureServiceConnection)'
-                    scriptType: 'bash'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      az deployment group create \
-                        --resource-group $(resourceGroupName) \
-                        --template-file infra/main.bicep \
-                        --parameters infra/environments/$(environmentName).bicepparam

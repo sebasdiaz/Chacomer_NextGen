@@ -9,6 +9,26 @@
 #
 # El nombre de la Function App se arma como {appBaseName}-{env}, que es la
 # convencion de infra/main.bicep (fa-axxon{dominio}-{env}).
+#
+# NOTA — sin tasks in-box y sin secretos:
+#   El org de DevOps tiene deshabilitadas las built-in tasks (UseDotNet@2,
+#   DotNetCoreCLI@2, PublishBuildArtifacts@1, AzureFunctionApp@2, ...), asi que
+#   todo son steps `bash` planos:
+#     - el SDK se instala con dotnet-install.sh
+#     - el artifact se publica con el logging command ##vso[artifact.upload] y se
+#       baja por REST en el stage de deploy (ver functionapp-deploy-stage.yml:
+#       `- download:` tambien resuelve a un task in-box)
+#     - el deploy va por `az functionapp deployment source config-zip`
+#     - el login sale del token OIDC de la service connection federada del
+#       ambiente (ver steps-az-login.yml)
+#
+# NO hay secretos: ni client secret en variables del pipeline, ni en Key Vault.
+# Los GUIDs de abajo (service connection, clientId, tenant, suscripcion) son
+# identificadores publicos. El unico credential es el token OIDC que Azure DevOps
+# emite para cada job, con vida de minutos.
+#
+# El SP de cada service connection necesita Contributor sobre el RG del ambiente,
+# y la SC tiene que estar autorizada para el pipeline.
 # ---------------------------------------------------------------------------
 
 parameters:
@@ -33,15 +53,36 @@ parameters:
   - name: testAppName
     type: string
     default: ''
-  - name: inteServiceConnection
+  # Resource group de cada ambiente: hace falta explicito porque
+  # `az functionapp deployment source config-zip` lo pide (el task no lo pedia).
+  - name: inteResourceGroup
     type: string
-    default: 'sc-chacomer-eip-inte'
-  - name: testServiceConnection
+    default: 'DataverseINTE'
+  - name: testResourceGroup
     type: string
-    default: 'sc-chacomer-eip-test'
-  - name: dotnetVersion
+    default: 'dataversetest'
+  # Service connections federadas por ambiente (GUIDs publicos, no secretos).
+  - name: inteServiceConnectionId      # sc-chacomer-eip-inte
     type: string
-    default: '10.0.x'
+    default: 'c7600511-119a-4ba0-aeb5-cc2e5d7ff1a1'
+  - name: inteClientId
+    type: string
+    default: 'b391d418-ef2a-4d83-afcc-310ec4d8ae52'
+  - name: testServiceConnectionId      # sc-chacomer-eip-test
+    type: string
+    default: '4f60dbf8-7391-48ab-a002-a208d277f2b2'
+  - name: testClientId
+    type: string
+    default: '67ae2e5d-3bdd-4d24-bad0-ecf59b1d8788'
+  - name: azureTenantId
+    type: string
+    default: 'd0e6feed-3ca5-4438-bca3-09cb8ba9814a'
+  - name: azureSubscriptionId          # AZURE_DYNAMICS
+    type: string
+    default: '09592883-de3a-4c93-944c-222b3c88e832'
+  - name: dotnetChannel      # Canal de dotnet-install.sh, no una version exacta
+    type: string
+    default: '10.0'
   - name: buildConfiguration
     type: string
     default: 'Release'
@@ -54,36 +95,64 @@ stages:
         pool:
           vmImage: 'ubuntu-latest'
         steps:
-          - task: UseDotNet@2
-            displayName: 'Instalar .NET SDK ${{ parameters.dotnetVersion }}'
-            inputs:
-              packageType: 'sdk'
-              version: ${{ parameters.dotnetVersion }}
+          - checkout: self
+
+          - bash: |
+              set -euo pipefail
+              curl -sSfL https://dot.net/v1/dotnet-install.sh -o "$AGENT_TEMPDIRECTORY/dotnet-install.sh"
+              bash "$AGENT_TEMPDIRECTORY/dotnet-install.sh" \
+                --channel '${{ parameters.dotnetChannel }}' --install-dir "$HOME/.dotnet" --no-path
+              echo "##vso[task.prependpath]$HOME/.dotnet"
+              "$HOME/.dotnet/dotnet" --info
+            displayName: 'Instalar .NET SDK ${{ parameters.dotnetChannel }}'
+            env:
+              AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
+              DOTNET_CLI_TELEMETRY_OPTOUT: '1'
 
           # Antes del publish: si los tests caen, no se genera artifact.
           - ${{ if ne(parameters.testProjectPath, '') }}:
-            - task: DotNetCoreCLI@2
+            - bash: |
+                set -euo pipefail
+                dotnet test '${{ parameters.testProjectPath }}' \
+                  -c '${{ parameters.buildConfiguration }}' \
+                  --logger trx --results-directory "$AGENT_TEMPDIRECTORY/testresults"
               displayName: 'dotnet test'
-              inputs:
-                command: 'test'
-                projects: '${{ parameters.testProjectPath }}'
-                arguments: '-c ${{ parameters.buildConfiguration }} --logger trx --results-directory $(Agent.TempDirectory)/testresults'
-                publishTestResults: true
+              env:
+                AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
 
-          - task: DotNetCoreCLI@2
-            displayName: 'dotnet publish'
-            inputs:
-              command: 'publish'
-              publishWebProjects: false
-              projects: '${{ parameters.projectPath }}'
-              arguments: '-c ${{ parameters.buildConfiguration }} -o $(Build.ArtifactStagingDirectory)/publish'
-              zipAfterPublish: true
+            # PublishTestResults@2 tambien es in-box; el logging command hace lo mismo.
+            - bash: |
+                set -euo pipefail
+                trx=$(find "$AGENT_TEMPDIRECTORY/testresults" -name '*.trx' 2>/dev/null | paste -sd, -)
+                if [ -n "$trx" ]; then
+                  echo "##vso[results.publish type=VSTest;mergeResults=true;resultFiles=$trx;]"
+                else
+                  echo "Sin archivos .trx que publicar."
+                fi
+              displayName: 'Publicar resultados de tests'
+              condition: succeededOrFailed()
+              env:
+                AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
 
-          - task: PublishBuildArtifacts@1
+          # Flex Consumption (One Deploy) espera un zip con el CONTENIDO del
+          # directorio de publish en la raiz, no una carpeta contenedora.
+          - bash: |
+              set -euo pipefail
+              rm -rf "$BUILD_ARTIFACTSTAGINGDIRECTORY/publish" "$BUILD_ARTIFACTSTAGINGDIRECTORY/functionapp.zip"
+              dotnet publish '${{ parameters.projectPath }}' \
+                -c '${{ parameters.buildConfiguration }}' \
+                -o "$BUILD_ARTIFACTSTAGINGDIRECTORY/publish"
+              ( cd "$BUILD_ARTIFACTSTAGINGDIRECTORY/publish" && zip -r -q "$BUILD_ARTIFACTSTAGINGDIRECTORY/functionapp.zip" . )
+              ls -lh "$BUILD_ARTIFACTSTAGINGDIRECTORY/functionapp.zip"
+            displayName: 'dotnet publish + zip'
+            env:
+              BUILD_ARTIFACTSTAGINGDIRECTORY: $(Build.ArtifactStagingDirectory)
+
+          - bash: |
+              echo "##vso[artifact.upload containerfolder=functionapp;artifactname=functionapp]$BUILD_ARTIFACTSTAGINGDIRECTORY/functionapp.zip"
             displayName: 'Publicar artifact'
-            inputs:
-              PathtoPublish: '$(Build.ArtifactStagingDirectory)/publish'
-              ArtifactName: 'functionapp'
+            env:
+              BUILD_ARTIFACTSTAGINGDIRECTORY: $(Build.ArtifactStagingDirectory)
 
   - ${{ if parameters.deployToInte }}:
     - template: functionapp-deploy-stage.yml
@@ -95,7 +164,11 @@ stages:
         ${{ else }}:
           appName: '${{ parameters.appBaseName }}-inte'
         environmentName: 'inte'
-        azureServiceConnection: ${{ parameters.inteServiceConnection }}
+        resourceGroupName: ${{ parameters.inteResourceGroup }}
+        serviceConnectionId: ${{ parameters.inteServiceConnectionId }}
+        azureClientId: ${{ parameters.inteClientId }}
+        azureTenantId: ${{ parameters.azureTenantId }}
+        azureSubscriptionId: ${{ parameters.azureSubscriptionId }}
 
   - ${{ if parameters.deployToTest }}:
     - template: functionapp-deploy-stage.yml
@@ -111,4 +184,8 @@ stages:
         ${{ else }}:
           appName: '${{ parameters.appBaseName }}-test'
         environmentName: 'test'
-        azureServiceConnection: ${{ parameters.testServiceConnection }}
+        resourceGroupName: ${{ parameters.testResourceGroup }}
+        serviceConnectionId: ${{ parameters.testServiceConnectionId }}
+        azureClientId: ${{ parameters.testClientId }}
+        azureTenantId: ${{ parameters.azureTenantId }}
+        azureSubscriptionId: ${{ parameters.azureSubscriptionId }}
