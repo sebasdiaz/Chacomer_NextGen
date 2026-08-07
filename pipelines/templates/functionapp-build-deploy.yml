@@ -10,25 +10,16 @@
 # El nombre de la Function App se arma como {appBaseName}-{env}, que es la
 # convencion de infra/main.bicep (fa-axxon{dominio}-{env}).
 #
-# NOTA — sin tasks in-box y sin secretos:
-#   El org de DevOps tiene deshabilitadas las built-in tasks (UseDotNet@2,
-#   DotNetCoreCLI@2, PublishBuildArtifacts@1, AzureFunctionApp@2, ...), asi que
-#   todo son steps `bash` planos:
-#     - el SDK se instala con dotnet-install.sh
-#     - el artifact se publica con el logging command ##vso[artifact.upload] y se
-#       baja por REST en el stage de deploy (ver functionapp-deploy-stage.yml:
-#       `- download:` tambien resuelve a un task in-box)
-#     - el deploy va por `az functionapp deployment source config-zip`
-#     - el login sale del token OIDC de la service connection federada del
-#       ambiente (ver steps-az-login.yml)
+# NOTA — el build no usa tasks in-box:
+#   El SDK se instala con dotnet-install.sh y el artifact se publica con el
+#   logging command ##vso[artifact.upload]. Viene de cuando se creia que el org
+#   tenia deshabilitadas las built-in tasks; no es asi (ver el stage de deploy,
+#   que si usa AzureCLI@2). Funciona y esta probado, pero se puede volver a
+#   UseDotNet@2 / DotNetCoreCLI@2 / PublishBuildArtifacts@1 cuando convenga.
 #
-# NO hay secretos: ni client secret en variables del pipeline, ni en Key Vault.
-# Los GUIDs de abajo (service connection, clientId, tenant, suscripcion) son
-# identificadores publicos. El unico credential es el token OIDC que Azure DevOps
-# emite para cada job, con vida de minutos.
-#
-# El SP de cada service connection necesita Contributor sobre el RG del ambiente,
-# y la SC tiene que estar autorizada para el pipeline.
+# NO hay secretos: el login del deploy sale de la service connection federada
+# del ambiente, via AzureCLI@2. El SP de cada SC necesita Contributor sobre el
+# RG del ambiente, y la SC tiene que estar autorizada para el pipeline.
 # ---------------------------------------------------------------------------
 
 parameters:
@@ -61,25 +52,15 @@ parameters:
   - name: testResourceGroup
     type: string
     default: 'dataversetest'
-  # Service connections federadas por ambiente (GUIDs publicos, no secretos).
-  - name: inteServiceConnectionId      # sc-chacomer-eip-inte
+  # Service connections federadas por ambiente. Van por nombre: es lo que espera
+  # el input `azureSubscription` de AzureCLI@2, y es esa referencia la que
+  # habilita a DevOps a emitir el token OIDC para el stage.
+  - name: inteServiceConnection
     type: string
-    default: 'c7600511-119a-4ba0-aeb5-cc2e5d7ff1a1'
-  - name: inteClientId
+    default: 'sc-chacomer-eip-inte'
+  - name: testServiceConnection
     type: string
-    default: 'b391d418-ef2a-4d83-afcc-310ec4d8ae52'
-  - name: testServiceConnectionId      # sc-chacomer-eip-test
-    type: string
-    default: '4f60dbf8-7391-48ab-a002-a208d277f2b2'
-  - name: testClientId
-    type: string
-    default: '67ae2e5d-3bdd-4d24-bad0-ecf59b1d8788'
-  - name: azureTenantId
-    type: string
-    default: 'd0e6feed-3ca5-4438-bca3-09cb8ba9814a'
-  - name: azureSubscriptionId          # AZURE_DYNAMICS
-    type: string
-    default: '09592883-de3a-4c93-944c-222b3c88e832'
+    default: 'sc-chacomer-eip-test'
   - name: dotnetChannel      # Canal de dotnet-install.sh, no una version exacta
     type: string
     default: '10.0'
@@ -165,10 +146,7 @@ stages:
           appName: '${{ parameters.appBaseName }}-inte'
         environmentName: 'inte'
         resourceGroupName: ${{ parameters.inteResourceGroup }}
-        serviceConnectionId: ${{ parameters.inteServiceConnectionId }}
-        azureClientId: ${{ parameters.inteClientId }}
-        azureTenantId: ${{ parameters.azureTenantId }}
-        azureSubscriptionId: ${{ parameters.azureSubscriptionId }}
+        azureServiceConnection: ${{ parameters.inteServiceConnection }}
 
   - ${{ if parameters.deployToTest }}:
     - template: functionapp-deploy-stage.yml
@@ -185,7 +163,4 @@ stages:
           appName: '${{ parameters.appBaseName }}-test'
         environmentName: 'test'
         resourceGroupName: ${{ parameters.testResourceGroup }}
-        serviceConnectionId: ${{ parameters.testServiceConnectionId }}
-        azureClientId: ${{ parameters.testClientId }}
-        azureTenantId: ${{ parameters.azureTenantId }}
-        azureSubscriptionId: ${{ parameters.azureSubscriptionId }}
+        azureServiceConnection: ${{ parameters.testServiceConnection }}
