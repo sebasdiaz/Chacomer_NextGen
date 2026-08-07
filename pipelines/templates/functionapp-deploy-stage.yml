@@ -6,12 +6,15 @@
 # El artifact se construye UNA sola vez (stage Build) y se promueve tal cual:
 # el binario que se valida en INTE es exactamente el que llega a TEST.
 #
-# NOTA — sin tasks in-box y sin secretos:
-#   `- download: current` resuelve a DownloadPipelineArtifact@2, que es un task
-#   in-box y el org lo tiene deshabilitado. Por eso el artifact se baja por la
-#   REST API de builds con $(System.AccessToken), y el deploy va por az CLI
-#   (`config-zip` es el camino soportado para Flex Consumption / One Deploy).
-#   El login sale de la service connection federada; ver steps-az-login.yml.
+# El artifact se baja por la REST API de builds con $(System.AccessToken) (es el
+# par de `##vso[artifact.upload]` que usa el stage de Build), y el deploy va por
+# az CLI: `config-zip` es el camino soportado para Flex Consumption / One Deploy.
+#
+# El login a Azure lo hace AzureCLI@2 con la service connection federada del
+# ambiente. No hay secretos: la SC es de Workload Identity Federation y el task
+# resuelve el token OIDC por su cuenta. Es ademas la UNICA forma de consumirla:
+# Azure DevOps solo emite el token si el stage referencia la SC explicitamente
+# con un input de tipo connectedService, que es lo que hace `azureSubscription`.
 # ---------------------------------------------------------------------------
 
 parameters:
@@ -25,15 +28,7 @@ parameters:
     type: string
   - name: resourceGroupName
     type: string
-  # Identificadores de la service connection federada del ambiente. Ninguno es
-  # secreto: el credential efectivo es el token OIDC que DevOps emite por job.
-  - name: serviceConnectionId
-    type: string
-  - name: azureClientId
-    type: string
-  - name: azureTenantId
-    type: string
-  - name: azureSubscriptionId
+  - name: azureServiceConnection  # Nombre de la service connection del ambiente
     type: string
 
 stages:
@@ -77,26 +72,24 @@ stages:
                     SYSTEM_TEAMPROJECTID: $(System.TeamProjectId)
                     BUILD_BUILDID: $(Build.BuildId)
 
-                - template: steps-az-login.yml
-                  parameters:
-                    serviceConnectionId: ${{ parameters.serviceConnectionId }}
-                    clientId: ${{ parameters.azureClientId }}
-                    tenantId: ${{ parameters.azureTenantId }}
-                    subscriptionId: ${{ parameters.azureSubscriptionId }}
-
-                - bash: |
-                    set -euo pipefail
-                    pkg=$(cat "$AGENT_TEMPDIRECTORY/pkg-path")
-
-                    if ! az functionapp show -g '${{ parameters.resourceGroupName }}' -n '${{ parameters.appName }}' -o none 2>/dev/null; then
-                      echo "##vso[task.logissue type=error]La Function App '${{ parameters.appName }}' no existe en el resource group '${{ parameters.resourceGroupName }}', o el service principal no tiene acceso."
-                      exit 1
-                    fi
-
-                    az functionapp deployment source config-zip \
-                      -g '${{ parameters.resourceGroupName }}' \
-                      -n '${{ parameters.appName }}' \
-                      --src "$pkg"
+                - task: AzureCLI@2
                   displayName: 'Deploy a ${{ parameters.appName }}'
+                  inputs:
+                    azureSubscription: ${{ parameters.azureServiceConnection }}
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      pkg=$(cat "$AGENT_TEMPDIRECTORY/pkg-path")
+
+                      if ! az functionapp show -g '${{ parameters.resourceGroupName }}' -n '${{ parameters.appName }}' -o none 2>/dev/null; then
+                        echo "##vso[task.logissue type=error]La Function App '${{ parameters.appName }}' no existe en el resource group '${{ parameters.resourceGroupName }}', o el service principal de ${{ parameters.azureServiceConnection }} no tiene acceso."
+                        exit 1
+                      fi
+
+                      az functionapp deployment source config-zip \
+                        -g '${{ parameters.resourceGroupName }}' \
+                        -n '${{ parameters.appName }}' \
+                        --src "$pkg"
                   env:
                     AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
