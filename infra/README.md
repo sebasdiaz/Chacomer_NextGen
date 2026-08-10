@@ -174,6 +174,23 @@ Cada Function App recibe, vía role assignment (least privilege):
 - **Key Vault Secrets User** sobre el vault.
 - **Azure Service Bus Data Receiver** sobre el namespace (solo contacts y customers, que consumen SB).
 
+> **TEST va hoy con `deployRoleAssignments = false`.** ARM hace PUT de las role
+> assignments en cada deployment aunque no cambien, y ese PUT exige
+> `Microsoft.Authorization/roleAssignments/write`. El SP de `sc-chacomer-eip-test`
+> (`67ae2e5d-…`) sólo tiene **Contributor** sobre `dataversetest`, así que el deployment
+> entero falla con `InvalidTemplateDeployment / Authorization failed` — aunque las 18
+> assignments ya existan y estén correctas. **El what-if no lo detecta**: no valida
+> permisos de escritura, así que el error aparece recién en el stage de deploy.
+>
+> Es un parche: con el flag en false el template deja de ser la fuente de verdad del
+> RBAC y una app nueva se crea sin sus roles. Para volver a `true`, alguien con Owner o
+> UAA sin condición (el UAA de `sebastian.diaz@` está restringido por ABAC y **no**
+> puede) tiene que correr:
+>
+> ```bash
+> az role assignment create --assignee-object-id f57b2a77-e6d4-403d-9846-e6d354abccd9 --assignee-principal-type ServicePrincipal --role "Role Based Access Control Administrator" --scope "/subscriptions/09592883-de3a-4c93-944c-222b3c88e832/resourceGroups/dataversetest"
+> ```
+
 ## Deploy
 
 Normalmente vía pipeline: `pipelines/azure-pipelines-infra.yml` (INTE, se dispara

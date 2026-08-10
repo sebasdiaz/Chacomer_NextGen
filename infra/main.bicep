@@ -68,6 +68,23 @@ hasta completar el cutover a Managed Identity + Key Vault.
 ''')
 param deployFunctionApps bool = true
 
+@description('''
+False para que el template NO declare las role assignments de las Function Apps
+(Storage Blob/Queue, Key Vault Secrets User, Service Bus Data Receiver/Sender).
+
+ARM las hace PUT en cada deployment aunque el contenido no cambie, y ese PUT exige
+`Microsoft.Authorization/roleAssignments/write`. Con un SP que solo tiene Contributor,
+el deployment entero falla con `InvalidTemplateDeployment / Authorization failed` —
+aunque las assignments ya existan y esten correctas. El what-if NO lo detecta: no valida
+permisos de escritura.
+
+**Es un parche, no el estado deseado.** Con esto en false el template deja de ser la
+fuente de verdad del RBAC: una Function App nueva se crea sin sus roles y hay que
+asignarlos a mano. Lo correcto es darle al SP del pipeline el rol
+"Role Based Access Control Administrator" sobre el RG y volver a true.
+''')
+param deployRoleAssignments bool = true
+
 var tags = {
   platform: 'EiP'
   environment: environmentName
@@ -120,6 +137,7 @@ module contacts 'modules/functionApp.bicep' = if (deployFunctionApps) {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
     serviceBusNamespaceName: serviceBus.outputs.namespaceName
     needsServiceBus: true
     // Publica en customer-fo-sync los raws de legal entities fuera de Dual Write.
@@ -148,6 +166,7 @@ module customers 'modules/functionApp.bicep' = if (deployFunctionApps) {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
     serviceBusNamespaceName: serviceBus.outputs.namespaceName
     needsServiceBus: true
     appSettings: [
@@ -175,6 +194,7 @@ module customerGroups 'modules/functionApp.bicep' = if (deployFunctionApps) {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
     needsServiceBus: false
     appSettings: [
       { name: 'DataverseUrl', value: dataverseUrl }
@@ -198,6 +218,7 @@ module products 'modules/functionApp.bicep' = if (deployFunctionApps) {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
     needsServiceBus: false
     appSettings: [
       { name: 'DataverseUrl', value: dataverseUrl }
@@ -227,6 +248,7 @@ module fiscal 'modules/functionApp.bicep' = if (deployFunctionApps) {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
     needsServiceBus: false
     appSettings: []
   }
