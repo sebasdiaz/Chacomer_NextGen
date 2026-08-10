@@ -41,6 +41,18 @@ param queues array = [
     name: 'customer-fo-sync'
     requiresSession: true
   }
+  {
+    // RemoteExecutionContext del mensaje QualifyLead, publicado por un Service
+    // Endpoint de Dataverse. SIN sessions: el Service Endpoint no setea SessionId
+    // y con requiresSession la publicacion falla.
+    //
+    // En INTE esta cola quedo en el namespace viejo (`dataverseinte`, con SAS).
+    // Aca se declara dentro del namespace de la EiP porque el trigger comparte
+    // `ServiceBusConnection` con customer-fo-sync: las dos tienen que vivir en el
+    // mismo namespace. La de INTE se migra en el cutover, no la toca este template.
+    name: 'leadcontacts'
+    requiresSession: false
+  }
 ]
 
 var namespaceName = 'sb-chacomer-eip-${environmentName}'

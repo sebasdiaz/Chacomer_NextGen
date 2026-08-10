@@ -118,9 +118,23 @@ siga apuntando a `keyvaultinte`, o migrar los secretos a `kv-chacomer-eip-inte`.
 | Log Analytics | `log-eip-{env}` | workspace compartido |
 | Application Insights | `appi-eip-{env}` | workspace-based; apps distinguidas por `cloud_RoleName` |
 | Key Vault | `kv-chacomer-eip-{env}` | RBAC, purge protection |
-| Service Bus | `sb-chacomer-eip-{env}` | Standard; queues con sessions |
+| Service Bus | `sb-chacomer-eip-{env}` | Standard; 4 queues (ver abajo) |
 | Function Apps | `fa-axxon{dominio}-{env}` | Flex Consumption (FC1), .NET isolated, System-Assigned MI |
 | Storage (x app) | `st{app}{env}{hash}` | `allowSharedKeyAccess=false` — solo MI |
+
+### Queues del namespace
+
+| Queue | Sessions | Productor | Consumidor |
+|---|---|---|---|
+| `contact-master-matching` | sí | plugin de Dataverse | `AxxonContacts.Functions` |
+| `account-master-matching` | sí | plugin de Dataverse | `AxxonContacts.Functions` |
+| `customer-fo-sync` | sí | `AxxonContacts.Functions` | `AxxonCustomers.Functions` |
+| `leadcontacts` | **no** | Service Endpoint de Dataverse (QualifyLead) | `AxxonCustomers.Functions` |
+
+`leadcontacts` va sin sessions porque el Service Endpoint de Dataverse no setea
+`SessionId`: con `requiresSession` la publicación falla. En **INTE** esta cola vive
+todavía en el namespace viejo (`dataverseinte`, con connection string SAS) y el template
+no la toca — se unifica en el cutover a Managed Identity.
 
 ### Scale-out y límites de F&O
 

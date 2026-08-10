@@ -141,6 +141,9 @@ module customers 'modules/functionApp.bicep' = if (deployFunctionApps) {
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
       { name: 'ServiceBusConnection__fullyQualifiedNamespace', value: serviceBus.outputs.fullyQualifiedNamespace }
+      // Cola del Service Endpoint de Dataverse (QualifyLead). Sin este setting el
+      // trigger de QualifyLeadCustomerSyncFunction no resuelve y la app no arranca.
+      { name: 'ServiceBusQueueName', value: 'leadcontacts' }
       { name: 'FoSyncServiceBusQueueName', value: 'customer-fo-sync' }
     ]
   }

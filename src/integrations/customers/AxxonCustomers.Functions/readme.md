@@ -203,7 +203,17 @@ hay que mirarlo y decidir de nuevo.**
 > *System administration > Microsoft Entra applications*).
 
 > **Las dos colas comparten `ServiceBusConnection`**, asi que `leadcontacts` y
-> `customer-fo-sync` tienen que vivir en el **mismo namespace**. `customer-fo-sync` la
-> crea `infra/modules/servicebus.bicep` en el namespace de la EiP
-> (`sb-chacomer-eip-{env}`); si `leadcontacts` sigue en otro namespace, hay que unificar
-> antes de deployar.
+> `customer-fo-sync` tienen que vivir en el **mismo namespace**. Las dos las crea
+> `infra/modules/servicebus.bicep` en el namespace de la EiP (`sb-chacomer-eip-{env}`):
+> `customer-fo-sync` con sessions, `leadcontacts` sin sessions (el Service Endpoint de
+> Dataverse no setea `SessionId`).
+>
+> **INTE es la excepcion:** ahi `leadcontacts` quedo en el namespace viejo
+> (`dataverseinte`) y la app la consume con connection string SAS. Se unifica en el
+> cutover a Managed Identity; el template no toca esa cola.
+
+> **El deploy de infra no alcanza para que llegue el primer mensaje.** Crear la cola no
+> conecta nada: hay que apuntar el **Service Endpoint de Dataverse** del ambiente a
+> `sb-chacomer-eip-{env}` / `leadcontacts`, con una **SAS policy Send** sobre la cola (el
+> plugin corre en el sandbox de Dataverse, no tiene Managed Identity). Sin eso la cola
+> queda vacia y el flujo de QualifyLead no falla en ningun lado: simplemente no pasa nada.
