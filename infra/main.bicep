@@ -46,6 +46,19 @@ param foBoundMaxInstanceCount int = 1
 param maxInstanceCount int = 40
 
 @description('''
+CRON de los timer triggers (NCRONTAB de 6 campos: {seg} {min} {hora} {dia} {mes} {dia-semana}, en UTC).
+Van como app settings `Schedules__*`: el doble guion bajo es lo que el host mapea a la
+clave jerarquica `Schedules:*` que piden los bindings `%Schedules:X%`. Sin el setting el
+binding no resuelve, la funcion queda "in error" y el host levanta con "No job functions
+found" — la app corre pero no ejecuta nada, y no falla en ningun lado visible.
+''')
+param schedules object = {
+  customerGroupSync: '0 0 23 * * *'
+  productGroupSync: '0 0 23 * * *'
+  releasedProductSync: '0 0 * * * *'
+}
+
+@description('''
 False para desplegar SOLO los recursos compartidos (monitoring, Key Vault,
 Service Bus) sin tocar las Function Apps. Necesario en ambientes donde las apps
 ya existen creadas a mano: este template declara la coleccion completa de
@@ -167,6 +180,7 @@ module customerGroups 'modules/functionApp.bicep' = if (deployFunctionApps) {
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
       { name: 'DualWriteLegalEntities', value: dualWriteLegalEntities }
+      { name: 'Schedules__CustomerGroupSync', value: schedules.customerGroupSync }
     ]
   }
 }
@@ -189,6 +203,8 @@ module products 'modules/functionApp.bicep' = if (deployFunctionApps) {
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
       { name: 'AssignOwningBusinessUnit', value: 'false' }
+      { name: 'Schedules__ProductGroupSync', value: schedules.productGroupSync }
+      { name: 'Schedules__ReleasedProductSync', value: schedules.releasedProductSync }
     ]
   }
 }

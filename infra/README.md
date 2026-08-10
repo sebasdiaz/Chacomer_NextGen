@@ -136,6 +136,30 @@ siga apuntando a `keyvaultinte`, o migrar los secretos a `kv-chacomer-eip-inte`.
 todavía en el namespace viejo (`dataverseinte`, con connection string SAS) y el template
 no la toca — se unifica en el cutover a Managed Identity.
 
+### CRON de los timer triggers
+
+`customergroups` y `products` disparan por `TimerTrigger` con el schedule en un
+placeholder (`%Schedules:CustomerGroupSync%`, `%Schedules:ProductGroupSync%`,
+`%Schedules:ReleasedProductSync%`). Los valores salen del param `schedules` de
+`main.bicep` y se emiten como app settings **`Schedules__*`** — doble guion bajo, que es
+lo que el host mapea a la clave jerarquica `Schedules:*`.
+
+**Si el setting falta o está mal escrito, la app arranca igual y no ejecuta nada:**
+
+```
+The 'CustomerGroupSyncFunction' function is in error:
+  '%Schedules:CustomerGroupSync%' does not resolve to a value.
+No job functions found.
+```
+
+Queda en `Running`, sin excepciones ni requests fallidos — sólo esos dos traces al
+iniciar el host. Chequeo rápido, sin esperar al horario del CRON:
+`GET /admin/functions/<Funcion>/status` con la master key devuelve `{}` si indexó bien.
+
+Las apps de **INTE** están fuera del Bicep y tienen los settings escritos sin separador
+(`SchedulesCustomerGroupSync`), que **no resuelve**: `fa-axxoncustomergroup` viene fallando
+así. Se corrige en el cutover, junto con el resto de los settings extra.
+
 ### Scale-out y límites de F&O
 
 `maxConcurrentCalls` de host.json es **por instancia**, así que sin techo de

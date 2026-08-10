@@ -44,7 +44,7 @@ por nombre. Si no existe, el campo se omite y se loguea Warning (el mapeo tiene
 
 | Setting                       | Descripcion                                                      |
 |-------------------------------|------------------------------------------------------------------|
-| `Schedules:CustomerGroupSync` | CRON del timer. Default sugerido: `0 0 23 * * *`                 |
+| `Schedules__CustomerGroupSync` | CRON del timer. Default: `0 0 23 * * *`. **Doble guion bajo**, ver abajo |
 | `WEBSITE_TIME_ZONE`           | Zona horaria del CRON (ej. `Paraguay Standard Time`)             |
 | `DualWriteLegalEntities`      | dataAreaIds excluidos del sync por estar en Dual Write, separados por coma (ej: `cha,cne`). Vacio = todas |
 | `DataverseUrl`                | URL del environment de Dataverse                                 |
@@ -56,6 +56,23 @@ por nombre. Si no existe, el campo se omite y se loguea Warning (el mapeo tiene
 | `FoClientSecret`              | (DESA) Secret                                                    |
 | `KeyVaultUri`                 | Vault del que se leen los secretos. En INTE: `https://keyvaultinte.vault.azure.net/` |
 | `DataverseClientSecretName` / `FoClientSecretName` | Nombre del secret en el vault cuando no coincide con la clave. En INTE ambos: `SecretNextGenDynamics365Inte` |
+
+> **El nombre del setting es `Schedules__CustomerGroupSync`, con doble guion bajo.** El
+> binding pide `%Schedules:CustomerGroupSync%` (clave jerarquica) y el host mapea `__` a
+> `:` al leer las variables de entorno. Escrito de cualquier otra forma
+> (`SchedulesCustomerGroupSync`, `Schedules.CustomerGroupSync`) el placeholder no
+> resuelve y el arranque falla asi:
+>
+> ```
+> The 'CustomerGroupSyncFunction' function is in error:
+>   '%Schedules:CustomerGroupSync%' does not resolve to a value.
+> No job functions found.
+> ```
+>
+> **La app queda "Running" y el timer no corre nunca.** No hay excepcion, no hay request
+> fallido, no hay alerta: solo esos dos traces al iniciar el host. Para chequearlo sin
+> esperar al horario del CRON: `GET /admin/functions/CustomerGroupSyncFunction/status`
+> con la master key devuelve `{}` si indexo bien, o el error si no.
 
 > En produccion usar Managed Identity de la Function App tanto para Dataverse
 > (application user) como para F&O (registrar el client id en
