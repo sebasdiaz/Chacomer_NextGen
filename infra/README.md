@@ -126,15 +126,29 @@ siga apuntando a `keyvaultinte`, o migrar los secretos a `kv-chacomer-eip-inte`.
 
 | Queue | Sessions | Productor | Consumidor |
 |---|---|---|---|
-| `contact-master-matching` | sí | plugin de Dataverse | `AxxonContacts.Functions` |
-| `account-master-matching` | sí | plugin de Dataverse | `AxxonContacts.Functions` |
-| `customer-fo-sync` | sí | `AxxonContacts.Functions` | `AxxonCustomers.Functions` |
-| `leadcontacts` | **no** | Service Endpoint de Dataverse (QualifyLead) | `AxxonCustomers.Functions` |
+| `contact-master-matching` | no | Service Endpoint de Dataverse | `AxxonContacts.Functions` |
+| `account-master-matching` | no | Service Endpoint de Dataverse | `AxxonContacts.Functions` |
+| `customer-fo-sync` | **sí** | `AxxonContacts.Functions` | `AxxonCustomers.Functions` |
+| `leadcontacts` | no | Service Endpoint de Dataverse (QualifyLead) | `AxxonCustomers.Functions` |
 
-`leadcontacts` va sin sessions porque el Service Endpoint de Dataverse no setea
-`SessionId`: con `requiresSession` la publicación falla. En **INTE** esta cola vive
-todavía en el namespace viejo (`dataverseinte`, con connection string SAS) y el template
-no la toca — se unifica en el cutover a Managed Identity.
+**Sólo `customer-fo-sync` lleva sessions.** Es la única cuyo publisher las soporta
+(`EipServiceBusPublisher` setea `SessionId`) y la única cuyo trigger declara
+`IsSessionsEnabled = true`. Las otras tres las alimenta el **Service Endpoint OOB de
+Dataverse, que no setea `SessionId`**, y sus triggers declaran `IsSessionsEnabled = false`:
+con `requiresSession` fallan las dos puntas — el publisher no puede enviar
+(`The SessionId was not set on a message`) y un receiver sin sessions tampoco puede leer.
+
+Esto es espejo de **INTE**, donde las 5 colas del namespace `dataverseinte` (`contacts`,
+`accounts`, `leadcontacts`, `custcustomerv3`, `ingest`) son todas `requiresSession = false`.
+
+> `AxxonContacts.Plugins` incluye un `ContactEventPublisherPlugin` que publica con
+> `SessionId`, pero **no está registrado en ningún ambiente**: en INTE el único step del
+> assembly es `MasterContactDuplicatePreventionPlugin`. No asumir que las colas de master
+> matching se alimentan por plugin.
+
+> `requiresSession` es **inmutable**: no se puede cambiar por deployment. Para pasar una
+> cola existente de `true` a `false` hay que borrarla y dejar que el template la recree,
+> lo que descarta los mensajes que tenga encoladas.
 
 ### CRON de los timer triggers
 

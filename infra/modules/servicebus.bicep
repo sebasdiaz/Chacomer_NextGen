@@ -27,12 +27,18 @@ Defaults reflejan lo relevado: contact-master-matching con sessions.
 ''')
 param queues array = [
   {
+    // SIN sessions, igual que INTE (`contacts` en el namespace dataverseinte).
+    // Las alimenta el Service Endpoint OOB de Dataverse, que no setea SessionId, y
+    // las consume ContactMasterMatchingFunction con IsSessionsEnabled = false.
+    // Con requiresSession = true fallan las dos puntas: el publisher no puede enviar
+    // y un receiver sin sessions tampoco puede leer.
     name: 'contact-master-matching'
-    requiresSession: true
+    requiresSession: false
   }
   {
+    // Idem, espejo de la cola `accounts` de INTE.
     name: 'account-master-matching'
-    requiresSession: true
+    requiresSession: false
   }
   {
     // Accounts y contacts de legal entities que Dual Write no sincroniza: van a F&O
