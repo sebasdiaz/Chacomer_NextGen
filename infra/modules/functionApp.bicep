@@ -55,6 +55,15 @@ param needsServiceBus bool = false
 @description('True si esta app publica en Service Bus (agrega el role assignment Data Sender).')
 param publishesToServiceBus bool = false
 
+@description('''
+False para NO declarar las role assignments de la MI. El deployment las hace PUT en cada
+corrida aunque no cambien, y ese PUT pide `Microsoft.Authorization/roleAssignments/write`:
+si el SP del pipeline solo tiene Contributor, todo el deployment falla con
+`InvalidTemplateDeployment / Authorization failed`. Ver `deployRoleAssignments` en
+main.bicep antes de tocar esto.
+''')
+param deployRoleAssignments bool = true
+
 @description('App settings propios de la integracion (array de { name, value }).')
 param appSettings array = []
 
@@ -179,7 +188,7 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
 
 // ---- Role assignments (least privilege) ----
 
-resource storageBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource storageBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployRoleAssignments) {
   name: guid(storage.id, functionApp.id, roleIds.storageBlobDataOwner)
   scope: storage
   properties: {
@@ -189,7 +198,7 @@ resource storageBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
   }
 }
 
-resource storageQueueRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource storageQueueRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployRoleAssignments) {
   name: guid(storage.id, functionApp.id, roleIds.storageQueueDataContributor)
   scope: storage
   properties: {
@@ -203,7 +212,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
 }
 
-resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployRoleAssignments) {
   name: guid(keyVault.id, functionApp.id, roleIds.keyVaultSecretsUser)
   scope: keyVault
   properties: {
@@ -217,7 +226,7 @@ resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview
   name: serviceBusNamespaceName
 }
 
-resource serviceBusReceiverRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (needsServiceBus) {
+resource serviceBusReceiverRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (needsServiceBus && deployRoleAssignments) {
   name: guid(resourceGroup().id, serviceBusNamespaceName, functionApp.id, roleIds.serviceBusDataReceiver)
   scope: serviceBusNamespace
   properties: {
@@ -229,7 +238,7 @@ resource serviceBusReceiverRole 'Microsoft.Authorization/roleAssignments@2022-04
 
 // Send va separado de Receive a proposito: una app que solo publica no tiene por que
 // poder leer las colas de las demas.
-resource serviceBusSenderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (publishesToServiceBus) {
+resource serviceBusSenderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (publishesToServiceBus && deployRoleAssignments) {
   name: guid(resourceGroup().id, serviceBusNamespaceName, functionApp.id, roleIds.serviceBusDataSender)
   scope: serviceBusNamespace
   properties: {

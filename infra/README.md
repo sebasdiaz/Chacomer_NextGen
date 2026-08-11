@@ -118,9 +118,61 @@ siga apuntando a `keyvaultinte`, o migrar los secretos a `kv-chacomer-eip-inte`.
 | Log Analytics | `log-eip-{env}` | workspace compartido |
 | Application Insights | `appi-eip-{env}` | workspace-based; apps distinguidas por `cloud_RoleName` |
 | Key Vault | `kv-chacomer-eip-{env}` | RBAC, purge protection |
-| Service Bus | `sb-chacomer-eip-{env}` | Standard; queues con sessions |
+| Service Bus | `sb-chacomer-eip-{env}` | Standard; 4 queues (ver abajo) |
 | Function Apps | `fa-axxon{dominio}-{env}` | Flex Consumption (FC1), .NET isolated, System-Assigned MI |
 | Storage (x app) | `st{app}{env}{hash}` | `allowSharedKeyAccess=false` — solo MI |
+
+### Queues del namespace
+
+| Queue | Sessions | Productor | Consumidor |
+|---|---|---|---|
+| `contact-master-matching` | no | Service Endpoint de Dataverse | `AxxonContacts.Functions` |
+| `account-master-matching` | no | Service Endpoint de Dataverse | `AxxonContacts.Functions` |
+| `customer-fo-sync` | **sí** | `AxxonContacts.Functions` | `AxxonCustomers.Functions` |
+| `leadcontacts` | no | Service Endpoint de Dataverse (QualifyLead) | `AxxonCustomers.Functions` |
+
+**Sólo `customer-fo-sync` lleva sessions.** Es la única cuyo publisher las soporta
+(`EipServiceBusPublisher` setea `SessionId`) y la única cuyo trigger declara
+`IsSessionsEnabled = true`. Las otras tres las alimenta el **Service Endpoint OOB de
+Dataverse, que no setea `SessionId`**, y sus triggers declaran `IsSessionsEnabled = false`:
+con `requiresSession` fallan las dos puntas — el publisher no puede enviar
+(`The SessionId was not set on a message`) y un receiver sin sessions tampoco puede leer.
+
+Esto es espejo de **INTE**, donde las 5 colas del namespace `dataverseinte` (`contacts`,
+`accounts`, `leadcontacts`, `custcustomerv3`, `ingest`) son todas `requiresSession = false`.
+
+> `AxxonContacts.Plugins` incluye un `ContactEventPublisherPlugin` que publica con
+> `SessionId`, pero **no está registrado en ningún ambiente**: en INTE el único step del
+> assembly es `MasterContactDuplicatePreventionPlugin`. No asumir que las colas de master
+> matching se alimentan por plugin.
+
+> `requiresSession` es **inmutable**: no se puede cambiar por deployment. Para pasar una
+> cola existente de `true` a `false` hay que borrarla y dejar que el template la recree,
+> lo que descarta los mensajes que tenga encoladas.
+
+### CRON de los timer triggers
+
+`customergroups` y `products` disparan por `TimerTrigger` con el schedule en un
+placeholder (`%Schedules:CustomerGroupSync%`, `%Schedules:ProductGroupSync%`,
+`%Schedules:ReleasedProductSync%`). Los valores salen del param `schedules` de
+`main.bicep` y se emiten como app settings **`Schedules__*`** — doble guion bajo, que es
+lo que el host mapea a la clave jerarquica `Schedules:*`.
+
+**Si el setting falta o está mal escrito, la app arranca igual y no ejecuta nada:**
+
+```
+The 'CustomerGroupSyncFunction' function is in error:
+  '%Schedules:CustomerGroupSync%' does not resolve to a value.
+No job functions found.
+```
+
+Queda en `Running`, sin excepciones ni requests fallidos — sólo esos dos traces al
+iniciar el host. Chequeo rápido, sin esperar al horario del CRON:
+`GET /admin/functions/<Funcion>/status` con la master key devuelve `{}` si indexó bien.
+
+Las apps de **INTE** están fuera del Bicep y tienen los settings escritos sin separador
+(`SchedulesCustomerGroupSync`), que **no resuelve**: `fa-axxoncustomergroup` viene fallando
+así. Se corrige en el cutover, junto con el resto de los settings extra.
 
 ### Scale-out y límites de F&O
 
@@ -135,6 +187,23 @@ Cada Function App recibe, vía role assignment (least privilege):
 - **Storage Blob Data Owner** + **Storage Queue Data Contributor** sobre su storage (AzureWebJobsStorage y deployment package, todo por identidad).
 - **Key Vault Secrets User** sobre el vault.
 - **Azure Service Bus Data Receiver** sobre el namespace (solo contacts y customers, que consumen SB).
+
+> **TEST va hoy con `deployRoleAssignments = false`.** ARM hace PUT de las role
+> assignments en cada deployment aunque no cambien, y ese PUT exige
+> `Microsoft.Authorization/roleAssignments/write`. El SP de `sc-chacomer-eip-test`
+> (`67ae2e5d-…`) sólo tiene **Contributor** sobre `dataversetest`, así que el deployment
+> entero falla con `InvalidTemplateDeployment / Authorization failed` — aunque las 18
+> assignments ya existan y estén correctas. **El what-if no lo detecta**: no valida
+> permisos de escritura, así que el error aparece recién en el stage de deploy.
+>
+> Es un parche: con el flag en false el template deja de ser la fuente de verdad del
+> RBAC y una app nueva se crea sin sus roles. Para volver a `true`, alguien con Owner o
+> UAA sin condición (el UAA de `sebastian.diaz@` está restringido por ABAC y **no**
+> puede) tiene que correr:
+>
+> ```bash
+> az role assignment create --assignee-object-id f57b2a77-e6d4-403d-9846-e6d354abccd9 --assignee-principal-type ServicePrincipal --role "Role Based Access Control Administrator" --scope "/subscriptions/09592883-de3a-4c93-944c-222b3c88e832/resourceGroups/dataversetest"
+> ```
 
 ## Deploy
 

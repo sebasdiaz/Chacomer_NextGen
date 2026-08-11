@@ -46,6 +46,19 @@ param foBoundMaxInstanceCount int = 1
 param maxInstanceCount int = 40
 
 @description('''
+CRON de los timer triggers (NCRONTAB de 6 campos: {seg} {min} {hora} {dia} {mes} {dia-semana}, en UTC).
+Van como app settings `Schedules__*`: el doble guion bajo es lo que el host mapea a la
+clave jerarquica `Schedules:*` que piden los bindings `%Schedules:X%`. Sin el setting el
+binding no resuelve, la funcion queda "in error" y el host levanta con "No job functions
+found" — la app corre pero no ejecuta nada, y no falla en ningun lado visible.
+''')
+param schedules object = {
+  customerGroupSync: '0 0 23 * * *'
+  productGroupSync: '0 0 23 * * *'
+  releasedProductSync: '0 0 * * * *'
+}
+
+@description('''
 False para desplegar SOLO los recursos compartidos (monitoring, Key Vault,
 Service Bus) sin tocar las Function Apps. Necesario en ambientes donde las apps
 ya existen creadas a mano: este template declara la coleccion completa de
@@ -54,6 +67,23 @@ plano (DataverseClientSecret, FoClientSecret, Schedules*) y las dejaria caidas
 hasta completar el cutover a Managed Identity + Key Vault.
 ''')
 param deployFunctionApps bool = true
+
+@description('''
+False para que el template NO declare las role assignments de las Function Apps
+(Storage Blob/Queue, Key Vault Secrets User, Service Bus Data Receiver/Sender).
+
+ARM las hace PUT en cada deployment aunque el contenido no cambie, y ese PUT exige
+`Microsoft.Authorization/roleAssignments/write`. Con un SP que solo tiene Contributor,
+el deployment entero falla con `InvalidTemplateDeployment / Authorization failed` —
+aunque las assignments ya existan y esten correctas. El what-if NO lo detecta: no valida
+permisos de escritura.
+
+**Es un parche, no el estado deseado.** Con esto en false el template deja de ser la
+fuente de verdad del RBAC: una Function App nueva se crea sin sus roles y hay que
+asignarlos a mano. Lo correcto es darle al SP del pipeline el rol
+"Role Based Access Control Administrator" sobre el RG y volver a true.
+''')
+param deployRoleAssignments bool = true
 
 var tags = {
   platform: 'EiP'
@@ -107,6 +137,7 @@ module contacts 'modules/functionApp.bicep' = if (deployFunctionApps) {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
     serviceBusNamespaceName: serviceBus.outputs.namespaceName
     needsServiceBus: true
     // Publica en customer-fo-sync los raws de legal entities fuera de Dual Write.
@@ -135,12 +166,16 @@ module customers 'modules/functionApp.bicep' = if (deployFunctionApps) {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
     serviceBusNamespaceName: serviceBus.outputs.namespaceName
     needsServiceBus: true
     appSettings: [
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
       { name: 'ServiceBusConnection__fullyQualifiedNamespace', value: serviceBus.outputs.fullyQualifiedNamespace }
+      // Cola del Service Endpoint de Dataverse (QualifyLead). Sin este setting el
+      // trigger de QualifyLeadCustomerSyncFunction no resuelve y la app no arranca.
+      { name: 'ServiceBusQueueName', value: 'leadcontacts' }
       { name: 'FoSyncServiceBusQueueName', value: 'customer-fo-sync' }
     ]
   }
@@ -159,11 +194,13 @@ module customerGroups 'modules/functionApp.bicep' = if (deployFunctionApps) {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
     needsServiceBus: false
     appSettings: [
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
       { name: 'DualWriteLegalEntities', value: dualWriteLegalEntities }
+      { name: 'Schedules__CustomerGroupSync', value: schedules.customerGroupSync }
     ]
   }
 }
@@ -181,11 +218,14 @@ module products 'modules/functionApp.bicep' = if (deployFunctionApps) {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
     needsServiceBus: false
     appSettings: [
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
       { name: 'AssignOwningBusinessUnit', value: 'false' }
+      { name: 'Schedules__ProductGroupSync', value: schedules.productGroupSync }
+      { name: 'Schedules__ReleasedProductSync', value: schedules.releasedProductSync }
     ]
   }
 }
@@ -208,6 +248,7 @@ module fiscal 'modules/functionApp.bicep' = if (deployFunctionApps) {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
     needsServiceBus: false
     appSettings: []
   }

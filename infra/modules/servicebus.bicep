@@ -27,12 +27,18 @@ Defaults reflejan lo relevado: contact-master-matching con sessions.
 ''')
 param queues array = [
   {
+    // SIN sessions, igual que INTE (`contacts` en el namespace dataverseinte).
+    // Las alimenta el Service Endpoint OOB de Dataverse, que no setea SessionId, y
+    // las consume ContactMasterMatchingFunction con IsSessionsEnabled = false.
+    // Con requiresSession = true fallan las dos puntas: el publisher no puede enviar
+    // y un receiver sin sessions tampoco puede leer.
     name: 'contact-master-matching'
-    requiresSession: true
+    requiresSession: false
   }
   {
+    // Idem, espejo de la cola `accounts` de INTE.
     name: 'account-master-matching'
-    requiresSession: true
+    requiresSession: false
   }
   {
     // Accounts y contacts de legal entities que Dual Write no sincroniza: van a F&O
@@ -40,6 +46,18 @@ param queues array = [
     // modificaciones del mismo cliente no se procesen fuera de orden.
     name: 'customer-fo-sync'
     requiresSession: true
+  }
+  {
+    // RemoteExecutionContext del mensaje QualifyLead, publicado por un Service
+    // Endpoint de Dataverse. SIN sessions: el Service Endpoint no setea SessionId
+    // y con requiresSession la publicacion falla.
+    //
+    // En INTE esta cola quedo en el namespace viejo (`dataverseinte`, con SAS).
+    // Aca se declara dentro del namespace de la EiP porque el trigger comparte
+    // `ServiceBusConnection` con customer-fo-sync: las dos tienen que vivir en el
+    // mismo namespace. La de INTE se migra en el cutover, no la toca este template.
+    name: 'leadcontacts'
+    requiresSession: false
   }
 ]
 
