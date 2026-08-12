@@ -15,6 +15,18 @@ namespace AxxonContacts.Functions.Services
         private const string IdentificationNumber = "msdyn_identificationnumber";
         private const int    BulkBatchSize        = 1000;
 
+        /// <summary>
+        /// Bloque de domicilio que se copia del raw al master. address1_stateorprovince es
+        /// el logical name real del departamento/estado (no existe address1_stateprovince).
+        /// </summary>
+        private static readonly string[] AddressColumns =
+        [
+            "address1_line1", "address1_line2", "address1_line3",
+            "address1_city", "address1_county", "address1_stateorprovince",
+            "address1_postalcode", "address1_country",
+            "address1_latitude", "address1_longitude"
+        ];
+
         private readonly IOrganizationService _service;
         private readonly ILogger              _logger;
 
@@ -127,6 +139,55 @@ namespace AxxonContacts.Functions.Services
         }
 
         // ────────────────────────────────────────────────────────────
+        // EnrichAddressFromDataverse
+        // ────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Completa el domicilio leyendolo del raw en Dataverse cuando no vino en el evento.
+        ///
+        /// Hace falta porque los campos address1_* solo llegan en el mensaje si el Step del
+        /// Service Endpoint los incluye en su PreImage. Si el PreImage esta acotado a los
+        /// campos de matching, el domicilio no viaja y el master se crearia vacio sin que
+        /// falle nada. Se resuelve con un Retrieve extra, que solo se paga al CREAR el
+        /// master (una vez por identificacion), no en cada mensaje.
+        /// </summary>
+        private async Task EnrichAddressFromDataverseAsync(AccountEventMessage message)
+        {
+            if (message.HasAddress) return;
+
+            try
+            {
+                var record = await Task.Run(() =>
+                    _service.Retrieve(EntityLogicalName, message.AccountId, new ColumnSet(AddressColumns)));
+
+                message.Address1Line1           = record.GetAttributeValue<string>("address1_line1");
+                message.Address1Line2           = record.GetAttributeValue<string>("address1_line2");
+                message.Address1Line3           = record.GetAttributeValue<string>("address1_line3");
+                message.Address1City            = record.GetAttributeValue<string>("address1_city");
+                message.Address1County          = record.GetAttributeValue<string>("address1_county");
+                message.Address1StateOrProvince = record.GetAttributeValue<string>("address1_stateorprovince");
+                message.Address1PostalCode      = record.GetAttributeValue<string>("address1_postalcode");
+                message.Address1Country         = record.GetAttributeValue<string>("address1_country");
+                message.Address1Latitude        = record.GetAttributeValue<double?>("address1_latitude");
+                message.Address1Longitude       = record.GetAttributeValue<double?>("address1_longitude");
+
+                if (message.HasAddress)
+                    _logger.LogInformation(
+                        "[AccountMasterMatchingService] Domicilio recuperado de Dataverse para Account {AccountId}.",
+                        message.AccountId);
+            }
+            catch (Exception ex)
+            {
+                // El domicilio es un dato secundario: si no se puede leer, el master igual
+                // se crea. Perderlo no justifica reintentar el mensaje.
+                _logger.LogWarning(ex,
+                    "[AccountMasterMatchingService] No se pudo recuperar el domicilio de Account {AccountId}. " +
+                    "El master se crea sin domicilio.",
+                    message.AccountId);
+            }
+        }
+
+        // ────────────────────────────────────────────────────────────
         // FindMasterByIdentification
         // ────────────────────────────────────────────────────────────
 
@@ -162,6 +223,8 @@ namespace AxxonContacts.Functions.Services
 
         private async Task<EntityReference> CreateMasterAsync(AccountEventMessage message)
         {
+            await EnrichAddressFromDataverseAsync(message);
+
             var master = BuildMasterEntity(message);
 
             try
@@ -209,6 +272,18 @@ namespace AxxonContacts.Functions.Services
             SetString(e, "description",   m.Description);
             SetString(e, IdentificationNumber, m.MsdynIdentificationNumber);
 
+            // Domicilio: el bloque address1_* del raw se copia tal cual al master.
+            SetString(e, "address1_line1",           m.Address1Line1);
+            SetString(e, "address1_line2",           m.Address1Line2);
+            SetString(e, "address1_line3",           m.Address1Line3);
+            SetString(e, "address1_city",            m.Address1City);
+            SetString(e, "address1_county",          m.Address1County);
+            SetString(e, "address1_stateorprovince", m.Address1StateOrProvince);
+            SetString(e, "address1_postalcode",      m.Address1PostalCode);
+            SetString(e, "address1_country",         m.Address1Country);
+            SetDouble(e, "address1_latitude",        m.Address1Latitude);
+            SetDouble(e, "address1_longitude",       m.Address1Longitude);
+
             // msdyn_company requerido por plugin de Dual Write
             SetRef(e, "msdyn_company", "cdm_company", m.MsdynCompany);
 
@@ -218,6 +293,11 @@ namespace AxxonContacts.Functions.Services
         private static void SetString(Entity e, string field, string? value)
         {
             if (!string.IsNullOrEmpty(value)) e[field] = value;
+        }
+
+        private static void SetDouble(Entity e, string field, double? value)
+        {
+            if (value.HasValue) e[field] = value.Value;
         }
 
         private static void SetRef(Entity e, string field, string logicalName, Guid? id)
