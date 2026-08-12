@@ -49,6 +49,17 @@ namespace AxxonContacts.Functions.Services
                 EmailAddress1 = Str(merged, "emailaddress1"),
                 Description   = Str(merged, "description"),
 
+                Address1Line1           = Str(merged, "address1_line1"),
+                Address1Line2           = Str(merged, "address1_line2"),
+                Address1Line3           = Str(merged, "address1_line3"),
+                Address1City            = Str(merged, "address1_city"),
+                Address1County          = Str(merged, "address1_county"),
+                Address1StateOrProvince = Str(merged, "address1_stateorprovince"),
+                Address1PostalCode      = Str(merged, "address1_postalcode"),
+                Address1Country         = Str(merged, "address1_country"),
+                Address1Latitude        = Dbl(merged, "address1_latitude"),
+                Address1Longitude       = Dbl(merged, "address1_longitude"),
+
                 MsdynCompany = Ref(merged, "msdyn_company"),
                 ModifiedBy   = Ref(merged, "modifiedby"),
             };
@@ -108,6 +119,26 @@ namespace AxxonContacts.Functions.Services
                 JsonValueKind.True  => true,
                 JsonValueKind.False => false,
                 _                   => null
+            };
+        }
+
+        // Double (address1_latitude / address1_longitude). El serializador del
+        // RemoteExecutionContext lo emite como numero JSON, pero se acepta tambien la
+        // forma string: viene asi cuando el valor se serializa con comillas, y un
+        // domicilio sin coordenadas no justifica perder el resto del bloque.
+        private static double? Dbl(Dictionary<string, JsonElement> m, string key)
+        {
+            if (!m.TryGetValue(key, out var el)) return null;
+
+            return el.ValueKind switch
+            {
+                JsonValueKind.Number => el.TryGetDouble(out var d) ? d : null,
+                JsonValueKind.String => double.TryParse(
+                    el.GetString(),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var s) ? s : null,
+                _ => null
             };
         }
 

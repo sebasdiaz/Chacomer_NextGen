@@ -53,6 +53,55 @@ namespace AxxonContacts.Functions.Models
         [JsonPropertyName("msdynIsProspect")]
         public bool? MsdynIsProspect { get; set; }
 
+        // ── Domicilio (bloque address1_*) ────────────────────────────
+        // Se copia tal cual del raw al master. Los nombres siguen el logical name
+        // de Dataverse: ojo que el campo de departamento/estado es
+        // address1_stateorprovince, no address1_stateprovince.
+        [JsonPropertyName("address1Line1")]
+        public string? Address1Line1 { get; set; }
+
+        [JsonPropertyName("address1Line2")]
+        public string? Address1Line2 { get; set; }
+
+        [JsonPropertyName("address1Line3")]
+        public string? Address1Line3 { get; set; }
+
+        [JsonPropertyName("address1City")]
+        public string? Address1City { get; set; }
+
+        [JsonPropertyName("address1County")]
+        public string? Address1County { get; set; }
+
+        [JsonPropertyName("address1StateOrProvince")]
+        public string? Address1StateOrProvince { get; set; }
+
+        [JsonPropertyName("address1PostalCode")]
+        public string? Address1PostalCode { get; set; }
+
+        [JsonPropertyName("address1Country")]
+        public string? Address1Country { get; set; }
+
+        /// <summary>address1_latitude. Tipo Double en Dataverse (rango -90..90).</summary>
+        [JsonPropertyName("address1Latitude")]
+        public double? Address1Latitude { get; set; }
+
+        /// <summary>address1_longitude. Tipo Double en Dataverse (rango -180..180).</summary>
+        [JsonPropertyName("address1Longitude")]
+        public double? Address1Longitude { get; set; }
+
+        /// <summary>True si llego algun dato de domicilio en el evento.</summary>
+        [JsonIgnore]
+        public bool HasAddress =>
+            !string.IsNullOrWhiteSpace(Address1Line1)   ||
+            !string.IsNullOrWhiteSpace(Address1Line2)   ||
+            !string.IsNullOrWhiteSpace(Address1Line3)   ||
+            !string.IsNullOrWhiteSpace(Address1City)    ||
+            !string.IsNullOrWhiteSpace(Address1County)  ||
+            !string.IsNullOrWhiteSpace(Address1StateOrProvince) ||
+            !string.IsNullOrWhiteSpace(Address1PostalCode)      ||
+            !string.IsNullOrWhiteSpace(Address1Country) ||
+            Address1Latitude.HasValue || Address1Longitude.HasValue;
+
         // ── Control Master/Raw ───────────────────────────────────────
         [JsonPropertyName("isMaster")]
         public bool IsMaster { get; set; }

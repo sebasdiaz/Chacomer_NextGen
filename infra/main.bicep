@@ -31,6 +31,30 @@ param foBaseUrl string
 @description('Legal entities ya sincronizadas por Dual Write (CustomerGroups). CSV, ej: "cha,cne".')
 param dualWriteLegalEntities string = ''
 
+@description('''
+Client ID del app registration con el que las apps autentican contra Dataverse.
+VACIO (default) = autentican con su propia Managed Identity, que es el estado deseado
+y lo que debe usar un ambiente nuevo.
+
+Se declara aca y no a mano en cada app porque este template define la coleccion COMPLETA
+de appSettings: cualquier setting puesto por fuera lo borra el proximo deployment. Sin
+`DataverseClientId`, `DataverseOptions.UseClientSecretAuth` queda en false y la app cae a
+Managed Identity en silencio — si esa MI no esta dada de alta como Application User,
+falla recien al primer llamado.
+
+No es un secreto: el client secret vive en Key Vault (secret `DataverseClientSecret`).
+''')
+param dataverseClientId string = ''
+
+@description('''
+Client ID del app registration para la auth S2S contra F&O. Mismo criterio que
+`dataverseClientId`: vacio = Managed Identity. El secreto va en Key Vault (`FoClientSecret`).
+''')
+param foClientId string = ''
+
+@description('Tenant ID de Entra para la auth S2S contra F&O. Solo se emite junto con foClientId.')
+param foTenantId string = ''
+
 @description('Version del runtime .NET isolated (8.0, 9.0, 10.0).')
 param dotnetIsolatedVersion string = '10.0'
 
@@ -91,6 +115,20 @@ var tags = {
   managedBy: 'bicep'
 }
 
+// Settings de autenticacion por Service Principal. Se emiten solo si el ambiente los
+// declara; sin ellos la app usa su Managed Identity. Los *ClientSecret NO van aca:
+// se resuelven desde Key Vault por nombre canonico (ver `Secretos` en infra/README.md).
+var dataverseAuthSettings = empty(dataverseClientId) ? [] : [
+  { name: 'DataverseClientId', value: dataverseClientId }
+]
+
+var foAuthSettings = empty(foClientId)
+  ? []
+  : concat(
+      [ { name: 'FoClientId', value: foClientId } ],
+      empty(foTenantId) ? [] : [ { name: 'FoTenantId', value: foTenantId } ]
+    )
+
 // ---- Recursos compartidos ----
 
 module monitoring 'modules/monitoring.bicep' = {
@@ -142,14 +180,15 @@ module contacts 'modules/functionApp.bicep' = if (deployFunctionApps) {
     needsServiceBus: true
     // Publica en customer-fo-sync los raws de legal entities fuera de Dual Write.
     publishesToServiceBus: true
-    appSettings: [
+    // contacts no habla con F&O directo (publica en Service Bus): solo auth de Dataverse.
+    appSettings: concat([
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'ServiceBusConnection__fullyQualifiedNamespace', value: serviceBus.outputs.fullyQualifiedNamespace }
       { name: 'ServiceBusQueueName', value: 'contact-master-matching' }
       { name: 'AccountServiceBusQueueName', value: 'account-master-matching' }
       { name: 'FoSyncServiceBusQueueName', value: 'customer-fo-sync' }
       // SetApiKey NO va aca: se resuelve desde Key Vault (secret "SetApiKey").
-    ]
+    ], dataverseAuthSettings)
   }
 }
 
@@ -169,7 +208,7 @@ module customers 'modules/functionApp.bicep' = if (deployFunctionApps) {
     deployRoleAssignments: deployRoleAssignments
     serviceBusNamespaceName: serviceBus.outputs.namespaceName
     needsServiceBus: true
-    appSettings: [
+    appSettings: concat([
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
       { name: 'ServiceBusConnection__fullyQualifiedNamespace', value: serviceBus.outputs.fullyQualifiedNamespace }
@@ -177,7 +216,7 @@ module customers 'modules/functionApp.bicep' = if (deployFunctionApps) {
       // trigger de QualifyLeadCustomerSyncFunction no resuelve y la app no arranca.
       { name: 'ServiceBusQueueName', value: 'leadcontacts' }
       { name: 'FoSyncServiceBusQueueName', value: 'customer-fo-sync' }
-    ]
+    ], dataverseAuthSettings, foAuthSettings)
   }
 }
 
@@ -196,12 +235,12 @@ module customerGroups 'modules/functionApp.bicep' = if (deployFunctionApps) {
     keyVaultUri: keyVault.outputs.keyVaultUri
     deployRoleAssignments: deployRoleAssignments
     needsServiceBus: false
-    appSettings: [
+    appSettings: concat([
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
       { name: 'DualWriteLegalEntities', value: dualWriteLegalEntities }
       { name: 'Schedules__CustomerGroupSync', value: schedules.customerGroupSync }
-    ]
+    ], dataverseAuthSettings, foAuthSettings)
   }
 }
 
@@ -220,6 +259,10 @@ module products 'modules/functionApp.bicep' = if (deployFunctionApps) {
     keyVaultUri: keyVault.outputs.keyVaultUri
     deployRoleAssignments: deployRoleAssignments
     needsServiceBus: false
+    // SIN dataverseAuthSettings / foAuthSettings a proposito: en TEST esta app ya corre
+    // por Managed Identity (nunca tuvo *ClientId) y agregarselos le cambiaria el modo de
+    // autenticacion de rebote. Es la unica de las cuatro que ya esta en el estado deseado.
+    // Cuando las otras completen su alta de MI, se les saca el param y esto queda parejo.
     appSettings: [
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
