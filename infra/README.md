@@ -262,9 +262,41 @@ az keyvault secret set --vault-name $VAULT --name FoClientSecret --value "<secre
 ```
 
 El nombre del secret coincide con la clave de configuración que lee el código
-(`AddEipKeyVault` monta el vault como configuration provider). Cuando no coincide —el caso
-de `keyvaultinte` en INTE— se declara el nombre real en el Application Setting
-`{clave}Name`. Ver README raíz, sección "Key Vault".
+(`AddEipKeyVault` monta el vault como configuration provider), así que **no hace falta
+ningún app setting**: alcanza con `KeyVaultUri`, que ya declara el template.
+
+Ese es el motivo de usar los nombres canónicos y no la indirección `{clave}Name`: un
+`DataverseClientSecretName` puesto a mano lo borra el próximo deployment, porque este
+template declara la colección completa de `appSettings`. Con el nombre canónico el
+cableado vive en el vault, que el deployment no toca.
+
+> La indirección sigue existiendo en el código (`EipSecretResolver`) y se usa en INTE
+> mientras esas apps estén fuera del Bicep. Es transitoria, no el patrón a seguir.
+
+### Los `*ClientId` van en el template, no a mano
+
+`DataverseClientId`, `FoClientId` y `FoTenantId` **no son secretos** pero sí son necesarios:
+sin ellos `UseClientSecretAuth` queda en false y la app cae a Managed Identity en silencio,
+fallando recién al primer llamado a Dataverse o F&O. Se declaran con los params
+`dataverseClientId` / `foClientId` / `foTenantId`, vacíos por default (= Managed Identity,
+el estado deseado). `products` va a propósito sin ellos: ya corre por MI.
+
+### Dos vaults por resource group
+
+Cada RG tiene el vault del template (`kv-chacomer-eip-{env}`) y uno legacy hecho a mano
+(`keyvaultinte`, `keyvaultchacomertest`). **El que queda es el del template**: tiene purge
+protection —los legacy no, y eso no se arregla sin recrear el vault— y está versionado acá.
+
+| | Consumidores hoy | Qué hacer |
+|---|---|---|
+| `kv-chacomer-eip-test` | las 5 Function Apps de TEST | es el bueno |
+| `keyvaultchacomertest` | ninguno | se puede borrar |
+| `keyvaultinte` | 4 apps de la EiP + `fa-axxonticketatencion-inte` + SP `NextGenInte` | migrar |
+| `kv-chacomer-eip-inte` | ninguno todavía | destino de INTE |
+
+Migrar INTE no es sólo cambiar `KeyVaultUri`: hay que dar `Key Vault Secrets User` sobre el
+vault nuevo a cada MI y **coordinar con el dueño de `fa-axxonticketatencion-inte`**, que no
+vive en este repo.
 
 ## Promoción del código a un ambiente nuevo
 
