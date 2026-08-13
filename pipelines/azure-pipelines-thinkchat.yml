@@ -17,8 +17,13 @@ extends:
   parameters:
     appBaseName: 'fa-axxonthinkchat'
     projectPath: 'src/integrations/thinkchat/AxxonThinkchat.Functions/AxxonThinkchat.Functions.csproj'
-    # La app todavia no existe en ningun ambiente: el stage fallaria al hacer
-    # config-zip contra una app inexistente. Poner en true cuando el pipeline de
-    # infra la haya creado (deployThinkchatApp = true en el bicepparam del ambiente).
-    deployToInte: false
+    # fa-axxonthinkchat-inte ya existe (la creo el pipeline de infra INTE con
+    # deployThinkchatApp = true) y su managed identity ya tiene los 3 roles asignados
+    # a mano, asi que el host puede arrancar: ver "INTE: thinkchat con los roles a
+    # mano" en infra/README.md.
+    deployToInte: true
+    # En TEST la app todavia no existe: el stage fallaria al hacer config-zip contra
+    # una app inexistente. Poner en true cuando el pipeline de infra TEST la haya
+    # creado (y despues de asignarle los roles, que TEST tambien va con
+    # deployRoleAssignments = false).
     deployToTest: false
