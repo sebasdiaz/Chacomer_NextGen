@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="AxxonContacts" constructor="MasterContactAddressesGrid" version="0.0.1" display-name-key="MasterContactAddressesGrid" description-key="Domicilios (customeraddress) de los contactos hijo de un contacto master" control-type="virtual" >
+    <external-service-usage enabled="false">
+    </external-service-usage>
+    <!-- Placeholder requerido por PCF; el GUID del registro se lee de context.page.entityId
+         en runtime, igual que en MasterContactChildrenGrid. -->
+    <property name="masterContactId" display-name-key="MasterContactId_Display_Key" description-key="MasterContactId_Desc_Key" of-type="SingleLine.Text" usage="bound" required="true" />
+    <resources>
+      <code path="index.ts" order="1"/>
+      <platform-library name="React" version="16.14.0" />
+      <platform-library name="Fluent" version="9.46.2" />
+    </resources>
+    <feature-usage>
+      <uses-feature name="WebAPI" required="true" />
+    </feature-usage>
+  </control>
+</manifest>
