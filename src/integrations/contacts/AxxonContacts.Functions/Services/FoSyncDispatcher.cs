@@ -55,7 +55,9 @@ namespace AxxonContacts.Functions.Services
             }
 
             // El master es un registro nuestro de consolidacion, no un cliente de una
-            // compania: nunca va a F&O (por eso se crea con customertypecode = 12).
+            // compania: nunca va a F&O. Por eso el contact master se crea sin
+            // msdyn_company y con msdyn_sellable = false, y el account master con
+            // customertypecode = 12 (MasterFoIsolationPlugin sostiene esos valores).
             if (isMaster)
             {
                 _logger.LogInformation(
