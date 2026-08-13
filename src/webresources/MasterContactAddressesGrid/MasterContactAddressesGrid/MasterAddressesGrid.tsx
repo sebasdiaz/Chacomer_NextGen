@@ -39,11 +39,22 @@ const FORMATTED_VALUE = '@OData.Community.Display.V1.FormattedValue';
 // Fallback por si la anotacion de formatted value no viene. Valores verificados contra la
 // metadata del environment.
 const ADDRESS_TYPE_LABELS: Record<number, string> = {
-    1: 'Bill To',
-    2: 'Ship To',
-    3: 'Primary',
-    4: 'Other',
+    1: 'Facturacion',
+    2: 'Envio',
+    3: 'Principal',
+    4: 'Otro',
 };
+
+// context.page.entityId normalmente devuelve el GUID pelado, pero segun el host puede venir
+// entre llaves. Se normaliza y se valida antes de interpolarlo en el $filter: un GUID mal
+// formado se traduce en un 400 de Dataverse que no explica cual es el problema.
+const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizeGuid(value: string | null): string | null {
+    if (!value) return null;
+    const trimmed = value.trim().replace(/^\{/, '').replace(/\}$/, '');
+    return GUID_PATTERN.test(trimmed) ? trimmed : null;
+}
 
 interface ICustomerAddressEntity {
     customeraddressid: string;
@@ -150,13 +161,17 @@ function resolveAddressType(entity: ICustomerAddressEntity): string {
 
 export const MasterAddressesGrid: React.FC<IMasterAddressesGridProps> = ({ masterContactId, webAPI }) => {
     const styles = useStyles();
+    const contactId = React.useMemo(() => normalizeGuid(masterContactId), [masterContactId]);
     const [addresses, setAddresses] = React.useState<IMasterAddress[]>([]);
-    const [isLoading, setIsLoading] = React.useState(false);
+    // Arranca cargando cuando hay un master que consultar: si arrancara en false, el primer
+    // render mostraria el mensaje de "sin domicilios" hasta que resuelva la query.
+    const [isLoading, setIsLoading] = React.useState(() => contactId !== null);
     const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
     React.useEffect(() => {
-        if (!masterContactId) {
+        if (!contactId) {
             setAddresses([]);
+            setIsLoading(false);
             return;
         }
 
@@ -165,7 +180,7 @@ export const MasterAddressesGrid: React.FC<IMasterAddressesGridProps> = ({ maste
         setErrorMessage(null);
 
         const filter =
-            `parentid_contact/_axx_mastercontactid_value eq ${masterContactId} and ${NON_EMPTY_FILTER}`;
+            `parentid_contact/_axx_mastercontactid_value eq ${contactId} and ${NON_EMPTY_FILTER}`;
         const options =
             `?$select=${SELECT_FIELDS}&$expand=${EXPAND_FIELDS}&$filter=${filter}&$orderby=addressnumber`;
 
@@ -204,7 +219,7 @@ export const MasterAddressesGrid: React.FC<IMasterAddressesGridProps> = ({ maste
             });
 
         return () => { cancelled = true; };
-    }, [masterContactId]);
+    }, [contactId]);
 
     if (isLoading) {
         return (
