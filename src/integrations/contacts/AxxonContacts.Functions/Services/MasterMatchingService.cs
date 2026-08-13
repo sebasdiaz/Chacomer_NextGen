@@ -2,7 +2,6 @@ using AxxonContacts.Functions.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using System.ServiceModel;
-using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
 namespace AxxonContacts.Functions.Services
@@ -388,13 +387,8 @@ namespace AxxonContacts.Functions.Services
             if (raws.Count >= BulkBatchSize)
                 _logger.LogWarning("[BulkAssociate] Limite {Limit} alcanzado. Pueden quedar Raws sin procesar.", BulkBatchSize);
 
-            var execMultiple = new ExecuteMultipleRequest
-            {
-                Requests = new OrganizationRequestCollection(),
-                Settings = new ExecuteMultipleSettings { ContinueOnError = true, ReturnResponses = true }
-            };
-
-            int skip = 0;
+            var updates = new List<Entity>();
+            int skip    = 0;
 
             foreach (var raw in raws)
             {
@@ -403,26 +397,22 @@ namespace AxxonContacts.Functions.Services
 
                 var upd = new Entity(EntityLogicalName, raw.Id);
                 upd[MasterContactId] = masterRef;
-                execMultiple.Requests.Add(new UpdateRequest { Target = upd });
+                updates.Add(upd);
             }
 
-            if (execMultiple.Requests.Count == 0)
+            if (updates.Count == 0)
             {
                 _logger.LogInformation("[BulkAssociate] Todos los {Count} Raws ya estaban asociados.", skip);
                 return;
             }
 
-            var resp = (ExecuteMultipleResponse)await Task.Run(() => _service.Execute(execMultiple));
-
-            int errors  = resp.Responses.Count(r => r.Fault != null);
-            int success = execMultiple.Requests.Count - errors;
-
             _logger.LogInformation(
-                "[BulkAssociate] Resultado: {Success} OK, {Skip} skip, {Errors} errores.",
-                success, skip, errors);
+                "[BulkAssociate] {Count} Raws a linkear ({Skip} ya asociados).", updates.Count, skip);
 
-            foreach (var item in resp.Responses.Where(r => r.Fault != null))
-                _logger.LogError("[BulkAssociate] Error index {Idx}: {Fault}", item.RequestIndex, item.Fault.Message);
+            // Si algun link no se puede escribir se lanza: el mensaje se reintenta y,
+            // si el problema persiste, termina en el DLQ. Perderlo en silencio dejaria
+            // al raw huerfano sin que nadie se entere.
+            await BulkUpdateExecutor.ExecuteAsync(_service, _logger, "[BulkAssociate]", updates);
         }
     }
 }
