@@ -32,3 +32,14 @@ param foTenantId = 'd0e6feed-3ca5-4438-bca3-09cb8ba9814a'
 // template YA existen y estan completas, asi que saltearlas no cambia nada en runtime.
 // Volver a true cuando el SP tenga "Role Based Access Control Administrator" sobre el RG.
 param deployRoleAssignments = false
+
+// Thinkchat (sync de templates -> axx_metatemplates). Se despliega junto con el resto
+// (deployFunctionApps queda en true), pero con deployRoleAssignments = false la app nace
+// SIN sus roles: al ser nueva no existen de antes, asi que hay que asignarlos a mano
+// (Storage Blob Data Owner + Storage Queue Data Contributor sobre su storage, y Key Vault
+// Secrets User sobre el vault) o la app no arranca.
+// Misma URL que INTE: es el unico endpoint conocido de Thinkchat. Si llega a haber una
+// instancia separada para TEST, cambiar aca. get_template es de solo lectura, asi que
+// mientras tanto TEST consulta los templates reales sin efectos secundarios.
+param thinkchatBaseUrl = 'https://chacomer.whatsapp.net.py/thinkcomm-x/api/v2/'
+param thinkchatFrom = '595215180000'

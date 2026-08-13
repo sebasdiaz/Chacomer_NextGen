@@ -80,7 +80,14 @@ param schedules object = {
   customerGroupSync: '0 0 23 * * *'
   productGroupSync: '0 0 23 * * *'
   releasedProductSync: '0 0 * * * *'
+  thinkchatTemplateSync: '0 0 */2 * * *'
 }
+
+@description('URL base de la API de Thinkchat (con o sin barra final).')
+param thinkchatBaseUrl string = ''
+
+@description('Numero emisor que Thinkchat espera en el body de get_template. Ej: 595215180000.')
+param thinkchatFrom string = ''
 
 @description('''
 False para desplegar SOLO los recursos compartidos (monitoring, Key Vault,
@@ -91,6 +98,17 @@ plano (DataverseClientSecret, FoClientSecret, Schedules*) y las dejaria caidas
 hasta completar el cutover a Managed Identity + Key Vault.
 ''')
 param deployFunctionApps bool = true
+
+@description('''
+Toggle propio de la app de Thinkchat. Existe porque es la unica app GREENFIELD: no hay
+una version creada a mano en ningun ambiente, asi que puede desplegarse por Bicep sin
+arrastrar el problema de adopcion que mantiene `deployFunctionApps = false` en INTE.
+
+Default: sigue a `deployFunctionApps`. Ponerlo en true de forma independiente exige que
+`deployRoleAssignments` tambien este en true — la app corre con AzureWebJobsStorage por
+identidad, asi que sin los roles de Storage no arranca. Ver `deployRoleAssignments`.
+''')
+param deployThinkchatApp bool = deployFunctionApps
 
 @description('''
 False para que el template NO declare las role assignments de las Function Apps
@@ -294,6 +312,39 @@ module fiscal 'modules/functionApp.bicep' = if (deployFunctionApps) {
     deployRoleAssignments: deployRoleAssignments
     needsServiceBus: false
     appSettings: []
+  }
+}
+
+// Sync de templates de Thinkchat hacia axx_metatemplates (timer cada 2 horas).
+// No consume ni publica en Service Bus, y no habla con F&O: solo Dataverse + la API
+// de Thinkchat. El token sale del Key Vault (secret "secretThinkChat"), que la MI lee
+// con el rol Key Vault Secrets User que cablea el modulo.
+module thinkchat 'modules/functionApp.bicep' = if (deployThinkchatApp) {
+  name: 'fa-thinkchat'
+  params: {
+    functionAppName: 'fa-axxonthinkchat-${environmentName}'
+    appKey: 'thinkchat'
+    environmentName: environmentName
+    location: location
+    tags: tags
+    runtimeVersion: dotnetIsolatedVersion
+    // No pega a F&O: no necesita el techo de instancias de las apps F&O-bound.
+    maximumInstanceCount: maxInstanceCount
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    keyVaultName: keyVault.outputs.keyVaultName
+    keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
+    needsServiceBus: false
+    // SIN dataverseAuthSettings a proposito, mismo criterio que products: al ser una app
+    // nueva nace en el estado deseado (Managed Identity). Requiere dar de alta su MI como
+    // Application User en Dataverse antes del primer run.
+    appSettings: [
+      { name: 'DataverseUrl', value: dataverseUrl }
+      { name: 'ThinkchatBaseUrl', value: thinkchatBaseUrl }
+      { name: 'ThinkchatFrom', value: thinkchatFrom }
+      { name: 'Schedules__ThinkchatTemplateSync', value: schedules.thinkchatTemplateSync }
+      // El token NO va aca: se resuelve desde Key Vault (secret "secretThinkChat").
+    ]
   }
 }
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
-  <control namespace="AxxonContacts" constructor="MasterContactAddressesGrid" version="0.0.1" display-name-key="MasterContactAddressesGrid" description-key="Domicilios (customeraddress) de los contactos hijo de un contacto master" control-type="virtual" >
+  <control namespace="AxxonContacts" constructor="MasterContactAddressesGrid" version="0.0.2" display-name-key="MasterContactAddressesGrid" description-key="Domicilios (customeraddress) de los contactos hijo de un contacto master" control-type="virtual" >
     <external-service-usage enabled="false">
     </external-service-usage>
     <!-- Placeholder requerido por PCF; el GUID del registro se lee de context.page.entityId

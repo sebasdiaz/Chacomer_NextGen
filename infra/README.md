@@ -29,7 +29,7 @@ infra/
 
 | Ambiente | Resource group | Dataverse | F&O | Service connection | Function Apps |
 |---|---|---|---|---|---|
-| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover) |
+| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover), salvo thinkchat |
 | `test` | `dataversetest` | `operations-b1-chacomer-test` | `b1-chacomer-test.sandbox` | `sc-chacomer-eip-test` | administradas por el Bicep |
 | `uat` | *(sin crear)* | — | — | — | — |
 | `prod` | *(sin crear)* | — | — | — | — |
@@ -63,6 +63,12 @@ crea el template — la diferencia no es la infraestructura sino la configuraci�
 El template declara la **colección completa** de app settings, así que poner
 `deployFunctionApps = true` sin preparar el terreno **deja las 4 apps caídas**.
 El orden del cutover, por app:
+
+> **`fa-axxonthinkchat-{env}` es la excepción.** Es la única app greenfield: no existe
+> creada a mano en ningún ambiente, así que no tiene nada que adoptar y puede nacer
+> administrada por Bicep sin esperar al cutover. Por eso tiene su propio toggle
+> `deployThinkchatApp` (default: sigue a `deployFunctionApps`). Para prenderla en INTE
+> hace falta que el SP del pipeline pueda escribir role assignments — ver abajo.
 
 1. ✅ **Secretos a Key Vault + System-Assigned MI** — `scripts/Set-InteKeyVaultAuth.ps1`.
 2. Dar de alta la MI como Application User en Dataverse y como usuario S2S en F&O.
@@ -180,8 +186,8 @@ así. Se corrige en el cutover, junto con el resto de los settings extra.
 instancias la concurrencia real contra F&O se multiplica por N. Por eso las apps
 que llaman a F&O por mensaje (`contacts`, `customers`, `customergroups`,
 `products`) van con `foBoundMaxInstanceCount = 1`; `fiscal` es un proxy HTTP puro
-contra SET/TURUC y escala con `maxInstanceCount = 40`. Ambos son params de
-`main.bicep`, overrideables por ambiente.
+contra SET/TURUC y `thinkchat` es un timer que no toca F&O, así que ambos escalan con
+`maxInstanceCount = 40`. Los dos son params de `main.bicep`, overrideables por ambiente.
 
 Cada Function App recibe, vía role assignment (least privilege):
 - **Storage Blob Data Owner** + **Storage Queue Data Contributor** sobre su storage (AzureWebJobsStorage y deployment package, todo por identidad).
@@ -256,6 +262,9 @@ VAULT=kv-chacomer-eip-test
 # API Key de la SET Paraguay (contacts + fiscal) — requerido en todos los ambientes
 az keyvault secret set --vault-name $VAULT --name SetApiKey --value "<api-key>"
 
+# Token de Thinkchat (app thinkchat). El nombre del secret es el que ya usa INTE.
+az keyvault secret set --vault-name $VAULT --name secretThinkChat --value "<token>"
+
 # Client secrets (solo ambientes sin Managed Identity contra Dataverse/F&O)
 az keyvault secret set --vault-name $VAULT --name DataverseClientSecret --value "<secret>"
 az keyvault secret set --vault-name $VAULT --name FoClientSecret --value "<secret>"
@@ -301,7 +310,7 @@ vive en este repo.
 ## Promoción del código a un ambiente nuevo
 
 La infra crea las Function Apps vacías; el código lo pone el pipeline de cada
-integración. Los 5 pipelines (`azure-pipelines-{contacts,customers,customergroups,products,fiscal}.yml`)
+integración. Los 6 pipelines (`azure-pipelines-{contacts,customers,customergroups,products,fiscal,thinkchat}.yml`)
 extienden `templates/functionapp-build-deploy.yml`, que compila **una sola vez** y
 promueve el mismo artifact en cadena:
 
