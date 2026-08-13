@@ -21,13 +21,23 @@ param deployFunctionApps = false
 // Thinkchat (sync de templates -> axx_metatemplates). Es la unica app greenfield: no
 // existe creada a mano, asi que puede nacer administrada por Bicep sin el problema de
 // adopcion que mantiene deployFunctionApps en false.
+param deployThinkchatApp = true
+
+// El modulo de thinkchat declara 3 role assignments (Storage Blob Data Owner, Storage
+// Queue Data Contributor, Key Vault Secrets User) y el SP del pipeline solo tiene
+// Contributor sobre este RG. Contributor NO incluye roleAssignments/write, asi que con
+// el flag en true el deployment entero muere con Authorization failed. El rol que lo
+// destrabaria —Role Based Access Control Administrator— no lo puede otorgar
+// sebastian.diaz@: su User Access Administrator esta restringido por una condicion ABAC
+// que niega exactamente ese rol.
 //
-// Para crearla hay que agregar aca `param deployThinkchatApp = true`. NO se deja puesto
-// todavia porque el modulo declara 3 role assignments (Storage Blob, Storage Queue,
-// Key Vault Secrets User) y el SP del pipeline sobre este RG no tiene
-// roleAssignments/write: el deployment entero fallaria con Authorization failed. Y
-// saltearlas con deployRoleAssignments = false no sirve — sin los roles de Storage la
-// app ni siquiera arranca (AzureWebJobsStorage va por identidad).
-// Ver "Role assignments" en infra/README.md.
+// Por eso la app nace sin roles y los 3 se asignan a mano a su managed identity despues
+// del deploy. Ese paso NO es opcional: AzureWebJobsStorage va por identidad, asi que sin
+// los roles de Storage la app ni siquiera arranca. Los comandos estan en la seccion
+// "Role assignments" de infra/README.md.
+//
+// En INTE el flag no tiene efecto colateral: con deployFunctionApps = false, thinkchat
+// es la unica app con role assignments en juego.
+param deployRoleAssignments = false
 param thinkchatBaseUrl = 'https://chacomer.whatsapp.net.py/thinkcomm-x/api/v2/'
 param thinkchatFrom = '595215180000'

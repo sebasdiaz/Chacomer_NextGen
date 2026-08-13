@@ -211,6 +211,37 @@ Cada Function App recibe, vía role assignment (least privilege):
 > az role assignment create --assignee-object-id f57b2a77-e6d4-403d-9846-e6d354abccd9 --assignee-principal-type ServicePrincipal --role "Role Based Access Control Administrator" --scope "/subscriptions/09592883-de3a-4c93-944c-222b3c88e832/resourceGroups/dataversetest"
 > ```
 
+### INTE: thinkchat con los roles a mano
+
+`inte.bicepparam` va con **`deployRoleAssignments = false`** por el mismo motivo, con el
+SP `b391d418-…` (`sc-chacomer-eip-inte`, objectId `e57cb312-…`), que tiene Contributor
+sobre `DataverseINTE` pero no `roleAssignments/write`. Como en INTE
+`deployFunctionApps = false`, la única app en juego es `thinkchat`.
+
+La app nace sin roles, y **sin ellos no arranca**: `AzureWebJobsStorage` va por identidad.
+Después de cada deploy que la (re)cree, correr:
+
+```bash
+RG=DataverseINTE
+APP=fa-axxonthinkchat-inte
+MI=$(az functionapp show -g $RG -n $APP --query identity.principalId -o tsv)
+ST=$(az storage account list -g $RG --query "[?starts_with(name,'stthinkchatinte')].id | [0]" -o tsv)
+KV=$(az keyvault show -n kv-chacomer-eip-inte --query id -o tsv)
+
+az role assignment create --assignee-object-id $MI --assignee-principal-type ServicePrincipal --role "Storage Blob Data Owner"          --scope $ST
+az role assignment create --assignee-object-id $MI --assignee-principal-type ServicePrincipal --role "Storage Queue Data Contributor"   --scope $ST
+az role assignment create --assignee-object-id $MI --assignee-principal-type ServicePrincipal --role "Key Vault Secrets User"           --scope $KV
+```
+
+Ninguno de esos tres roles cae en la condición ABAC que restringe a `sebastian.diaz@`
+(sólo le niega `Owner`, `User Access Administrator` y `Role Based Access Control
+Administrator`), así que este paso no depende de nadie más.
+
+Falta además, del lado de Dataverse: la MI de la app tiene que estar dada de alta como
+**Application User en Dataverse INTE** con permisos sobre `axx_metatemplates`. La app va
+sin `dataverseAuthSettings` a propósito (mismo criterio que `products`): habla con
+Dataverse por managed identity, así que sin ese alta levanta pero el sync falla.
+
 ## Deploy
 
 Normalmente vía pipeline: `pipelines/azure-pipelines-infra.yml` (INTE, se dispara
