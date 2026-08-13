@@ -1,0 +1,24 @@
+# Pipeline de la integracion Thinkchat (sync de templates -> axx_metatemplates).
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/integrations/thinkchat/AxxonThinkchat.Functions/**
+      - src/core/**
+      - pipelines/azure-pipelines-thinkchat.yml
+      - pipelines/templates/functionapp-build-deploy.yml
+      - pipelines/templates/functionapp-deploy-stage.yml
+
+extends:
+  template: templates/functionapp-build-deploy.yml
+  parameters:
+    appBaseName: 'fa-axxonthinkchat'
+    projectPath: 'src/integrations/thinkchat/AxxonThinkchat.Functions/AxxonThinkchat.Functions.csproj'
+    # La app todavia no existe en ningun ambiente: el stage fallaria al hacer
+    # config-zip contra una app inexistente. Poner en true cuando el pipeline de
+    # infra la haya creado (deployThinkchatApp = true en el bicepparam del ambiente).
+    deployToInte: false
+    deployToTest: false

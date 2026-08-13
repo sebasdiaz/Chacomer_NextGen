@@ -32,3 +32,12 @@ param foTenantId = 'd0e6feed-3ca5-4438-bca3-09cb8ba9814a'
 // template YA existen y estan completas, asi que saltearlas no cambia nada en runtime.
 // Volver a true cuando el SP tenga "Role Based Access Control Administrator" sobre el RG.
 param deployRoleAssignments = false
+
+// Thinkchat (sync de templates -> axx_metatemplates). Se despliega junto con el resto
+// (deployFunctionApps queda en true), pero con deployRoleAssignments = false la app nace
+// SIN sus roles: al ser nueva no existen de antes, asi que hay que asignarlos a mano
+// (Storage Blob Data Owner + Storage Queue Data Contributor sobre su storage, y Key Vault
+// Secrets User sobre el vault) o la app no arranca.
+param thinkchatFrom = '595215180000'
+// TODO: sale del environment de Postman.
+// param thinkchatBaseUrl = 'https://...'

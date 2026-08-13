@@ -29,6 +29,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonCustomers.Functions.Te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonContacts.Functions.Tests", "tests\AxxonContacts.Functions.Tests\AxxonContacts.Functions.Tests.csproj", "{EEE4CBB1-F668-438F-8B6A-3801DE810D6F}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "thinkchat", "thinkchat", "{4D6F09A6-ED69-5051-502E-9829832DE115}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonThinkchat.Functions", "src\integrations\thinkchat\AxxonThinkchat.Functions\AxxonThinkchat.Functions.csproj", "{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -135,6 +139,18 @@ Global
 		{EEE4CBB1-F668-438F-8B6A-3801DE810D6F}.Release|x64.Build.0 = Release|Any CPU
 		{EEE4CBB1-F668-438F-8B6A-3801DE810D6F}.Release|x86.ActiveCfg = Release|Any CPU
 		{EEE4CBB1-F668-438F-8B6A-3801DE810D6F}.Release|x86.Build.0 = Release|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Debug|x64.Build.0 = Debug|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Debug|x86.Build.0 = Debug|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Release|x64.ActiveCfg = Release|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Release|x64.Build.0 = Release|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Release|x86.ActiveCfg = Release|Any CPU
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -146,6 +162,8 @@ Global
 		{8D626EA8-CB54-BC41-363A-217881BEBA6E} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{5D3BEFD0-B3BC-4561-A87E-FC8D880CA16D} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{EEE4CBB1-F668-438F-8B6A-3801DE810D6F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{4D6F09A6-ED69-5051-502E-9829832DE115} = {95CF60EF-5A8F-866C-1324-B5EA7AAAC44D}
+		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92} = {4D6F09A6-ED69-5051-502E-9829832DE115}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {9A13A925-DE06-4E29-9A01-848571A1E78F}
