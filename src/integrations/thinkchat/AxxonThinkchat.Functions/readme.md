@@ -43,7 +43,7 @@ Thinkchat** hacia la tabla **`axx_metatemplates`** de Dataverse, cada dos horas.
 |---|---|
 | `Schedules__ThinkchatTemplateSync` | CRON del timer. Sugerido: `0 0 */2 * * *`. **Doble guion bajo**, ver abajo |
 | `WEBSITE_TIME_ZONE` | Zona horaria del CRON (ej. `Paraguay Standard Time`) |
-| `ThinkchatBaseUrl` | URL base de la API de Thinkchat |
+| `ThinkchatBaseUrl` | URL base de la API. Hoy: `https://chacomer.whatsapp.net.py/thinkcomm-x/api/v2/` |
 | `ThinkchatTemplatesPath` | Path del endpoint. Default `get_template` |
 | `ThinkchatFrom` | Numero emisor que va en el body. En INTE: `595215180000` |
 | `ThinkchatApiKeyName` | Solo si el secret deja de llamarse `secretThinkChat` |

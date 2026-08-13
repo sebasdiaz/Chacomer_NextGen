@@ -38,6 +38,8 @@ param deployRoleAssignments = false
 // SIN sus roles: al ser nueva no existen de antes, asi que hay que asignarlos a mano
 // (Storage Blob Data Owner + Storage Queue Data Contributor sobre su storage, y Key Vault
 // Secrets User sobre el vault) o la app no arranca.
+// Misma URL que INTE: es el unico endpoint conocido de Thinkchat. Si llega a haber una
+// instancia separada para TEST, cambiar aca. get_template es de solo lectura, asi que
+// mientras tanto TEST consulta los templates reales sin efectos secundarios.
+param thinkchatBaseUrl = 'https://chacomer.whatsapp.net.py/thinkcomm-x/api/v2/'
 param thinkchatFrom = '595215180000'
-// TODO: sale del environment de Postman.
-// param thinkchatBaseUrl = 'https://...'

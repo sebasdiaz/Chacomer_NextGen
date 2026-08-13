@@ -29,6 +29,5 @@ param deployFunctionApps = false
 // saltearlas con deployRoleAssignments = false no sirve — sin los roles de Storage la
 // app ni siquiera arranca (AzureWebJobsStorage va por identidad).
 // Ver "Role assignments" en infra/README.md.
+param thinkchatBaseUrl = 'https://chacomer.whatsapp.net.py/thinkcomm-x/api/v2/'
 param thinkchatFrom = '595215180000'
-// TODO: sale del environment de Postman.
-// param thinkchatBaseUrl = 'https://...'
