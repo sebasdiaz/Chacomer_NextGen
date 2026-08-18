@@ -15,7 +15,19 @@ namespace AxxonContacts.Functions.Services
         private const int    BulkBatchSize        = 1000;
 
         private const string CustomerAddressEntity = "customeraddress";
-        private const string StreetNumber          = "msdyn_streetnumber";
+
+        /// <summary>
+        /// Campos del customeraddress 1 que se copian del raw al master.
+        /// msdyn_streetnumber, axx_numero y msdyn_district viven SOLO en customeraddress
+        /// (no tienen proyeccion address1_* en el contact), asi que el bloque que copia
+        /// BuildMasterEntity no puede arrastrarlos. Los demas se copian tambien para que
+        /// el domicilio 1 del master quede completo a nivel customeraddress.
+        /// </summary>
+        private static readonly string[] CustomerAddressColumns =
+        [
+            "msdyn_streetnumber", "axx_numero", "line3",
+            "msdyn_district", "latitude", "longitude", "postalcode"
+        ];
 
         /// <summary>
         /// Bloque de domicilio que se copia del raw al master. address1_stateorprovince es
@@ -259,7 +271,7 @@ namespace AxxonContacts.Functions.Services
             {
                 var masterId = await Task.Run(() => _service.Create(master));
                 _logger.LogInformation("[MasterMatchingService] Master creado. Id={Id}", masterId);
-                await CopyStreetNumberToMasterAsync(message.ContactId, masterId);
+                await CopyCustomerAddressFieldsToMasterAsync(message.ContactId, masterId);
                 return new EntityReference(EntityLogicalName, masterId);
             }
             catch (Exception ex)
@@ -279,49 +291,50 @@ namespace AxxonContacts.Functions.Services
         }
 
         // ────────────────────────────────────────────────────────────
-        // CopyStreetNumberToMaster
+        // CopyCustomerAddressFieldsToMaster
         // ────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Copia msdyn_streetnumber del customeraddress 1 del raw al del master.
-        ///
-        /// Hace falta porque msdyn_streetnumber NO es un atributo del contact: vive solo
-        /// en customeraddress. El bloque address1_* que copia BuildMasterEntity se
-        /// proyecta automaticamente al customeraddress 1 del master, pero el numero de
-        /// calle queda atras porque no tiene proyeccion en el contact. Dataverse crea el
-        /// customeraddress 1 del master junto con el Create, asi que aca solo se updatea.
+        /// Copia los CustomerAddressColumns del customeraddress 1 del raw al del master.
+        /// Dataverse crea el customeraddress 1 del master junto con el Create del
+        /// registro, asi que aca solo se updatea. Se copian unicamente los campos que
+        /// vinieron con dato: el Retrieve no devuelve atributos en null.
         /// </summary>
-        private async Task CopyStreetNumberToMasterAsync(Guid rawId, Guid masterId)
+        private async Task CopyCustomerAddressFieldsToMasterAsync(Guid rawId, Guid masterId)
         {
             try
             {
-                var rawAddress   = await FindAddress1Async(rawId, new ColumnSet(StreetNumber));
-                var streetNumber = rawAddress?.GetAttributeValue<string>(StreetNumber);
-                if (string.IsNullOrWhiteSpace(streetNumber)) return;
+                var rawAddress = await FindAddress1Async(rawId, new ColumnSet(CustomerAddressColumns));
+                if (rawAddress == null) return;
+
+                var toCopy = CustomerAddressColumns.Where(rawAddress.Contains).ToArray();
+                if (toCopy.Length == 0) return;
 
                 var masterAddress = await FindAddress1Async(masterId, new ColumnSet(false));
                 if (masterAddress == null)
                 {
                     _logger.LogWarning(
-                        "[MasterMatchingService] Master {MasterId} sin customeraddress 1. StreetNumber no copiado.",
+                        "[MasterMatchingService] Master {MasterId} sin customeraddress 1. Domicilio no copiado.",
                         masterId);
                     return;
                 }
 
                 var upd = new Entity(CustomerAddressEntity, masterAddress.Id);
-                upd[StreetNumber] = streetNumber;
+                foreach (var column in toCopy)
+                    upd[column] = rawAddress[column];
+
                 await Task.Run(() => _service.Update(upd));
 
                 _logger.LogInformation(
-                    "[MasterMatchingService] StreetNumber '{StreetNumber}' copiado al master {MasterId}.",
-                    streetNumber, masterId);
+                    "[MasterMatchingService] Customeraddress del raw copiado al master {MasterId}: {Columns}.",
+                    masterId, string.Join(", ", toCopy));
             }
             catch (Exception ex)
             {
                 // Mismo criterio que el domicilio: dato secundario, si no se puede copiar
                 // el master igual queda creado y no justifica reintentar el mensaje.
                 _logger.LogWarning(ex,
-                    "[MasterMatchingService] No se pudo copiar StreetNumber del raw {RawId} al master {MasterId}.",
+                    "[MasterMatchingService] No se pudo copiar el customeraddress del raw {RawId} al master {MasterId}.",
                     rawId, masterId);
             }
         }
