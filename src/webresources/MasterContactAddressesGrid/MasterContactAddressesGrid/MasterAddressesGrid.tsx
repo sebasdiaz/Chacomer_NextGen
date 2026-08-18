@@ -17,7 +17,7 @@ import {
 } from '@fluentui/react-components';
 
 const SELECT_FIELDS =
-    'customeraddressid,addressnumber,addresstypecode,line1,axx_numero,city,stateorprovince,country';
+    'customeraddressid,addressnumber,addresstypecode,line1,axx_numero,msdyn_streetnumber,city,stateorprovince,country';
 
 // El padre del domicilio es un lookup polimorfico (account | contact). parentid_contact es
 // la navigation property hacia contacto, y permite resolver todo en UNA query: no hace falta
@@ -30,7 +30,7 @@ const EXPAND_FIELDS = 'parentid_contact($select=contactid,fullname)';
 // en blanco. Se filtra en el servidor para no traer lo que no se va a mostrar.
 const NON_EMPTY_FIELDS = [
     'line1', 'line2', 'line3', 'city', 'county',
-    'stateorprovince', 'postalcode', 'country', 'axx_numero', 'name',
+    'stateorprovince', 'postalcode', 'country', 'axx_numero', 'msdyn_streetnumber', 'name',
 ];
 const NON_EMPTY_FILTER = `(${NON_EMPTY_FIELDS.map((f) => `${f} ne null`).join(' or ')})`;
 
@@ -62,6 +62,7 @@ interface ICustomerAddressEntity {
     addresstypecode?: number;
     line1?: string;
     axx_numero?: string;
+    msdyn_streetnumber?: string;
     city?: string;
     stateorprovince?: string;
     country?: string;
@@ -194,7 +195,10 @@ export const MasterAddressesGrid: React.FC<IMasterAddressesGridProps> = ({ maste
                     addressNumber: e.addressnumber ?? 0,
                     addressType: resolveAddressType(e),
                     line1: e.line1 ?? '',
-                    numero: e.axx_numero ?? '',
+                    // El numero de calle vive en dos campos segun quien lo cargo: los
+                    // formularios de este environment llenan msdyn_streetnumber y
+                    // axx_numero queda vacio. Se muestra el que tenga dato.
+                    numero: e.axx_numero ?? e.msdyn_streetnumber ?? '',
                     city: e.city ?? '',
                     stateOrProvince: e.stateorprovince ?? '',
                     country: e.country ?? '',
