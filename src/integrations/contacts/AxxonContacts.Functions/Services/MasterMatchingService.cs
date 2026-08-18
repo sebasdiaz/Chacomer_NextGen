@@ -14,6 +14,9 @@ namespace AxxonContacts.Functions.Services
         private const string IdentificationNumber = "msdyn_identificationnumber";
         private const int    BulkBatchSize        = 1000;
 
+        private const string CustomerAddressEntity = "customeraddress";
+        private const string StreetNumber          = "msdyn_streetnumber";
+
         /// <summary>
         /// Bloque de domicilio que se copia del raw al master. address1_stateorprovince es
         /// el logical name real del departamento/estado (no existe address1_stateprovince).
@@ -256,6 +259,7 @@ namespace AxxonContacts.Functions.Services
             {
                 var masterId = await Task.Run(() => _service.Create(master));
                 _logger.LogInformation("[MasterMatchingService] Master creado. Id={Id}", masterId);
+                await CopyStreetNumberToMasterAsync(message.ContactId, masterId);
                 return new EntityReference(EntityLogicalName, masterId);
             }
             catch (Exception ex)
@@ -272,6 +276,74 @@ namespace AxxonContacts.Functions.Services
                 }
                 throw;
             }
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // CopyStreetNumberToMaster
+        // ────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Copia msdyn_streetnumber del customeraddress 1 del raw al del master.
+        ///
+        /// Hace falta porque msdyn_streetnumber NO es un atributo del contact: vive solo
+        /// en customeraddress. El bloque address1_* que copia BuildMasterEntity se
+        /// proyecta automaticamente al customeraddress 1 del master, pero el numero de
+        /// calle queda atras porque no tiene proyeccion en el contact. Dataverse crea el
+        /// customeraddress 1 del master junto con el Create, asi que aca solo se updatea.
+        /// </summary>
+        private async Task CopyStreetNumberToMasterAsync(Guid rawId, Guid masterId)
+        {
+            try
+            {
+                var rawAddress   = await FindAddress1Async(rawId, new ColumnSet(StreetNumber));
+                var streetNumber = rawAddress?.GetAttributeValue<string>(StreetNumber);
+                if (string.IsNullOrWhiteSpace(streetNumber)) return;
+
+                var masterAddress = await FindAddress1Async(masterId, new ColumnSet(false));
+                if (masterAddress == null)
+                {
+                    _logger.LogWarning(
+                        "[MasterMatchingService] Master {MasterId} sin customeraddress 1. StreetNumber no copiado.",
+                        masterId);
+                    return;
+                }
+
+                var upd = new Entity(CustomerAddressEntity, masterAddress.Id);
+                upd[StreetNumber] = streetNumber;
+                await Task.Run(() => _service.Update(upd));
+
+                _logger.LogInformation(
+                    "[MasterMatchingService] StreetNumber '{StreetNumber}' copiado al master {MasterId}.",
+                    streetNumber, masterId);
+            }
+            catch (Exception ex)
+            {
+                // Mismo criterio que el domicilio: dato secundario, si no se puede copiar
+                // el master igual queda creado y no justifica reintentar el mensaje.
+                _logger.LogWarning(ex,
+                    "[MasterMatchingService] No se pudo copiar StreetNumber del raw {RawId} al master {MasterId}.",
+                    rawId, masterId);
+            }
+        }
+
+        private async Task<Entity?> FindAddress1Async(Guid parentId, ColumnSet columns)
+        {
+            var query = new QueryExpression(CustomerAddressEntity)
+            {
+                ColumnSet = columns,
+                Criteria = new FilterExpression(LogicalOperator.And)
+                {
+                    Conditions =
+                    {
+                        new ConditionExpression("parentid", ConditionOperator.Equal, parentId),
+                        new ConditionExpression("addressnumber", ConditionOperator.Equal, 1)
+                    }
+                },
+                TopCount = 1
+            };
+
+            var results = await Task.Run(() => _service.RetrieveMultiple(query));
+            return results.Entities.Count > 0 ? results.Entities[0] : null;
         }
 
         // ────────────────────────────────────────────────────────────
