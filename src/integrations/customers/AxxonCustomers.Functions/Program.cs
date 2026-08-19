@@ -1,6 +1,7 @@
 using Axxon.Eip.Core.Dataverse;
 using Axxon.Eip.Core.FinOps;
 using Axxon.Eip.Core.Hosting;
+using AxxonCustomers.Functions.Configuration;
 using AxxonCustomers.Functions.Mapping;
 using AxxonCustomers.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
@@ -24,6 +25,15 @@ builder.Services.AddEipFoOData(builder.Configuration);
 builder.Services.AddSingleton<IOrganizationService>(sp =>
     sp.GetRequiredService<DataverseClientFactory>().CreateOrganizationService());
 
+var settings = new AppSettings
+{
+    // Valor que QualifyLead escribe en msdyn_sellable del contact antes de sincronizar.
+    // Ausente o no booleano = no se sella nada (comportamiento historico).
+    QualifyLeadSellableValue =
+        AppSettings.ParseSellableValue(builder.Configuration["QualifyLeadSellableValue"])
+};
+builder.Services.AddSingleton(settings);
+
 // Mapeos por JSON (export de Dual Write + overlay), compilados al arranque.
 builder.Services.AddSingleton(sp => EntityMapRegistry.Load(
     EntityMapRegistry.DefaultDirectory,
@@ -40,6 +50,7 @@ builder.Services.AddTransient<IDualWriteCompanyResolver, DualWriteCompanyResolve
 
 builder.Services.AddTransient<IFoCustomerService, FoCustomerService>();
 builder.Services.AddTransient<ICustomerSyncService, CustomerSyncService>();
+builder.Services.AddTransient<ISellableStamper, SellableStamper>();
 
 var app = builder.Build();
 
