@@ -17,9 +17,11 @@ namespace AxxonCustomers.Functions.Functions
     ///   1. Parsea el RemoteExecutionContext y extrae el contact desde
     ///      InputParameters.OpportunityCustomerId o, en su defecto, desde
     ///      OutputParameters.CreatedEntities (flujo estandar de la UI).
-    ///   2. Si hay contact, lo lee de Dataverse y lo inserta en CustomersV3 de F&O
+    ///   2. Sella msdyn_sellable en el contact con el valor del App Setting
+    ///      QualifyLeadSellableValue (sin ese true no pasa la guarda syncWhen del mapeo).
+    ///   3. Si hay contact, lo lee de Dataverse y lo inserta en CustomersV3 de F&O
     ///      segun el mapeo customersv3.contact.*.json.
-    ///   3. Escribe el CustomerAccount generado en msdyn_contactpersonid del contact.
+    ///   4. Escribe el CustomerAccount generado en msdyn_contactpersonid del contact.
     ///
     /// Alcance: legal entities que SI sincroniza Dual Write. Dual Write en direccion
     /// CRM -> AX solo actualiza customers existentes (su filtro pide
@@ -40,15 +42,18 @@ namespace AxxonCustomers.Functions.Functions
 
         private readonly ICustomerSyncService _syncService;
         private readonly IDualWriteCompanyResolver _companyResolver;
+        private readonly ISellableStamper _sellableStamper;
         private readonly ILogger<QualifyLeadCustomerSyncFunction> _logger;
 
         public QualifyLeadCustomerSyncFunction(
             ICustomerSyncService syncService,
             IDualWriteCompanyResolver companyResolver,
+            ISellableStamper sellableStamper,
             ILogger<QualifyLeadCustomerSyncFunction> logger)
         {
             _syncService     = syncService;
             _companyResolver = companyResolver;
+            _sellableStamper = sellableStamper;
             _logger          = logger;
         }
 
@@ -124,31 +129,41 @@ namespace AxxonCustomers.Functions.Functions
                 return;
             }
 
-            // Reparto excluyente con CustomerFoSyncFunction: las legal entities que NO
-            // estan en Dual Write las sincroniza fo-sync de punta a punta (alta y
-            // modificacion). Si las procesaramos las dos, el alta saldria por duplicado y
-            // F&O rechazaria la segunda con un 400.
-            //
-            // Solo se saltea cuando la company dice explicitamente que no esta en Dual
-            // Write. Indeterminada (flag sin setear) sigue el camino de siempre: mientras
-            // cdm_isenabledfordualwrite no este poblado, este flujo se comporta como antes.
-            var company = await _companyResolver.ResolveForRecordAsync(
-                MapName, context.ContactId.Value, cancellationToken: cancellationToken);
-
-            if (company.Handling == CompanySyncHandling.Api)
-            {
-                _logger.LogInformation(
-                    "[QualifyLeadCustomerSyncFunction] El contact {ContactId} es de la legal entity " +
-                    "{DataAreaId}, que no esta en Dual Write: lo sincroniza CustomerFoSyncFunction. " +
-                    "Se completa sin procesar.",
-                    context.ContactId, company.DataAreaId ?? "sin codigo");
-
-                await messageActions.CompleteMessageAsync(message);
-                return;
-            }
-
             try
             {
+                // Calificar el prospecto lo vuelve sellable: sin msdyn_sellable = true el
+                // contact no pasa la guarda syncWhen del mapeo y no llega nunca a F&O.
+                // El valor sale del App Setting QualifyLeadSellableValue.
+                //
+                // Va ANTES del reparto por legal entity a proposito: el sellado es un dato
+                // del contact, no de la ruta que despues sigue el alta. Si solo se sellara
+                // la rama de Dual Write, los contacts de legal entities fuera de Dual Write
+                // quedarian sin sellar y fo-sync los saltearia por la misma guarda.
+                _sellableStamper.Stamp(context.ContactId.Value);
+
+                // Reparto excluyente con CustomerFoSyncFunction: las legal entities que NO
+                // estan en Dual Write las sincroniza fo-sync de punta a punta (alta y
+                // modificacion). Si las procesaramos las dos, el alta saldria por duplicado y
+                // F&O rechazaria la segunda con un 400.
+                //
+                // Solo se saltea cuando la company dice explicitamente que no esta en Dual
+                // Write. Indeterminada (flag sin setear) sigue el camino de siempre: mientras
+                // cdm_isenabledfordualwrite no este poblado, este flujo se comporta como antes.
+                var company = await _companyResolver.ResolveForRecordAsync(
+                    MapName, context.ContactId.Value, cancellationToken: cancellationToken);
+
+                if (company.Handling == CompanySyncHandling.Api)
+                {
+                    _logger.LogInformation(
+                        "[QualifyLeadCustomerSyncFunction] El contact {ContactId} es de la legal entity " +
+                        "{DataAreaId}, que no esta en Dual Write: lo sincroniza CustomerFoSyncFunction. " +
+                        "Se completa sin procesar.",
+                        context.ContactId, company.DataAreaId ?? "sin codigo");
+
+                    await messageActions.CompleteMessageAsync(message);
+                    return;
+                }
+
                 _logger.LogInformation(
                     "[QualifyLeadCustomerSyncFunction] Procesando contact {ContactId} " +
                     "(Lead={LeadId}, Message={MessageName}, legal entity={DataAreaId}/{Handling}).",

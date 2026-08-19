@@ -234,6 +234,10 @@ module customers 'modules/functionApp.bicep' = if (deployFunctionApps) {
       // trigger de QualifyLeadCustomerSyncFunction no resuelve y la app no arranca.
       { name: 'ServiceBusQueueName', value: 'leadcontacts' }
       { name: 'FoSyncServiceBusQueueName', value: 'customer-fo-sync' }
+      // Valor que QualifyLead escribe en msdyn_sellable del contact antes de sincronizar.
+      // Sin sellable = true F&O toma el party como prospecto y el alta del customer falla.
+      // Sacar el setting apaga el sellado (el contact sincroniza solo si ya venia sellable).
+      { name: 'QualifyLeadSellableValue', value: 'true' }
     ], dataverseAuthSettings, foAuthSettings)
   }
 }

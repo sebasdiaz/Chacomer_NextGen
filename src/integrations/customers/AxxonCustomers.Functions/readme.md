@@ -101,6 +101,13 @@ es lo que permite que un re-export sea un diff limpio en el PR.
 
 Precedencia: export -> `ignore` -> `fields` -> `constants`.
 
+> **Quien pone el `msdyn_sellable = true` que pide la guarda del contact:** el flujo de
+> QualifyLead, justo antes de sincronizar, con el valor del App Setting
+> `QualifyLeadSellableValue` (`SellableStamper`). fo-sync **no** sella: lee lo que haya.
+> Si se saca el setting, nadie escribe el campo y solo sincronizan los contacts que ya
+> venian sellables — que era la conducta anterior, y el motivo por el que un prospecto
+> recien calificado podia saltearse en silencio.
+
 ### Los cinco `kind`
 
 | `kind` | Que hace |
@@ -188,6 +195,7 @@ hay que mirarlo y decidir de nuevo.**
 | `ServiceBusConnection`  | Connection string (o config de identity) del namespace de Service Bus |
 | `ServiceBusQueueName`   | `leadcontacts`                                                    |
 | `FoSyncServiceBusQueueName` | `customer-fo-sync`                                            |
+| `QualifyLeadSellableValue` | Valor que QualifyLead escribe en `msdyn_sellable` del contact antes de sincronizar (`true`). Ausente o no booleano = no se sella nada |
 | `DataverseUrl`          | URL del environment de Dataverse                                  |
 | `DataverseClientId`     | (DESA) Client Id del app registration; vacio => Managed Identity  |
 | `DataverseClientSecret` | (DESA) Secret del app registration                                |
