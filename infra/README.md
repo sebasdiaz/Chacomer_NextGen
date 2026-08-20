@@ -211,6 +211,31 @@ Cada Function App recibe, vía role assignment (least privilege):
 > az role assignment create --assignee-object-id f57b2a77-e6d4-403d-9846-e6d354abccd9 --assignee-principal-type ServicePrincipal --role "Role Based Access Control Administrator" --scope "/subscriptions/09592883-de3a-4c93-944c-222b3c88e832/resourceGroups/dataversetest"
 > ```
 
+### Diagnostics: `FunctionAppLogs` al workspace
+
+Cada Function App lleva un diagnostic setting `diag-{functionAppName}` que manda la
+categoría **`FunctionAppLogs`** a `log-eip-{env}`, el mismo workspace que respalda a
+`appi-eip-{env}`. Se controla con el param `logAnalyticsWorkspaceId` del módulo
+`functionApp.bicep`: vacío = sin diagnostic setting.
+
+Es un **backstop de observabilidad**, no un duplicado. Las apps exportan por
+OpenTelemetry a Application Insights desde el worker (`AddEipCore`), y ese camino puede
+quedar mudo sin que nada falle: el 2026-08-20 `appi-eip-test` estuvo recibiendo sólo de
+`fa-axxonproducts-test` mientras contacts, customers y customergroups procesaban mensajes
+con el `APPLICATIONINSIGHTS_CONNECTION_STRING` correcto. Volvió sola a las 20:50Z junto
+con un reinicio del host, sin causa identificada. Los `FunctionAppLogs` los emite el
+**host**, no el worker, así que no comparten ese punto de falla.
+
+A diferencia de las role assignments, esto **no** pide
+`Microsoft.Authorization/roleAssignments/write` — alcanza con Contributor sobre el RG, así
+que queda prendido también en TEST pese a `deployRoleAssignments = false`.
+
+Para consultarlos:
+
+```
+FunctionAppLogs | where _ResourceId endswith "fa-axxoncontacts-test" | order by TimeGenerated desc
+```
+
 ### INTE: thinkchat con los roles a mano
 
 `inte.bicepparam` va con **`deployRoleAssignments = false`** por el mismo motivo, con el
