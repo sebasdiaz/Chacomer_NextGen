@@ -40,6 +40,13 @@ param maximumInstanceCount int = 40
 @description('Connection string de Application Insights (del modulo monitoring).')
 param appInsightsConnectionString string
 
+@description('''
+Resource id del workspace de Log Analytics al que mandar `FunctionAppLogs`. Vacio =
+sin diagnostic setting. Es el backstop de observabilidad: si el exporter de OpenTelemetry
+hacia Application Insights deja de emitir, los logs del host siguen llegando por aca.
+''')
+param logAnalyticsWorkspaceId string = ''
+
 @description('Nombre del Key Vault de la EiP (existente en el mismo RG).')
 param keyVaultName string
 
@@ -183,6 +190,24 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
         version: runtimeVersion
       }
     }
+  }
+}
+
+// ---- Diagnostics ----
+
+// A diferencia de las role assignments, esto no pide `roleAssignments/write`: alcanza con
+// Contributor sobre el RG, asi que puede quedar prendido tambien en TEST.
+resource diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceId)) {
+  name: 'diag-${functionAppName}'
+  scope: functionApp
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      {
+        category: 'FunctionAppLogs'
+        enabled: true
+      }
+    ]
   }
 }
 

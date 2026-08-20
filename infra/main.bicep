@@ -191,6 +191,7 @@ module contacts 'modules/functionApp.bicep' = if (deployFunctionApps) {
     runtimeVersion: dotnetIsolatedVersion
     maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
     deployRoleAssignments: deployRoleAssignments
@@ -221,6 +222,7 @@ module customers 'modules/functionApp.bicep' = if (deployFunctionApps) {
     runtimeVersion: dotnetIsolatedVersion
     maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
     deployRoleAssignments: deployRoleAssignments
@@ -253,6 +255,7 @@ module customerGroups 'modules/functionApp.bicep' = if (deployFunctionApps) {
     runtimeVersion: dotnetIsolatedVersion
     maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
     deployRoleAssignments: deployRoleAssignments
@@ -277,6 +280,7 @@ module products 'modules/functionApp.bicep' = if (deployFunctionApps) {
     runtimeVersion: dotnetIsolatedVersion
     maximumInstanceCount: foBoundMaxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
     deployRoleAssignments: deployRoleAssignments
@@ -311,6 +315,7 @@ module fiscal 'modules/functionApp.bicep' = if (deployFunctionApps) {
     // Proxy HTTP puro: no llama a F&O, escala libre.
     maximumInstanceCount: maxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
     deployRoleAssignments: deployRoleAssignments
@@ -335,6 +340,7 @@ module thinkchat 'modules/functionApp.bicep' = if (deployThinkchatApp) {
     // No pega a F&O: no necesita el techo de instancias de las apps F&O-bound.
     maximumInstanceCount: maxInstanceCount
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
     keyVaultName: keyVault.outputs.keyVaultName
     keyVaultUri: keyVault.outputs.keyVaultUri
     deployRoleAssignments: deployRoleAssignments
