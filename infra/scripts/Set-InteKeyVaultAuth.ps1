@@ -94,7 +94,7 @@ $appProfiles = [ordered]@{
     'fa-axxoncontacts-inte'  = @{ Dataverse = $true; FoOData = $false; SetApi = $true  }
     'fa-axxoncustomers-inte' = @{ Dataverse = $true; FoOData = $true;  SetApi = $false }
     'fa-axxonproducts-inte'  = @{ Dataverse = $true; FoOData = $true;  SetApi = $false }
-    # Sin sufijo -inte: se llama asi en Azure. Ver el punto 4 del cutover en infra/README.md.
+    # Sin sufijo -inte: se llama asi en Azure. Ver el punto 4 del cutover en docs/wiki/plataforma/ambientes.md.
     'fa-axxoncustomergroup'  = @{ Dataverse = $true; FoOData = $true;  SetApi = $false }
 }
 

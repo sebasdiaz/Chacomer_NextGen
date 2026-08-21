@@ -1,0 +1,87 @@
+# Chequeo de la wiki (docs/wiki).
+#
+# En cada PR: avisa que paginas dependen del codigo que el PR toca y no se
+# actualizaron. Ese aviso NO traba el merge — la decision de si la pagina hay que
+# tocarla o no es humana. Lo que si falla el check es un problema estructural:
+# un link relativo roto o una pagina sin bloque wiki-meta.
+#
+# Semanal: reporte completo de paginas rancias contra todo el historial.
+name: wiki
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'infra/**'
+      - 'pipelines/**'
+      - 'docs/**'
+      - 'tests/**'
+      - 'Chacomer.sln'
+  schedule:
+    # Lunes 09:00 UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pr:
+    name: Frescura del PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # checkout trae solo la ref del PR: la base hay que pedirla explicitamente.
+      - name: Traer la rama base
+        run: git fetch --no-tags origin ${{ github.base_ref }}
+
+      # Esto SI traba el merge: no es una opinion, es un hecho verificable.
+      - name: Las paginas generadas estan al dia
+        run: node docs/wiki/generate.mjs --check
+
+      - name: Chequear la wiki
+        run: node docs/wiki/check-freshness.mjs --diff origin/${{ github.base_ref }} --strict-links | tee wiki-report.txt
+
+      - name: Resumen
+        if: always()
+        run: |
+          echo '## Wiki' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat wiki-report.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Para actualizarlas: `/wiki-sync` en Claude Code, o a mano subiendo `last_reviewed`.' >> "$GITHUB_STEP_SUMMARY"
+
+  semanal:
+    name: Paginas rancias
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Las paginas generadas estan al dia
+        run: node docs/wiki/generate.mjs --check
+
+      - name: Reporte completo
+        run: node docs/wiki/check-freshness.mjs --strict-links | tee wiki-report.txt
+
+      - name: Resumen
+        if: always()
+        run: |
+          echo '## Wiki — paginas rancias' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat wiki-report.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

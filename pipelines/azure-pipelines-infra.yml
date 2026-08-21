@@ -5,7 +5,7 @@
 # OJO: DataverseINTE tiene 4 Function Apps vivas creadas a mano, con secretos
 # en app settings planos y auth por connection string. Por eso inte.bicepparam
 # va con deployFunctionApps = false: este pipeline administra hoy SOLO los
-# recursos compartidos. Ver infra/README, "Cutover de INTE".
+# recursos compartidos. Ver docs/wiki/plataforma/ambientes.md, "Cutover de INTE".
 #
 # NOTA — sin secretos:
 #   `sc-chacomer-eip-inte` es de Workload Identity Federation y se consume con

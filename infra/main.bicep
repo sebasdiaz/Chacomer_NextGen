@@ -135,7 +135,7 @@ var tags = {
 
 // Settings de autenticacion por Service Principal. Se emiten solo si el ambiente los
 // declara; sin ellos la app usa su Managed Identity. Los *ClientSecret NO van aca:
-// se resuelven desde Key Vault por nombre canonico (ver `Secretos` en infra/README.md).
+// se resuelven desde Key Vault por nombre canonico (ver docs/wiki/plataforma/secretos-y-key-vault.md).
 var dataverseAuthSettings = empty(dataverseClientId) ? [] : [
   { name: 'DataverseClientId', value: dataverseClientId }
 ]
