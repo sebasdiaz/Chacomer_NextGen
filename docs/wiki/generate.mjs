@@ -490,11 +490,15 @@ outputs.push({ name: 'README.md', title: 'Índice', from: '—', content: render
 
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
 
+// Comparar sin fin de linea: en Windows core.autocrlf deja los archivos con CRLF y
+// esto escribe LF, asi que sin normalizar --check daria drift siempre.
+const sameText = (a, b) => a !== null && a.replace(/\r\n/g, '\n') === b.replace(/\r\n/g, '\n');
+
 const drift = [];
 for (const o of outputs) {
   const file = path.join(OUT, o.name);
   const current = existsSync(file) ? read(file) : null;
-  if (current === o.content) continue;
+  if (sameText(current, o.content)) continue;
   drift.push(o.name);
   if (!CHECK) writeFileSync(file, o.content);
 }
@@ -502,7 +506,7 @@ for (const o of outputs) {
 // .order para Azure DevOps
 const orderFile = path.join(OUT, '.order');
 const order = outputs.filter((o) => o.name !== 'README.md').map((o) => o.name.replace(/\.md$/, '')).join('\n') + '\n';
-if (!CHECK && read0(orderFile) !== order) writeFileSync(orderFile, order);
+if (!CHECK && !sameText(read0(orderFile), order)) writeFileSync(orderFile, order);
 function read0(p) {
   return existsSync(p) ? read(p) : null;
 }
