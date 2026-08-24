@@ -30,6 +30,10 @@ parameters:
     type: string
   - name: azureServiceConnection  # Nombre de la service connection del ambiente
     type: string
+  # Funcion a verificar en el host despues del deploy. Vacio = sin smoke test.
+  - name: smokeTestFunctionName
+    type: string
+    default: ''
 
 stages:
   - stage: ${{ parameters.stageName }}
@@ -93,3 +97,29 @@ stages:
                         --src "$pkg"
                   env:
                     AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
+
+                # Un config-zip puede terminar "exitoso" sin que el host llegue a cargar
+                # nada (paquete mal armado, worker que no levanta). Preguntarle al host si
+                # la funcion existe es lo unico que distingue un deploy real de uno vacio.
+                - ${{ if ne(parameters.smokeTestFunctionName, '') }}:
+                  - task: AzureCLI@2
+                    displayName: 'Smoke test: ${{ parameters.smokeTestFunctionName }} registrada en el host'
+                    inputs:
+                      azureSubscription: ${{ parameters.azureServiceConnection }}
+                      scriptType: bash
+                      scriptLocation: inlineScript
+                      inlineScript: |
+                        set -euo pipefail
+
+                        # El host reindexa las funciones despues del deploy: no es inmediato.
+                        for intento in 1 2 3 4 5 6; do
+                          if az functionapp function show -g '${{ parameters.resourceGroupName }}' -n '${{ parameters.appName }}' --function-name '${{ parameters.smokeTestFunctionName }}' -o none 2>/dev/null; then
+                            echo "La funcion '${{ parameters.smokeTestFunctionName }}' esta registrada."
+                            exit 0
+                          fi
+                          echo "Intento $intento: todavia no aparece. Reintentando en 20s..."
+                          sleep 20
+                        done
+
+                        echo "##vso[task.logissue type=error]La funcion '${{ parameters.smokeTestFunctionName }}' no quedo registrada en '${{ parameters.appName }}'. El deploy no subio nada utilizable."
+                        exit 1

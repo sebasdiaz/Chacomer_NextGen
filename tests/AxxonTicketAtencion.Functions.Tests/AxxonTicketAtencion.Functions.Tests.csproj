@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>AxxonTicketAtencion.Functions.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\integrations\service\AxxonTicketAtencion.Functions\AxxonTicketAtencion.Functions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- El template no viaja solo por el ProjectReference: un <None> con
+         CopyToOutputDirectory no es transitivo. Se enlaza explicitamente para poder
+         probar el relleno contra el MISMO archivo que se despliega. -->
+    <None Include="..\..\src\integrations\service\AxxonTicketAtencion.Functions\Templates\template_ticket_atencion.docx"
+          Link="Templates\template_ticket_atencion.docx"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

@@ -29,14 +29,19 @@ Chacomer_NextGen/
 │       └── ServiceBusMessage.json
 │
 ├── tests/
-│   └── AxxonCustomers.Functions.Tests/   (xUnit — mapeos CRM -> F&O)
+│   ├── AxxonContacts.Functions.Tests/       (xUnit)
+│   ├── AxxonCustomers.Functions.Tests/      (xUnit — mapeos CRM -> F&O)
+│   └── AxxonTicketAtencion.Functions.Tests/ (xUnit — XML, relleno del .docx, fechas)
 │
 └── src/
     ├── core/
     │   └── Axxon.Eip.Core/            (.NET 10 — componentes CROSS de la EiP)
     │       ├── Configuration/         (DataverseOptions, FoODataOptions, Key Vault)
-    │       ├── Dataverse/             (DataverseClientFactory + AddEipDataverse)
+    │       ├── Dataverse/             (DataverseClientFactory + AddEipDataverse,
+    │       │                            DataverseWebApiClient + AddEipDataverseWebApi)
     │       ├── FinOps/                (FoODataClient generico + AddEipFoOData + retry 429)
+    │       ├── Graph/                 (GraphSharePointService + AddEipGraph: PDF y SharePoint)
+    │       ├── Identity/              (EipCredentialFactory: MI o Service Principal)
     │       └── Hosting/               (AddEipCore: Key Vault + OpenTelemetry + logging)
     │
     ├── integrations/
@@ -47,8 +52,10 @@ Chacomer_NextGen/
     │   ├── customers/
     │   │   ├── AxxonCustomers.Functions/
     │   │   └── AxxonCustomerGroups.Functions/
-    │   └── products/
-    │       └── AxxonProducts.Functions/
+    │   ├── products/
+    │   │   └── AxxonProducts.Functions/
+    │   └── service/
+    │       └── AxxonTicketAtencion.Functions/  (.NET 10 — Ticket de Atención en Word/PDF)
     │
     └── webresources/                  (PCF controls)
         ├── DeviceRegistrationGrid/
@@ -111,6 +118,7 @@ az role assignment create \
 | `DataverseClientSecret` | todas (DESA/INTE) | Client Secret del App Registration de Dataverse |
 | `FoClientSecret` | customers, customergroups, products (DESA/INTE) | Client Secret del App Registration de F&O |
 | `SetApiKey` | contacts, fiscal | API Key de la SET Paraguay |
+| `GraphClientSecret` | ticketatencion (DESA/INTE) | Client Secret del App Registration de Microsoft Graph. Hoy es el mismo de Dataverse. |
 
 En producción las conexiones a Dataverse/F&O usan Managed Identity: no hay secreto que guardar.
 Los secrets `*ClientSecret` solo existen en los vaults de DESA/INTE.

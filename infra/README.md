@@ -117,6 +117,58 @@ Cuando INTE pase a `deployFunctionApps = true`, `functionApp.bicep` cablea el
 `keyVaultUri` del vault que crea el propio template: hay que parametrizarlo para que INTE
 siga apuntando a `keyvaultinte`, o migrar los secretos a `kv-chacomer-eip-inte`.
 
+### TicketAtencion: la quinta app de INTE creada a mano
+
+`fa-axxonticketatencion-inte` (GAP-103/227) también existe creada a mano y también está
+fuera del Bicep mientras `deployFunctionApps` siga en `false`. Tiene su propio toggle
+`deployTicketAtencionApp` porque en TEST **no** existe: sin él, prender
+`deployFunctionApps` en TEST crearía la app y su storage de rebote.
+
+Es la única app de la EiP con CORS: expone un endpoint que consume un web resource desde
+el dominio de Dataverse. Lo declara el parámetro `allowedOrigins` de `functionApp.bicep`,
+que sale de `dataverseOrigin`.
+
+Estado verificado el 2026-08-24 y lo que falta para el cutover:
+
+```bash
+RG=DataverseINTE
+APP=fa-axxonticketatencion-inte
+VAULT=keyvaultinte
+DV=https://operations-b1-chacomer-inte.crm.dynamics.com
+
+# 1. Runtime: hoy dotnet-isolated 8.0; el proyecto es net10.0.
+az functionapp config set -g $RG -n $APP --net-framework-version v10.0
+az resource update -g $RG -n $APP --resource-type Microsoft.Web/sites   --set properties.functionAppConfig.runtime.version=10.0
+
+# 2. Rol de Key Vault para la Managed Identity (ya tiene MI: 760370b6-…).
+PRINCIPAL=$(az functionapp identity show -g $RG -n $APP --query principalId -o tsv)
+az role assignment create --assignee-object-id $PRINCIPAL --assignee-principal-type ServicePrincipal   --role "Key Vault Secrets User"   --scope $(az keyvault show -n $VAULT --query id -o tsv)
+
+# 3. App settings nuevos (los viejos DATAVERSE_URL / AZURE_* ya no los lee nadie).
+az functionapp config appsettings set -g $RG -n $APP --settings   "KeyVaultUri=https://$VAULT.vault.azure.net/"   "DataverseUrl=$DV"   "DataverseClientId=145fd64d-3deb-46eb-9f58-736d1ff46a3e"   "DataverseTenantId=d0e6feed-3ca5-4438-bca3-09cb8ba9814a"   "DataverseClientSecretName=SecretNextGenDynamics365Inte"   "GraphClientId=145fd64d-3deb-46eb-9f58-736d1ff46a3e"   "GraphTenantId=d0e6feed-3ca5-4438-bca3-09cb8ba9814a"   "GraphClientSecretName=SecretNextGenDynamics365Inte"   "SharePointSiteUrl=https://chacomercompy.sharepoint.com/sites/B1-Chacomer-INTE"
+
+# 4. CORS para el fetch del formulario de D365.
+az functionapp cors add -g $RG -n $APP --allowed-origins $DV
+
+# 5. Validado el deploy, se borran los settings viejos y el secreto en texto plano.
+az functionapp config appsettings delete -g $RG -n $APP --setting-names   DATAVERSE_URL AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET
+```
+
+**Falta algo que no se resuelve con `az`.** El app registration `145fd64d`
+(`NextGen_Dynamics365_Inte`) *pide* `Sites.ReadWrite.All` y `Files.ReadWrite.All` de Graph,
+pero su service principal tiene **cero** `appRoleAssignments`: nadie consintió esos
+permisos. Hasta que un Global Admin dé el consentimiento, Graph responde 403, el ticket
+sale siempre con `status = OK_SIN_PDF` y el PDF no aparece en la pestaña Archivos.
+
+```bash
+# Diagnóstico (devuelve [] hoy):
+SP=$(az ad sp show --id 145fd64d-3deb-46eb-9f58-736d1ff46a3e --query id -o tsv)
+az rest --method get --url "https://graph.microsoft.com/v1.0/servicePrincipals/$SP/appRoleAssignments"
+```
+
+Esto explica por qué el PDF nunca funcionó en INTE, junto con el `SHAREPOINT_SITE_URL`
+que tampoco estaba configurado.
+
 ## Qué despliega
 
 | Recurso | Nombre | Notas |
