@@ -128,30 +128,49 @@ Es la única app de la EiP con CORS: expone un endpoint que consume un web resou
 el dominio de Dataverse. Lo declara el parámetro `allowedOrigins` de `functionApp.bicep`,
 que sale de `dataverseOrigin`.
 
-Estado verificado el 2026-08-24 y lo que falta para el cutover:
+Estado verificado el 2026-08-24. **Los app settings y el CORS ya se aplicaron**, y la
+Managed Identity **ya tenía** `Key Vault Secrets User` sobre `keyvaultinte` de antes. Lo
+que sigue abajo queda como referencia de qué se corrió y qué falta.
 
 ```bash
 RG=DataverseINTE
 APP=fa-axxonticketatencion-inte
 VAULT=keyvaultinte
 DV=https://operations-b1-chacomer-inte.crm.dynamics.com
+MI=760370b6-34ba-4da2-9926-c7265d22fa5c   # System-Assigned MI de la app
 
-# 1. Runtime: hoy dotnet-isolated 8.0; el proyecto es net10.0.
-az functionapp config set -g $RG -n $APP --net-framework-version v10.0
-az resource update -g $RG -n $APP --resource-type Microsoft.Web/sites   --set properties.functionAppConfig.runtime.version=10.0
+# 1. PENDIENTE - Runtime: hoy dotnet-isolated 8.0 y el proyecto es net10.0.
+#    Dejarlo para JUSTO ANTES de correr el pipeline: el bump rompe el codigo viejo,
+#    que sigue desplegado y hoy funciona, hasta que entre el nuevo.
+az resource update -g $RG -n $APP --resource-type Microsoft.Web/sites \
+  --set properties.functionAppConfig.runtime.version=10.0
 
-# 2. Rol de Key Vault para la Managed Identity (ya tiene MI: 760370b6-…).
-PRINCIPAL=$(az functionapp identity show -g $RG -n $APP --query principalId -o tsv)
-az role assignment create --assignee-object-id $PRINCIPAL --assignee-principal-type ServicePrincipal   --role "Key Vault Secrets User"   --scope $(az keyvault show -n $VAULT --query id -o tsv)
+# 2. HECHO - Rol de Key Vault. La MI ya tenia "Key Vault Secrets User" sobre
+#    keyvaultinte de antes. Verificar (no crear):
+az role assignment list --assignee $MI \
+  --scope $(az keyvault show -n $VAULT --query id -o tsv) \
+  --query "[].roleDefinitionName" -o tsv
 
-# 3. App settings nuevos (los viejos DATAVERSE_URL / AZURE_* ya no los lee nadie).
-az functionapp config appsettings set -g $RG -n $APP --settings   "KeyVaultUri=https://$VAULT.vault.azure.net/"   "DataverseUrl=$DV"   "DataverseClientId=145fd64d-3deb-46eb-9f58-736d1ff46a3e"   "DataverseTenantId=d0e6feed-3ca5-4438-bca3-09cb8ba9814a"   "DataverseClientSecretName=SecretNextGenDynamics365Inte"   "GraphClientId=145fd64d-3deb-46eb-9f58-736d1ff46a3e"   "GraphTenantId=d0e6feed-3ca5-4438-bca3-09cb8ba9814a"   "GraphClientSecretName=SecretNextGenDynamics365Inte"   "SharePointSiteUrl=https://chacomercompy.sharepoint.com/sites/B1-Chacomer-INTE"
+# 3. HECHO - App settings nuevos. Los viejos (DATAVERSE_URL, AZURE_*) NO se tocan:
+#    son los que lee el codigo viejo mientras siga desplegado.
+az functionapp config appsettings set -g $RG -n $APP --settings \
+  "KeyVaultUri=https://$VAULT.vault.azure.net/" \
+  "DataverseUrl=$DV" \
+  "DataverseClientId=145fd64d-3deb-46eb-9f58-736d1ff46a3e" \
+  "DataverseTenantId=d0e6feed-3ca5-4438-bca3-09cb8ba9814a" \
+  "DataverseClientSecretName=SecretNextGenDynamics365Inte" \
+  "GraphClientId=145fd64d-3deb-46eb-9f58-736d1ff46a3e" \
+  "GraphTenantId=d0e6feed-3ca5-4438-bca3-09cb8ba9814a" \
+  "GraphClientSecretName=SecretNextGenDynamics365Inte" \
+  "SharePointSiteUrl=https://chacomercompy.sharepoint.com/sites/B1-Chacomer-INTE"
 
-# 4. CORS para el fetch del formulario de D365.
+# 4. HECHO - CORS para el fetch del formulario de D365.
 az functionapp cors add -g $RG -n $APP --allowed-origins $DV
 
-# 5. Validado el deploy, se borran los settings viejos y el secreto en texto plano.
-az functionapp config appsettings delete -g $RG -n $APP --setting-names   DATAVERSE_URL AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET
+# 5. PENDIENTE - Validado el deploy nuevo, se borran los settings viejos y el secreto
+#    en texto plano. NO antes.
+az functionapp config appsettings delete -g $RG -n $APP --setting-names \
+  DATAVERSE_URL AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET
 ```
 
 **Falta algo que no se resuelve con `az`.** El app registration `145fd64d`
@@ -167,7 +186,11 @@ az rest --method get --url "https://graph.microsoft.com/v1.0/servicePrincipals/$
 ```
 
 Esto explica por qué el PDF nunca funcionó en INTE, junto con el `SHAREPOINT_SITE_URL`
-que tampoco estaba configurado.
+que tampoco estaba configurado (ese ya se corrigió; el consentimiento no).
+
+Falta además que exista la ubicación de documentos de `msauto_serviceappointment` en
+Dataverse: `TicketSharePointService` la necesita como padre de la carpeta de cada Cita.
+Se crea sola la primera vez que alguien abre la pestaña Archivos de una Cita.
 
 ## Qué despliega
 

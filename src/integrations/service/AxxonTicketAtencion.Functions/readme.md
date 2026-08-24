@@ -97,20 +97,24 @@ que monta `AddEipCore()`. Ver `EipSecretResolver` para la indirección `{Clave}N
 
 ## Estado en INTE — lo que falta antes del primer deploy
 
-Verificado sobre `fa-axxonticketatencion-inte` (RG `DataverseINTE`) el 2026-08-24:
+Verificado sobre `fa-axxonticketatencion-inte` (RG `DataverseINTE`) el 2026-08-24.
+
+Ya aplicado:
+
+| Hecho | Detalle |
+|---|---|
+| App settings nuevos | `KeyVaultUri`, `DataverseUrl`, `DataverseTenantId`, `DataverseClientSecretName`, `Graph*` y `SharePointSiteUrl`. La ausencia de este último es la razón por la que el PDF nunca funcionó: la implementación anterior armaba `new Uri("")`, tiraba, y el `catch` se lo comía. |
+| Rol de Key Vault | La Managed Identity **ya tenía** `Key Vault Secrets User` sobre `keyvaultinte` desde antes. |
+| CORS | Origen `https://operations-b1-chacomer-inte.crm.dynamics.com`. |
+
+Pendiente:
 
 | # | Pendiente | Por qué bloquea |
 |---|---|---|
-| 1 | **Runtime en `dotnet-isolated 8.0`** | Este proyecto es `net10.0`. Hay que subirlo a `10.0` o el worker no levanta. |
-| 2 | **Consentimiento de admin de los permisos de Graph** | El registration `145fd64d` pide `Sites.ReadWrite.All` y `Files.ReadWrite.All`, pero tiene **cero** `appRoleAssignments`: nadie consintió. Sin eso Graph responde 403 y el ticket sale siempre `OK_SIN_PDF`. **Lo tiene que otorgar un Global Admin.** |
-| 3 | **`SharePointSiteUrl` no existe como app setting** | Por eso el PDF nunca funcionó en INTE: la implementación anterior armaba `new Uri("")`, tiraba, y el `catch` se lo comía. |
-| 4 | **La Managed Identity no tiene rol sobre `keyvaultinte`** | Necesita `Key Vault Secrets User` para resolver el secret. |
-| 5 | **CORS sin configurar** (`cors: null`) | El `fetch` desde el formulario de D365 se bloquea en el browser. |
-| 6 | **`AZURE_CLIENT_SECRET` en texto plano** | Se reemplaza por la indirección a Key Vault y se borra. |
-| 7 | **La ubicación de documentos de `msauto_serviceappointment`** | `TicketSharePointService` la necesita como padre. Se crea sola al abrir una vez la pestaña Archivos de una Cita. |
-
-Los settings viejos (`DATAVERSE_URL`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`,
-`AZURE_CLIENT_SECRET`) ya no los lee nadie: se borran después del cutover.
+| 1 | **Runtime en `dotnet-isolated 8.0`** | Este proyecto es `net10.0`. Hay que subirlo a `10.0` o el worker no levanta. Conviene hacerlo justo antes de correr el pipeline: el bump rompe el código viejo hasta que entre el nuevo. |
+| 2 | **Consentimiento de admin de los permisos de Graph** | El registration `145fd64d` pide `Sites.ReadWrite.All` y `Files.ReadWrite.All`, pero su service principal tiene **cero** `appRoleAssignments`: nadie consintió. Sin eso Graph responde 403 y el ticket sale siempre `OK_SIN_PDF`. **Lo tiene que otorgar un Global Admin.** |
+| 3 | **La ubicación de documentos de `msauto_serviceappointment`** | `TicketSharePointService` la necesita como padre. Se crea sola al abrir una vez la pestaña Archivos de una Cita. |
+| 4 | **`AZURE_CLIENT_SECRET` en texto plano** | Se borra después de validar el deploy, junto con `DATAVERSE_URL`, `AZURE_TENANT_ID` y `AZURE_CLIENT_ID`, que ya no los lee nadie. Siguen puestos a propósito: son los que usa el código viejo mientras siga desplegado. |
 
 Comandos en `infra/README.md`, sección de INTE.
 
