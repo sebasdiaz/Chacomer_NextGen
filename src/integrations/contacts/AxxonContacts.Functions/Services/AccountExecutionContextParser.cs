@@ -49,6 +49,8 @@ namespace AxxonContacts.Functions.Services
                 EmailAddress1 = Str(merged, "emailaddress1"),
                 Description   = Str(merged, "description"),
 
+                AxxLugarComercial = Ref(merged, "axx_lugarcomercial"),
+
                 Address1Line1           = Str(merged, "address1_line1"),
                 Address1Line2           = Str(merged, "address1_line2"),
                 Address1Line3           = Str(merged, "address1_line3"),
