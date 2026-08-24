@@ -40,7 +40,7 @@ El plugin de Dataverse necesita el Strong Name Key, una sola vez:
 
 ```
 src/core/            Axxon.Eip.Core — lo que comparten todas las Function Apps
-src/integrations/    una carpeta por dominio (contacts, customers, fiscal, products, thinkchat)
+src/integrations/    una carpeta por dominio (contacts, customers, fiscal, products, service, thinkchat)
 src/webresources/    controles PCF
 infra/               Bicep — un despliegue por ambiente
 pipelines/           Azure Pipelines — uno por integración + infra

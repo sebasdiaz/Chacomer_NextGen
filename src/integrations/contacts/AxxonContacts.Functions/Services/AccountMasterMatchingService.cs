@@ -12,6 +12,7 @@ namespace AxxonContacts.Functions.Services
         private const string IsMaster             = "axx_ismaster";
         private const string MasterAccountId      = "axx_masteraccountid";
         private const string IdentificationNumber = "msdyn_identificationnumber";
+        private const string LugarComercial       = "axx_lugarcomercial";
         private const int    BulkBatchSize        = 1000;
 
         private const string CustomerAddressEntity = "customeraddress";
@@ -202,6 +203,40 @@ namespace AxxonContacts.Functions.Services
         }
 
         // ────────────────────────────────────────────────────────────
+        // EnrichLugarComercialFromDataverse
+        // ────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Completa axx_lugarcomercial leyendolo del raw en Dataverse cuando no vino en el evento.
+        ///
+        /// Mismo motivo que el domicilio: el PreImage del Step esta acotado a los campos de
+        /// matching, asi que en un evento Update el lookup solo viaja si cambio en esa misma
+        /// operacion. Sin esto el master se crearia sin lugar comercial y sin que falle nada.
+        /// El Retrieve extra se paga solo al CREAR el master, no en cada mensaje.
+        /// </summary>
+        private async Task EnrichLugarComercialFromDataverseAsync(AccountEventMessage message)
+        {
+            if (message.AxxLugarComercial.HasValue) return;
+
+            try
+            {
+                var record = await Task.Run(() =>
+                    _service.Retrieve(EntityLogicalName, message.AccountId, new ColumnSet(LugarComercial)));
+
+                message.AxxLugarComercial = record.GetAttributeValue<EntityReference>(LugarComercial)?.Id;
+            }
+            catch (Exception ex)
+            {
+                // Dato secundario, mismo criterio que el domicilio: si no se puede leer el
+                // master igual se crea y no justifica reintentar el mensaje.
+                _logger.LogWarning(ex,
+                    "[AccountMasterMatchingService] No se pudo recuperar axx_lugarcomercial del raw {RawId}. " +
+                    "El master se crea sin lugar comercial.",
+                    message.AccountId);
+            }
+        }
+
+        // ────────────────────────────────────────────────────────────
         // FindMasterByIdentification
         // ────────────────────────────────────────────────────────────
 
@@ -238,6 +273,7 @@ namespace AxxonContacts.Functions.Services
         private async Task<EntityReference> CreateMasterAsync(AccountEventMessage message)
         {
             await EnrichAddressFromDataverseAsync(message);
+            await EnrichLugarComercialFromDataverseAsync(message);
 
             var master = BuildMasterEntity(message);
 
@@ -367,6 +403,9 @@ namespace AxxonContacts.Functions.Services
             SetString(e, "address1_country",         m.Address1Country);
             SetDouble(e, "address1_latitude",        m.Address1Latitude);
             SetDouble(e, "address1_longitude",       m.Address1Longitude);
+
+            // Lugar comercial: lookup a axx_lugarcomercial, se copia tal cual del raw.
+            SetRef(e, LugarComercial, "axx_lugarcomercial", m.AxxLugarComercial);
 
             // msdyn_company requerido por plugin de Dual Write
             SetRef(e, "msdyn_company", "cdm_company", m.MsdynCompany);

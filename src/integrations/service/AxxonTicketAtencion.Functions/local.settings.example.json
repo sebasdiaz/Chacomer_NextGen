@@ -1,0 +1,17 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+
+    "DataverseUrl": "https://operations-b1-chacomer-inte.crm.dynamics.com",
+    "DataverseTenantId": "d0e6feed-3ca5-4438-bca3-09cb8ba9814a",
+    "DataverseClientId": "145fd64d-3deb-46eb-9f58-736d1ff46a3e",
+    "DataverseClientSecret": "<solo para desarrollo local — en Azure sale de Key Vault>",
+
+    "SharePointSiteUrl": "https://chacomercompy.sharepoint.com/sites/B1-Chacomer-INTE",
+    "GraphTenantId": "d0e6feed-3ca5-4438-bca3-09cb8ba9814a",
+    "GraphClientId": "145fd64d-3deb-46eb-9f58-736d1ff46a3e",
+    "GraphClientSecret": "<idem>"
+  }
+}

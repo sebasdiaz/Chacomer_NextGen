@@ -51,6 +51,7 @@ namespace AxxonContacts.Functions.Services
                 LastName                = Str(merged, "lastname"),
                 MobilePhone             = Str(merged, "mobilephone"),
                 Description             = Str(merged, "description"),
+                AxxLugarComercial       = Ref(merged, "axx_lugarcomercial"),
                 EmailAddress1           = Str(merged, "emailaddress1"),
                 EmailAddress2           = Str(merged, "emailaddress2"),
                 MsdynIsProspect         = Bool(merged, "msdyn_isprospect"),

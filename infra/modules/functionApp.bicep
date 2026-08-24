@@ -74,6 +74,17 @@ param deployRoleAssignments bool = true
 @description('App settings propios de la integracion (array de { name, value }).')
 param appSettings array = []
 
+@description('''
+Origenes permitidos por CORS. Vacio = sin CORS, que es lo correcto para las apps que solo
+consumen Service Bus o timers.
+
+Hace falta para las que expone un web resource de Dataverse: el `fetch` del formulario sale
+del dominio de D365, y sin el origen en esta lista el browser bloquea la respuesta antes de
+que el JS la vea. Los headers NO se emiten desde el codigo de la Function: hacer las dos
+cosas duplica `Access-Control-Allow-Origin` y el browser tambien rechaza eso.
+''')
+param allowedOrigins array = []
+
 // Roles built-in (GUIDs fijos de Azure).
 var roleIds = {
   storageBlobDataOwner: 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
@@ -169,6 +180,11 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
     siteConfig: {
       minTlsVersion: '1.2'
       appSettings: concat(baseAppSettings, appSettings)
+      cors: empty(allowedOrigins) ? null : {
+        allowedOrigins: allowedOrigins
+        // Las llamadas van con function key en un header, no con cookies de sesion.
+        supportCredentials: false
+      }
     }
     functionAppConfig: {
       deployment: {

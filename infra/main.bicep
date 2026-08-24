@@ -47,6 +47,15 @@ No es un secreto: el client secret vive en Key Vault (secret `DataverseClientSec
 param dataverseClientId string = ''
 
 @description('''
+Tenant de Entra del app registration de `dataverseClientId`. Solo se emite junto con el.
+
+Hace falta desde que existe el cliente de Dataverse por Web API: el `ServiceClient` del SDK
+infiere la authority de la URL del environment, pero `ClientSecretCredential` la necesita
+explicita. Las apps que autentican por Managed Identity lo ignoran.
+''')
+param dataverseTenantId string = ''
+
+@description('''
 Client ID del app registration para la auth S2S contra F&O. Mismo criterio que
 `dataverseClientId`: vacio = Managed Identity. El secreto va en Key Vault (`FoClientSecret`).
 ''')
@@ -83,6 +92,18 @@ param schedules object = {
   thinkchatTemplateSync: '0 0 */2 * * *'
 }
 
+@description('''
+URL del sitio de SharePoint donde viven los documentos de Dataverse del ambiente.
+La usa TicketAtencion para adjuntar el PDF del ticket a la Cita de Servicio.
+''')
+param sharePointSiteUrl string = ''
+
+@description('''
+Origen del environment de Dataverse, para el CORS de las apps que expone un web resource.
+Se deriva de `dataverseUrl`, que ya trae exactamente esa forma (https://org.crm.dynamics.com).
+''')
+param dataverseOrigin string = dataverseUrl
+
 @description('URL base de la API de Thinkchat (con o sin barra final).')
 param thinkchatBaseUrl string = ''
 
@@ -111,6 +132,17 @@ identidad, asi que sin los roles de Storage no arranca. Ver `deployRoleAssignmen
 param deployThinkchatApp bool = deployFunctionApps
 
 @description('''
+Toggle propio de la app de TicketAtencion. Default: sigue a `deployFunctionApps`.
+
+Existe porque la app tiene un pie en cada ambiente: en INTE ya existe creada a mano
+(`fa-axxonticketatencion-inte`, la que consume el web resource) y entra en el mismo cutover
+que las otras cuatro, mientras que en TEST todavia no existe. Sin el toggle, poner
+`deployFunctionApps = true` en TEST crearia la app y su storage de rebote, sin que nadie
+lo haya decidido.
+''')
+param deployTicketAtencionApp bool = deployFunctionApps
+
+@description('''
 False para que el template NO declare las role assignments de las Function Apps
 (Storage Blob/Queue, Key Vault Secrets User, Service Bus Data Receiver/Sender).
 
@@ -136,9 +168,23 @@ var tags = {
 // Settings de autenticacion por Service Principal. Se emiten solo si el ambiente los
 // declara; sin ellos la app usa su Managed Identity. Los *ClientSecret NO van aca:
 // se resuelven desde Key Vault por nombre canonico (ver docs/wiki/plataforma/secretos-y-key-vault.md).
-var dataverseAuthSettings = empty(dataverseClientId) ? [] : [
-  { name: 'DataverseClientId', value: dataverseClientId }
-]
+var dataverseAuthSettings = empty(dataverseClientId)
+  ? []
+  : concat(
+      [ { name: 'DataverseClientId', value: dataverseClientId } ],
+      empty(dataverseTenantId) ? [] : [ { name: 'DataverseTenantId', value: dataverseTenantId } ]
+    )
+
+// Graph usa HOY el mismo app registration que Dataverse (es el que tiene pedidos
+// Sites.ReadWrite.All y Files.ReadWrite.All). Se emite aparte y no se asume la
+// equivalencia en el codigo: el dia que Graph pase a su propio registration —o a la
+// Managed Identity— se cambia solo esto.
+var graphAuthSettings = empty(dataverseClientId)
+  ? []
+  : concat(
+      [ { name: 'GraphClientId', value: dataverseClientId } ],
+      empty(dataverseTenantId) ? [] : [ { name: 'GraphTenantId', value: dataverseTenantId } ]
+    )
 
 var foAuthSettings = empty(foClientId)
   ? []
@@ -355,6 +401,41 @@ module thinkchat 'modules/functionApp.bicep' = if (deployThinkchatApp) {
       { name: 'Schedules__ThinkchatTemplateSync', value: schedules.thinkchatTemplateSync }
       // El token NO va aca: se resuelve desde Key Vault (secret "secretThinkChat").
     ]
+  }
+}
+
+// Ticket de Atencion (GAP-103/227): genera la Orden de Reparacion en Word desde el
+// formulario de Cita de Servicio y adjunta el PDF a la Cita en SharePoint.
+//
+// Es la unica app de la EiP que expone un endpoint consumido por un browser, asi que es
+// la unica con CORS. La key del endpoint la lee el web resource de una Environment
+// Variable de Dataverse — no va hardcodeada en el JS ni en este template.
+//
+// No habla con F&O ni con Service Bus: solo Dataverse (Web API) y Microsoft Graph.
+module ticketAtencion 'modules/functionApp.bicep' = if (deployTicketAtencionApp) {
+  name: 'fa-ticketatencion'
+  params: {
+    functionAppName: 'fa-axxonticketatencion-${environmentName}'
+    appKey: 'ticket'
+    environmentName: environmentName
+    location: location
+    tags: tags
+    runtimeVersion: dotnetIsolatedVersion
+    // No pega a F&O: no necesita el techo de instancias de las apps F&O-bound.
+    maximumInstanceCount: maxInstanceCount
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
+    keyVaultName: keyVault.outputs.keyVaultName
+    keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
+    needsServiceBus: false
+    // Sin esto el fetch del formulario de D365 falla antes de llegar a la funcion.
+    allowedOrigins: empty(dataverseOrigin) ? [] : [ dataverseOrigin ]
+    // Los *ClientSecret NO van aca: salen del Key Vault por nombre canonico.
+    appSettings: concat([
+      { name: 'DataverseUrl', value: dataverseUrl }
+      { name: 'SharePointSiteUrl', value: sharePointSiteUrl }
+    ], dataverseAuthSettings, graphAuthSettings)
   }
 }
 
