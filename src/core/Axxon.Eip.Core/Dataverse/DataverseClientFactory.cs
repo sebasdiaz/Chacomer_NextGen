@@ -56,13 +56,22 @@ namespace Axxon.Eip.Core.Dataverse
             var credential = new DefaultAzureCredential();
 
             // ServiceClient no acepta TokenCredential directamente —
-            // usa un callback async que recibe el resource URI y devuelve el token.
+            // usa un callback async que recibe una URL y devuelve el token.
+            //
+            // OJO: el SDK NO pasa el resource pelado, pasa el endpoint SOAP completo
+            // con query string:
+            //   https://org.crm.dynamics.com/XRMServices/2011/Organization.svc/web?SDKClientVersion=9.2.49
+            // Concatenarle "/.default" arma un scope invalido y AAD responde AADSTS500011
+            // ("resource principal not found"). Hay que quedarse solo con el origen.
             var client = new ServiceClient(
                 new Uri(_options.Url),
                 async (string resource) =>
                 {
+                    var uri   = new Uri(resource);
+                    var scope = $"{uri.Scheme}://{uri.Authority}/.default";
+
                     var token = await credential.GetTokenAsync(
-                        new Azure.Core.TokenRequestContext(new[] { resource + "/.default" }));
+                        new Azure.Core.TokenRequestContext(new[] { scope }));
                     return token.Token;
                 },
                 useUniqueInstance: true);

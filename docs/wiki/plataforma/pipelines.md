@@ -42,9 +42,37 @@ Todos disparan también ante cambios en su propio `.yml` y en los templates.
 
 ### Autenticación
 
-Sin secretos: el login sale de la **service connection federada** del ambiente
-(`sc-chacomer-eip-{env}`) vía `AzureCLI@2` / OIDC. El SP de cada SC necesita `Contributor`
-sobre el RG del ambiente y la SC tiene que estar autorizada para el pipeline.
+**No hay ningún secreto**: ni en variables del pipeline, ni en Key Vault. Las service
+connections del proyecto son de **Workload Identity Federation**, y el login sale de ahí
+vía `AzureCLI@2` / OIDC. El token dura minutos y sirve sólo para ese job.
+
+| Ambiente | Service connection | GUID de la SC | clientId del SP |
+|---|---|---|---|
+| `inte` | `sc-chacomer-eip-inte` | `c7600511-119a-4ba0-aeb5-cc2e5d7ff1a1` | `b391d418-ef2a-4d83-afcc-310ec4d8ae52` |
+| `test` | `sc-chacomer-eip-test` | `4f60dbf8-7391-48ab-a002-a208d277f2b2` | `67ae2e5d-3bdd-4d24-bad0-ecf59b1d8788` |
+
+Las dos sobre la suscripción `AZURE_DYNAMICS` (`09592883-…`), tenant `d0e6feed-…`. Esos
+GUIDs son identificadores públicos, no credenciales — por eso van en el YAML.
+
+Requisitos: el SP de cada SC necesita `Contributor` sobre el RG del ambiente, y **cada
+pipeline tiene que estar autorizado a usar su service connection**
+(*Project settings → Service connections → `<SC>` → Security*). Si no, el pedido del token
+OIDC falla con 401/403.
+
+### El build no usa tasks in-box
+
+Viene de cuando se creía que el org tenía deshabilitadas las built-in tasks. **No es así**
+— el stage de deploy usa `AzureCLI@2` —, pero el build quedó armado sin ellas y funciona:
+
+- El SDK se instala con `dotnet-install.sh` (param `dotnetChannel`, default `10.0`).
+- El artifact se publica con el logging command `##vso[artifact.upload]` y se baja en el
+  stage de deploy por la REST API de builds con `$(System.AccessToken)`.
+- El deploy va por `az functionapp deployment source config-zip`, que es el camino
+  soportado para Flex Consumption (One Deploy). Como el comando pide resource group,
+  el template lo recibe en `inteResourceGroup` / `testResourceGroup`.
+
+Se puede volver a `UseDotNet@2` / `DotNetCoreCLI@2` / `PublishBuildArtifacts@1` cuando
+convenga.
 
 ### Overrides útiles del template
 

@@ -4,12 +4,11 @@ using System.Text.Json.Serialization;
 namespace AxxonThinkchat.Functions.Models
 {
     /// <summary>
-    /// Template tal como lo devuelve get_template de Thinkchat.
+    /// Template tal como lo devuelve la accion get_templates de Thinkchat.
+    /// Nombres verificados contra la collection de Postman del proveedor.
     ///
-    /// PENDIENTE DE CONFIRMAR contra la collection de Postman: los nombres de las
-    /// propiedades JSON salen del mapeo 1:1 con las columnas de axx_metatemplates.
-    /// Si la API usa otros nombres, se ajusta el [JsonPropertyName] de cada campo
-    /// y no hace falta tocar nada mas.
+    /// El response trae ademas un "date" (fecha de alta del template) que no se mapea:
+    /// axx_metatemplates no tiene columna para eso.
     /// </summary>
     public class ThinkchatTemplate
     {

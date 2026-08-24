@@ -7,7 +7,7 @@ sources: []
 > Generado desde el código por [`generate.mjs`](../generate.mjs). Si algo de acá está
 > mal, el que está mal es el código — o el generador. No edites esta página.
 
-Las 18 Azure Functions de la plataforma, con el disparador que declara cada una.
+Las 20 Azure Functions de la plataforma, con el disparador que declara cada una.
 Entre paréntesis, el placeholder tal como está en el atributo; antes, el valor que le
 asigna `infra/main.bicep`.
 
@@ -30,4 +30,6 @@ asigna `infra/main.bicep`.
 | `Turuc_GetEntidadPublica` | `fa-axxonfiscal-{env}` | HTTP | GET /api/turuc/entidad-publica — auth: Function |
 | `Turuc_GetPersonaJuridica` | `fa-axxonfiscal-{env}` | HTTP | GET /api/turuc/persona-juridica — auth: Function |
 | `Turuc_SearchContribuyentes` | `fa-axxonfiscal-{env}` | HTTP | GET /api/turuc/contribuyente/search — auth: Function |
+| `Thinkchat_SendTemplate` | `fa-axxonthinkchat-{env}` | HTTP | POST /api/thinkchat/send-template — auth: Function |
+| `Thinkchat_SendText` | `fa-axxonthinkchat-{env}` | HTTP | POST /api/thinkchat/send-text — auth: Function |
 | `GenerarTicketAtencion` | `fa-axxonticketatencion-{env}` | HTTP | POST /api/GenerarTicketAtencion — auth: Function |
