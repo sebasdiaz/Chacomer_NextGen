@@ -33,6 +33,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "thinkchat", "thinkchat", "{
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonThinkchat.Functions", "src\integrations\thinkchat\AxxonThinkchat.Functions\AxxonThinkchat.Functions.csproj", "{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "service", "service", "{AF49AE88-1C31-7085-5A22-6A08E4A6E48C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonTicketAtencion.Functions", "src\integrations\service\AxxonTicketAtencion.Functions\AxxonTicketAtencion.Functions.csproj", "{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxxonTicketAtencion.Functions.Tests", "tests\AxxonTicketAtencion.Functions.Tests\AxxonTicketAtencion.Functions.Tests.csproj", "{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -151,6 +157,30 @@ Global
 		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Release|x64.Build.0 = Release|Any CPU
 		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Release|x86.ActiveCfg = Release|Any CPU
 		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92}.Release|x86.Build.0 = Release|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Debug|x64.Build.0 = Debug|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Debug|x86.Build.0 = Debug|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Release|x64.ActiveCfg = Release|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Release|x64.Build.0 = Release|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Release|x86.ActiveCfg = Release|Any CPU
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7}.Release|x86.Build.0 = Release|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Debug|x64.Build.0 = Debug|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Debug|x86.Build.0 = Debug|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Release|x64.ActiveCfg = Release|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Release|x64.Build.0 = Release|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Release|x86.ActiveCfg = Release|Any CPU
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -164,6 +194,9 @@ Global
 		{EEE4CBB1-F668-438F-8B6A-3801DE810D6F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{4D6F09A6-ED69-5051-502E-9829832DE115} = {95CF60EF-5A8F-866C-1324-B5EA7AAAC44D}
 		{5DAB9F32-D92B-4AB4-B9CA-7578AF517D92} = {4D6F09A6-ED69-5051-502E-9829832DE115}
+		{AF49AE88-1C31-7085-5A22-6A08E4A6E48C} = {95CF60EF-5A8F-866C-1324-B5EA7AAAC44D}
+		{D76A3792-00DB-4A16-B9EA-1488FDA5EDB7} = {AF49AE88-1C31-7085-5A22-6A08E4A6E48C}
+		{CEA0464F-5647-4BC3-9E21-32BB4AFCD334} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {9A13A925-DE06-4E29-9A01-848571A1E78F}

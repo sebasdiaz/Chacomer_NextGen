@@ -41,3 +41,10 @@ param deployThinkchatApp = true
 param deployRoleAssignments = false
 param thinkchatBaseUrl = 'https://chacomer.whatsapp.net.py/thinkcomm-x/api/v2/'
 param thinkchatFrom = '595215180000'
+
+// TicketAtencion (GAP-103/227). `fa-axxonticketatencion-inte` ya existe creada a mano y
+// entra en el mismo cutover que las otras apps de INTE (ver infra/README): mientras
+// deployFunctionApps siga en false, el Bicep no la administra y su configuracion se
+// aplica con az CLI. El sitio queda declarado aca para no tener que buscarlo el dia
+// del cutover.
+param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacomer-INTE'

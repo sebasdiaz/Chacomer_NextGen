@@ -24,6 +24,10 @@ param dotnetIsolatedVersion = '10.0'
 // A medida que cada MI quede dada de alta en Dataverse y como usuario S2S en F&O, se
 // vacian estos params y las apps pasan a MI sin tocar codigo.
 param dataverseClientId = '145fd64d-3deb-46eb-9f58-736d1ff46a3e'
+// Necesario desde que existe el cliente de Dataverse por Web API: ClientSecretCredential
+// pide la authority explicita. Sin esto, una app que use la Web API con client secret no
+// arranca. Las que van por el SDK o por Managed Identity lo ignoran.
+param dataverseTenantId = 'd0e6feed-3ca5-4438-bca3-09cb8ba9814a'
 param foClientId = '145fd64d-3deb-46eb-9f58-736d1ff46a3e'
 param foTenantId = 'd0e6feed-3ca5-4438-bca3-09cb8ba9814a'
 
@@ -43,3 +47,9 @@ param deployRoleAssignments = false
 // mientras tanto TEST consulta los templates reales sin efectos secundarios.
 param thinkchatBaseUrl = 'https://chacomer.whatsapp.net.py/thinkcomm-x/api/v2/'
 param thinkchatFrom = '595215180000'
+
+// TicketAtencion (GAP-103/227). La app vive hoy solo en INTE, creada a mano, y es la que
+// consume el web resource. En TEST todavia no existe: se deja apagada hasta que alguien
+// decida estrenarla ahi, para que un deployment de infra no la cree de rebote.
+param deployTicketAtencionApp = false
+param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacomer-TEST'

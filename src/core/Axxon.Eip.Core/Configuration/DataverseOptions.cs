@@ -17,6 +17,14 @@ namespace Axxon.Eip.Core.Configuration
         public string? ClientSecret { get; init; }
 
         /// <summary>
+        /// Tenant de Entra del App Registration. Solo hace falta cuando se autentica por
+        /// Service Principal: el <c>ServiceClient</c> del SDK lo infiere de la URL del
+        /// environment, pero <c>ClientSecretCredential</c> (Web API) necesita la authority
+        /// explicita. Se lee de la clave "DataverseTenantId".
+        /// </summary>
+        public string? TenantId { get; init; }
+
+        /// <summary>
         /// True si se deben usar credenciales de Service Principal en lugar de Managed Identity.
         /// Se activa automaticamente si ClientId y ClientSecret estan presentes.
         /// </summary>

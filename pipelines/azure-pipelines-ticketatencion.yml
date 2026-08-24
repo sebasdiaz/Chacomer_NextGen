@@ -1,0 +1,39 @@
+# Pipeline de la integracion Ticket de Atencion (GAP-103 / GAP-227).
+# Se dispara ante cambios en su proyecto, en sus tests o en el core compartido.
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/integrations/service/AxxonTicketAtencion.Functions/**
+      - tests/AxxonTicketAtencion.Functions.Tests/**
+      - src/core/**
+      - pipelines/azure-pipelines-ticketatencion.yml
+      - pipelines/templates/functionapp-build-deploy.yml
+      - pipelines/templates/functionapp-deploy-stage.yml
+
+extends:
+  template: templates/functionapp-build-deploy.yml
+  parameters:
+    appBaseName: 'fa-axxonticketatencion'
+    projectPath: 'src/integrations/service/AxxonTicketAtencion.Functions/AxxonTicketAtencion.Functions.csproj'
+    testProjectPath: 'tests/AxxonTicketAtencion.Functions.Tests/AxxonTicketAtencion.Functions.Tests.csproj'
+
+    # Sin el template en el paquete la app levanta bien y falla recien en la primera
+    # invocacion, con un 500 que no dice nada del csproj. Se verifica en el build.
+    requiredPublishFiles:
+      - 'Templates/template_ticket_atencion.docx'
+
+    # Un config-zip puede reportar exito sin subir nada utilizable: el 404 aparece recien
+    # cuando el usuario aprieta el boton. Se le pregunta al host.
+    smokeTestFunctionName: 'GenerarTicketAtencion'
+
+    # fa-axxonticketatencion-inte ya existe (creada a mano) y es la que consume el web
+    # resource del formulario de Cita de Servicio.
+    deployToInte: true
+
+    # En TEST la app todavia no existe: ver deployTicketAtencionApp en
+    # infra/environments/test.bicepparam. Prender las dos cosas juntas.
+    deployToTest: false

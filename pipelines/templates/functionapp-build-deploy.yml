@@ -61,6 +61,16 @@ parameters:
   - name: testServiceConnection
     type: string
     default: 'sc-chacomer-eip-test'
+  # Archivos que TIENEN que quedar en el publish output. Rutas relativas a el.
+  # Sirve para los assets que no son codigo (templates, mappings): si un cambio de csproj
+  # deja de copiarlos, la app despliega "bien" y falla recien en la primera invocacion.
+  - name: requiredPublishFiles
+    type: object
+    default: []
+  # Nombre de la funcion a verificar en el host despues del deploy. Vacio = sin smoke test.
+  - name: smokeTestFunctionName
+    type: string
+    default: ''
   - name: dotnetChannel      # Canal de dotnet-install.sh, no una version exacta
     type: string
     default: '10.0'
@@ -129,6 +139,23 @@ stages:
             env:
               BUILD_ARTIFACTSTAGINGDIRECTORY: $(Build.ArtifactStagingDirectory)
 
+          - ${{ if gt(length(parameters.requiredPublishFiles), 0) }}:
+            - bash: |
+                set -euo pipefail
+                missing=0
+                for f in ${{ join(' ', parameters.requiredPublishFiles) }}; do
+                  if [ -f "$BUILD_ARTIFACTSTAGINGDIRECTORY/publish/$f" ]; then
+                    echo "OK  $f"
+                  else
+                    echo "##vso[task.logissue type=error]Falta '$f' en el publish output."
+                    missing=1
+                  fi
+                done
+                exit $missing
+              displayName: 'Verificar assets en el publish output'
+              env:
+                BUILD_ARTIFACTSTAGINGDIRECTORY: $(Build.ArtifactStagingDirectory)
+
           - bash: |
               echo "##vso[artifact.upload containerfolder=functionapp;artifactname=functionapp]$BUILD_ARTIFACTSTAGINGDIRECTORY/functionapp.zip"
             displayName: 'Publicar artifact'
@@ -147,6 +174,7 @@ stages:
         environmentName: 'inte'
         resourceGroupName: ${{ parameters.inteResourceGroup }}
         azureServiceConnection: ${{ parameters.inteServiceConnection }}
+        smokeTestFunctionName: ${{ parameters.smokeTestFunctionName }}
 
   - ${{ if parameters.deployToTest }}:
     - template: functionapp-deploy-stage.yml
@@ -164,3 +192,4 @@ stages:
         environmentName: 'test'
         resourceGroupName: ${{ parameters.testResourceGroup }}
         azureServiceConnection: ${{ parameters.testServiceConnection }}
+        smokeTestFunctionName: ${{ parameters.smokeTestFunctionName }}
