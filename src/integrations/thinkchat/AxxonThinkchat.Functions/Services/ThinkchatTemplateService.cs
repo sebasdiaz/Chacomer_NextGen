@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AxxonThinkchat.Functions.Configuration;
@@ -12,14 +11,13 @@ namespace AxxonThinkchat.Functions.Services
     /// de Axxon.Eip.Core: HttpClient nombrado via IHttpClientFactory y credencial
     /// resuelta por EipSecretResolver.
     ///
-    /// get_template lleva parametros en el body, asi que se invoca por POST con
-    /// { "from": "<ThinkchatFrom>" }.
+    /// La API es RPC sobre un endpoint unico: POST contra la URL base con el verbo
+    /// logico en el body — { "action": "get_templates", "from": "<ThinkchatFrom>" } —
+    /// y el token en Authorization: Bearer. NO hay una ruta /get_templates: pedirla
+    /// devuelve el 404 de nginx.
     ///
-    /// PENDIENTE DE CONFIRMAR contra la collection de Postman:
-    ///   - esquema de auth (default Authorization: Bearer)
-    ///   - si el body lleva algun campo mas ademas de "from"
-    ///   - si el response es un array en la raiz o viene envuelto en un objeto
-    ///   - si pagina (hoy se asume que devuelve todos los templates en una llamada)
+    /// El response es { "success": true, "templates": [ ... ] }.
+    /// La doc del proveedor no documenta paginacion: se asume una sola llamada.
     /// </summary>
     public class ThinkchatTemplateService : IThinkchatTemplateService
     {
@@ -57,15 +55,18 @@ namespace AxxonThinkchat.Functions.Services
                     "[ThinkchatTemplateService] ThinkchatFrom no esta configurado: " +
                     "el body va sin numero emisor y la API probablemente rechace el request.");
 
+            // TemplatesPath vacio => la request va contra la BaseAddress, que es el
+            // endpoint RPC. HttpRequestMessage trata la cadena vacia como null y
+            // HttpClient resuelve la BaseAddress sola.
             using var request = new HttpRequestMessage(HttpMethod.Post, _options.TemplatesPath)
             {
-                Content = JsonContent.Create(new { from = _options.From })
+                Content = JsonContent.Create(new { action = _options.Action, from = _options.From })
             };
-            ApplyAuth(request);
+            ThinkchatAuth.Apply(request, _options);
 
             _logger.LogInformation(
-                "[ThinkchatTemplateService] POST {BaseUrl}{Path} from={From}",
-                _httpClient.BaseAddress, _options.TemplatesPath, _options.From);
+                "[ThinkchatTemplateService] POST {BaseUrl}{Path} action={Action} from={From}",
+                _httpClient.BaseAddress, _options.TemplatesPath, _options.Action, _options.From);
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -88,26 +89,10 @@ namespace AxxonThinkchat.Functions.Services
             return templates;
         }
 
-        private void ApplyAuth(HttpRequestMessage request)
-        {
-            if (string.IsNullOrWhiteSpace(_options.ApiKey))
-                return;
-
-            if (_options.AuthHeader.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(_options.AuthScheme))
-            {
-                request.Headers.Authorization =
-                    new AuthenticationHeaderValue(_options.AuthScheme, _options.ApiKey);
-                return;
-            }
-
-            request.Headers.TryAddWithoutValidation(_options.AuthHeader, _options.ApiKey);
-        }
-
         /// <summary>
-        /// Acepta tanto un array de templates en la raiz como un objeto que los envuelve
-        /// en "data" / "templates" / "result", que son las tres formas habituales.
-        /// Si la collection muestra otra, se ajusta aca.
+        /// La forma real es { "success": true, "templates": [ ... ] }. Se aceptan igual
+        /// el array en la raiz y los otros envoltorios habituales por si el proveedor
+        /// cambia: no cuesta nada y evita otra corrida perdida.
         /// </summary>
         private List<ThinkchatTemplate> Deserialize(string body)
         {
@@ -119,7 +104,19 @@ namespace AxxonThinkchat.Functions.Services
 
             if (root.ValueKind == JsonValueKind.Object)
             {
-                foreach (var name in new[] { "data", "templates", "result" })
+                // La API puede responder HTTP 200 con success=false (ej. accion o linea
+                // invalida). Sin este chequeo el error saldria como "response con forma
+                // inesperada", que manda a buscar el problema al lugar equivocado.
+                if (root.TryGetProperty("success", out var success)
+                    && success.ValueKind == JsonValueKind.False)
+                {
+                    var msg = root.TryGetProperty("msg", out var m) ? m.GetString() : null;
+
+                    throw new InvalidOperationException(
+                        $"Thinkchat rechazo el pedido de templates: {msg ?? "sin mensaje"}.");
+                }
+
+                foreach (var name in new[] { "templates", "data", "result" })
                 {
                     if (root.TryGetProperty(name, out var wrapped)
                         && wrapped.ValueKind == JsonValueKind.Array)

@@ -93,7 +93,7 @@ una está en su página de [integración](../integraciones.md).
 | `fa-axxoncustomergroups-{env}` | [Customer groups](../integraciones/customergroups.md) | Timer |
 | `fa-axxonproducts-{env}` | [Products](../integraciones/products.md) | Timer |
 | `fa-axxonfiscal-{env}` | [Fiscal](../integraciones/fiscal.md) | HTTP |
-| `fa-axxonthinkchat-{env}` | [Thinkchat](../integraciones/thinkchat.md) | Timer |
+| `fa-axxonthinkchat-{env}` | [Thinkchat](../integraciones/thinkchat.md) | Timer + HTTP |
 | `fa-axxonticketatencion-{env}` | [Ticket de Atención](../integraciones/ticketatencion.md) | HTTP — botón en el formulario de Cita de Servicio |
 
 > El nombre real de las apps de INTE no siempre sigue el patrón (ej. `fa-axxoncustomergroup`,

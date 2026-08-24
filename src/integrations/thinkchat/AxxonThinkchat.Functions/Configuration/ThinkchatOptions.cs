@@ -4,9 +4,9 @@ namespace AxxonThinkchat.Functions.Configuration
     /// Settings de la API de Thinkchat. La conexion a Dataverse se configura via
     /// Axxon.Eip.Core (DataverseUrl, DataverseClientId/Secret o Managed Identity).
     ///
-    /// PENDIENTE DE CONFIRMAR contra la collection de Postman: la URL base y el
-    /// esquema de auth estan puestos como valores por defecto razonables, no
-    /// verificados contra el servicio real.
+    /// La API no es REST por recurso: es RPC sobre un endpoint unico. Todas las
+    /// operaciones son POST contra la URL base y el verbo logico viaja en el campo
+    /// "action" del body. Verificado contra la collection de Postman del proveedor.
     /// </summary>
     public class ThinkchatOptions
     {
@@ -14,10 +14,29 @@ namespace AxxonThinkchat.Functions.Configuration
         public string BaseUrl { get; set; } = string.Empty;
 
         /// <summary>
-        /// Path relativo del endpoint que devuelve los templates (get_template).
-        /// App Setting "ThinkchatTemplatesPath".
+        /// Path relativo del endpoint. Vacio a proposito: el endpoint ES la URL base
+        /// (ver <see cref="Action"/>). Queda como App Setting "ThinkchatTemplatesPath"
+        /// por si el proveedor algun dia separa las operaciones por ruta.
         /// </summary>
-        public string TemplatesPath { get; set; } = "get_template";
+        public string TemplatesPath { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Verbo logico que va en el campo "action" del body. App Setting
+        /// "ThinkchatTemplatesAction". Es "get_templates", en plural.
+        /// </summary>
+        public string Action { get; set; } = "get_templates";
+
+        /// <summary>
+        /// Verbo del body para el envio de plantillas. App Setting
+        /// "ThinkchatSendTemplateAction". Default "send_template".
+        /// </summary>
+        public string SendTemplateAction { get; set; } = "send_template";
+
+        /// <summary>
+        /// Verbo del body para el texto libre en sesion. App Setting
+        /// "ThinkchatSendTextAction". Default "send_text_msg".
+        /// </summary>
+        public string SendTextAction { get; set; } = "send_text_msg";
 
         /// <summary>
         /// Numero emisor que va en el body del request ("from"). App Setting

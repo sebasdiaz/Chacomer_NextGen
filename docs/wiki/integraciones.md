@@ -16,7 +16,7 @@ propio [pipeline](plataforma/pipelines.md).
 | [Customer groups](integraciones/customergroups.md) | F&O → Dataverse | Timer (diario 23:00) | `fa-axxoncustomergroups-{env}` |
 | [Products](integraciones/products.md) | F&O → Dataverse | Timer (diario + horario) | `fa-axxonproducts-{env}` |
 | [Fiscal](integraciones/fiscal.md) | SET/DNIT y TURUC → HTTP | HTTP | `fa-axxonfiscal-{env}` |
-| [Thinkchat](integraciones/thinkchat.md) | Thinkchat → Dataverse | Timer (cada 2 h) | `fa-axxonthinkchat-{env}` |
+| [Thinkchat](integraciones/thinkchat.md) | Thinkchat ↔ Dataverse | Timer (cada 2 h) + HTTP | `fa-axxonthinkchat-{env}` |
 | [Ticket de Atención](integraciones/ticketatencion.md) | Dataverse → Word/PDF → SharePoint | HTTP (botón en el formulario de Cita) | `fa-axxonticketatencion-{env}` |
 
 ## Inventario de funciones

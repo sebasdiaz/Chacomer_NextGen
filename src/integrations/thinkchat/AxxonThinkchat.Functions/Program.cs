@@ -25,7 +25,11 @@ const string ThinkchatSecretName = "secretThinkChat";
 var thinkchat = new ThinkchatOptions
 {
     BaseUrl       = builder.Configuration["ThinkchatBaseUrl"] ?? string.Empty,
-    TemplatesPath = builder.Configuration["ThinkchatTemplatesPath"] ?? "get_template",
+    // El endpoint es la URL base: la operacion va en el body, no en la ruta.
+    TemplatesPath = builder.Configuration["ThinkchatTemplatesPath"] ?? string.Empty,
+    Action        = builder.Configuration["ThinkchatTemplatesAction"] ?? "get_templates",
+    SendTemplateAction = builder.Configuration["ThinkchatSendTemplateAction"] ?? "send_template",
+    SendTextAction = builder.Configuration["ThinkchatSendTextAction"] ?? "send_text_msg",
     From          = builder.Configuration["ThinkchatFrom"] ?? string.Empty,
     ApiKey        = builder.Configuration.ResolveSecret("ThinkchatApiKey")
                     ?? builder.Configuration[ThinkchatSecretName]
@@ -61,6 +65,24 @@ builder.Services.AddTransient<IThinkchatTemplateService>(sp =>
         httpClient,
         sp.GetRequiredService<ThinkchatOptions>(),
         sp.GetRequiredService<ILogger<ThinkchatTemplateService>>());
+});
+
+// Lookup de axx_metatemplates para validar los envios. Singleton con el ServiceClient
+// creado perezosamente: el endpoint HTTP no puede pagar el handshake de Dataverse en
+// cada request, y el sync sigue con su propio cliente transient.
+builder.Services.AddSingleton<IMetatemplateLookup>(sp => new MetatemplateLookup(
+    () => sp.GetRequiredService<DataverseClientFactory>().CreateOrganizationService(),
+    sp.GetRequiredService<ILogger<MetatemplateLookup>>()));
+
+builder.Services.AddTransient<IThinkchatMessageService>(sp =>
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>()
+        .CreateClient(ThinkchatTemplateService.HttpClientName);
+
+    return new ThinkchatMessageService(
+        httpClient,
+        sp.GetRequiredService<ThinkchatOptions>(),
+        sp.GetRequiredService<ILogger<ThinkchatMessageService>>());
 });
 
 builder.Services.AddTransient<ITemplateSyncService>(sp =>
