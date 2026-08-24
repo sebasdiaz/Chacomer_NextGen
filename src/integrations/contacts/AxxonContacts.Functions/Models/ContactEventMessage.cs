@@ -44,6 +44,12 @@ namespace AxxonContacts.Functions.Models
         [JsonPropertyName("description")]
         public string? Description { get; set; }
 
+        /// <summary>
+        /// axx_lugarcomercial. Lookup a la tabla axx_lugarcomercial: solo viaja el Id.
+        /// </summary>
+        [JsonPropertyName("axxLugarComercial")]
+        public Guid? AxxLugarComercial { get; set; }
+
         [JsonPropertyName("emailAddress1")]
         public string? EmailAddress1 { get; set; }
 

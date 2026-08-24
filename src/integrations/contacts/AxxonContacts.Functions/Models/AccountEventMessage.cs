@@ -39,6 +39,12 @@ namespace AxxonContacts.Functions.Models
         [JsonPropertyName("description")]
         public string? Description { get; set; }
 
+        /// <summary>
+        /// axx_lugarcomercial. Lookup a la tabla axx_lugarcomercial: solo viaja el Id.
+        /// </summary>
+        [JsonPropertyName("axxLugarComercial")]
+        public Guid? AxxLugarComercial { get; set; }
+
         // ── Domicilio (bloque address1_*) ────────────────────────────
         // Se copia tal cual del raw al master. Los nombres siguen el logical name
         // de Dataverse: ojo que el campo de departamento/estado es
