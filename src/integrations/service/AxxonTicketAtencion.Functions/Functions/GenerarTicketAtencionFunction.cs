@@ -52,7 +52,8 @@ namespace AxxonTicketAtencion.Functions.Functions
 
         [Function("GenerarTicketAtencion")]
         public async Task<HttpResponseData> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req,
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "GenerarTicketAtencion")]
+            HttpRequestData req,
             CancellationToken cancellationToken)
         {
             // try/catch global: cualquier excepcion sale como respuesta tipada. Sin esto un

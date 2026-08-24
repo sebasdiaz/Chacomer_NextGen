@@ -14,7 +14,7 @@ param dotnetIsolatedVersion = '10.0'
 
 // DataverseINTE tiene 4 Function Apps vivas creadas a mano, con secretos en app
 // settings planos y auth por connection string. Adoptarlas de golpe las dejaria
-// caidas. Hasta completar el cutover (ver infra/README) el Bicep administra en
+// caidas. Hasta completar el cutover (ver docs/wiki/plataforma/ambientes.md) el Bicep administra en
 // INTE solo los recursos compartidos.
 param deployFunctionApps = false
 
@@ -34,7 +34,7 @@ param deployThinkchatApp = true
 // Por eso la app nace sin roles y los 3 se asignan a mano a su managed identity despues
 // del deploy. Ese paso NO es opcional: AzureWebJobsStorage va por identidad, asi que sin
 // los roles de Storage la app ni siquiera arranca. Los comandos estan en la seccion
-// "Role assignments" de infra/README.md.
+// "Role assignments" de docs/wiki/plataforma/infraestructura.md.
 //
 // En INTE el flag no tiene efecto colateral: con deployFunctionApps = false, thinkchat
 // es la unica app con role assignments en juego.
