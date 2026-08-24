@@ -3,7 +3,7 @@ sources:
   - src/core/Axxon.Eip.Core/Hosting/**
   - src/integrations/**/host.json
   - infra/modules/monitoring.bicep
-last_reviewed: 2026-08-21
+last_reviewed: 2026-08-24
 -->
 
 # Telemetría

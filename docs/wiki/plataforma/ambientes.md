@@ -3,7 +3,7 @@ sources:
   - infra/environments/**
   - infra/scripts/**
   - pipelines/**
-last_reviewed: 2026-08-21
+last_reviewed: 2026-08-24
 -->
 
 # Ambientes
@@ -42,6 +42,11 @@ crea el template — la diferencia no es la infraestructura sino la configuraci�
 | Storage | `AzureWebJobsStorage` + `DEPLOYMENT_STORAGE_CONNECTION_STRING` (connection string) | `AzureWebJobsStorage__blobServiceUri` + MI |
 | Service Bus | `ServiceBusConnection` (connection string) | `__fullyQualifiedNamespace` + MI |
 | Managed Identity | sólo `fa-axxoncontacts-inte` la tiene | System-Assigned en las 5 |
+
+> **`fa-axxonticketatencion-inte` es la quinta app de INTE creada a mano** y entra en el
+> mismo cutover. Ya tiene System-Assigned MI y el rol `Key Vault Secrets User` sobre
+> `keyvaultinte`; le falta subir el runtime de `dotnet-isolated 8.0` a `10.0`. Ver
+> [Ticket de Atención › Estado del despliegue](../integraciones/ticketatencion.md#estado-del-despliegue).
 | Secretos | Key Vault `keyvaultinte` (ver abajo) | Key Vault `kv-chacomer-eip-inte` |
 | App Service Plan | `ASP-DataverseINTE-*` (uno por app) | `asp-{functionAppName}` |
 | Settings extra | `Schedules*`, `DataverseClientId`, `FoClientId`, `FoTenantId` | no contemplados |

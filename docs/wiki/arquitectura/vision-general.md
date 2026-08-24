@@ -5,7 +5,7 @@ sources_new:
   - src/**/*.csproj
   - src/**/*.pcfproj
   - tests/**/*.csproj
-last_reviewed: 2026-08-21
+last_reviewed: 2026-08-24
 -->
 
 # Visión general de la EiP
@@ -94,6 +94,7 @@ una está en su página de [integración](../integraciones.md).
 | `fa-axxonproducts-{env}` | [Products](../integraciones/products.md) | Timer |
 | `fa-axxonfiscal-{env}` | [Fiscal](../integraciones/fiscal.md) | HTTP |
 | `fa-axxonthinkchat-{env}` | [Thinkchat](../integraciones/thinkchat.md) | Timer |
+| `fa-axxonticketatencion-{env}` | [Ticket de Atención](../integraciones/ticketatencion.md) | HTTP — botón en el formulario de Cita de Servicio |
 
 > El nombre real de las apps de INTE no siempre sigue el patrón (ej. `fa-axxoncustomergroup`,
 > sin `s`). Ver [Ambientes](../plataforma/ambientes.md).

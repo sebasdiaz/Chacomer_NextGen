@@ -3,7 +3,7 @@ sources:
   - src/core/Axxon.Eip.Core/Configuration/**
   - infra/modules/keyvault.bicep
   - infra/scripts/**
-last_reviewed: 2026-08-21
+last_reviewed: 2026-08-24
 -->
 
 # Secretos y Key Vault
@@ -35,6 +35,7 @@ az role assignment create \
 | `DataverseClientSecret` | todas (DESA/INTE) | Client Secret del App Registration de Dataverse |
 | `FoClientSecret` | customers, customergroups, products (DESA/INTE) | Client Secret del App Registration de F&O |
 | `SetApiKey` | contacts, fiscal | API Key de la SET Paraguay |
+| `GraphClientSecret` | ticketatencion (DESA/INTE) | Client Secret del App Registration de Microsoft Graph. Hoy es el mismo de Dataverse; se declara aparte para poder separarlos sin tocar código |
 
 En producción las conexiones a Dataverse/F&O usan Managed Identity: no hay secreto que guardar.
 Los secrets `*ClientSecret` solo existen en los vaults de DESA/INTE.

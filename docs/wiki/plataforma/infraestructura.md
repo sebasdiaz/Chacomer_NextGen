@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - infra/**
-last_reviewed: 2026-08-21
+last_reviewed: 2026-08-24
 -->
 
 # Infraestructura (Bicep)
@@ -94,6 +94,20 @@ iniciar el host. Chequeo rápido, sin esperar al horario del CRON:
 Las apps de **INTE** están fuera del Bicep y tienen los settings escritos sin separador
 (`SchedulesCustomerGroupSync`), que **no resuelve**: `fa-axxoncustomergroup` viene fallando
 así. Se corrige en el cutover, junto con el resto de los settings extra.
+
+### CORS
+
+`functionApp.bicep` acepta `allowedOrigins`. Vacío —el default— significa sin CORS, que es
+lo correcto para las apps que sólo consumen Service Bus o timers.
+
+Hoy la única que lo usa es [Ticket de Atención](../integraciones/ticketatencion.md): su
+endpoint lo llama un `fetch` desde el formulario de D365, y sin el origen de Dataverse en la
+lista el browser bloquea la respuesta antes de que el JS la vea. El origen sale del
+parámetro `dataverseOrigin` de `main.bicep`, que por default es `dataverseUrl`.
+
+Los headers **no** se emiten desde el código de la Function. Hacer las dos cosas duplica
+`Access-Control-Allow-Origin`, y el browser rechaza una respuesta con el header duplicado
+igual que si no lo tuviera.
 
 ### Scale-out y límites de F&O
 

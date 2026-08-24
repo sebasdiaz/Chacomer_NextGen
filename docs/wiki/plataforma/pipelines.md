@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - pipelines/**
-last_reviewed: 2026-08-21
+last_reviewed: 2026-08-24
 -->
 
 # Pipelines
@@ -54,6 +54,8 @@ sobre el RG del ambiente y la SC tiene que estar autorizada para el pipeline.
 | `inteAppName` / `testAppName` | Cuando la app se creó a mano con otro nombre que el que genera `main.bicep` |
 | `inteResourceGroup` / `testResourceGroup` | Default `DataverseINTE` / `dataversetest` |
 | `testProjectPath` | Correr los tests antes del publish: si caen, no se genera artifact |
+| `requiredPublishFiles` | Lista de archivos que TIENEN que quedar en el publish output. Para assets que no son código (templates, mappings): si un cambio de csproj deja de copiarlos, la app despliega "bien" y falla recién en la primera invocación |
+| `smokeTestFunctionName` | Después del deploy, le pregunta al host si esa función quedó registrada. Un `config-zip` puede reportar éxito sin subir nada utilizable: el 404 aparecería recién cuando lo usa un usuario |
 
 ## Pipelines de infraestructura
 

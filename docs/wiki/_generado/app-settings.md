@@ -114,3 +114,18 @@ _Sin app settings propios._
 | `ThinkchatBaseUrl` | `thinkchatBaseUrl` | — |
 | `ThinkchatFrom` | `thinkchatFrom` | — |
 | `Schedules__ThinkchatTemplateSync` | `schedules.thinkchatTemplateSync` | `0 0 */2 * * *` |
+
+### `fa-axxonticketatencion-{env}`
+
+- appKey: `ticket`
+- instancias máx.: `maxInstanceCount`
+- consume Service Bus: no
+- publica en Service Bus: no
+- se despliega si: `deployTicketAtencionApp`
+
+| Setting | Valor en el template | Default |
+|---|---|---|
+| `DataverseUrl` | `dataverseUrl` | — |
+| `SharePointSiteUrl` | `sharePointSiteUrl` | — |
+
+Suma `dataverseAuthSettings`, que el template emite sólo si el ambiente declara el client id correspondiente.

@@ -3,7 +3,7 @@ sources:
   - src/integrations/contacts/**
   - tests/AxxonContacts.Functions.Tests/**
   - pipelines/azure-pipelines-contacts.yml
-last_reviewed: 2026-08-21
+last_reviewed: 2026-08-24
 -->
 
 # Contacts — Master Contact / Golden Record
