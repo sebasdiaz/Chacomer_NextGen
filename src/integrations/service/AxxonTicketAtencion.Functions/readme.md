@@ -83,40 +83,28 @@ Dos cosas que **no** se pueden hacer:
 |---|---|---|
 | `DataverseUrl` | `https://operations-b1-chacomer-inte.crm.dynamics.com` | |
 | `SharePointSiteUrl` | `https://chacomercompy.sharepoint.com/sites/B1-Chacomer-INTE` | Sin esto la rama de PDF falla siempre. |
-| `KeyVaultUri` | `https://keyvaultinte.vault.azure.net/` | Lo monta `AddEipCore()`. |
-| `DataverseClientId` | `145fd64d-…` | Vacío = Managed Identity. |
-| `DataverseTenantId` | `d0e6feed-…` | Sólo con client secret: `ClientSecretCredential` pide la authority explícita. |
-| `DataverseClientSecretName` | `SecretNextGenDynamics365Inte` | Indirección al nombre real del secret en el vault. |
-| `GraphClientId` | `145fd64d-…` | Hoy el mismo registration que Dataverse. |
-| `GraphTenantId` | `d0e6feed-…` | |
-| `GraphClientSecretName` | `SecretNextGenDynamics365Inte` | |
+| `KeyVaultUri` | `https://kv-chacomer-eip-inte.vault.azure.net/` | Lo monta `AddEipCore()`. Con Managed Identity no hay secreto que resolver, pero queda para cuando haga falta. |
+| `Dataverse*` / `Graph*` `ClientId` | *(sin declarar)* | Vacío = Managed Identity, que es como nace la app. Ver `EipCredentialFactory`. |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | del recurso de App Insights | |
 
 Ningún secreto va en app settings: salen del Key Vault por el provider de configuración
 que monta `AddEipCore()`. Ver `EipSecretResolver` para la indirección `{Clave}Name`.
 
-## Estado en INTE — lo que falta antes del primer deploy
+## Estado en INTE
 
-Verificado sobre `fa-axxonticketatencion-inte` (RG `DataverseINTE`) el 2026-08-24.
+La app creada a mano **se borró**. Nace administrada por Bicep
+(`deployTicketAtencionApp = true` en `inte.bicepparam`) y con **Managed Identity**: sin
+`dataverseClientId` en los params, el template no emite `DataverseClientId` ni
+`GraphClientId`, así que la app no lleva ningún secreto.
 
-Ya aplicado:
+Los pasos de alta —los 3 roles de la MI, el Application User en Dataverse y los app roles de
+Graph— están en
+[la wiki](../../../../docs/wiki/integraciones/ticketatencion.md#estado-del-despliegue).
 
-| Hecho | Detalle |
-|---|---|
-| App settings nuevos | `KeyVaultUri`, `DataverseUrl`, `DataverseTenantId`, `DataverseClientSecretName`, `Graph*` y `SharePointSiteUrl`. La ausencia de este último es la razón por la que el PDF nunca funcionó: la implementación anterior armaba `new Uri("")`, tiraba, y el `catch` se lo comía. |
-| Rol de Key Vault | La Managed Identity **ya tenía** `Key Vault Secrets User` sobre `keyvaultinte` desde antes. |
-| CORS | Origen `https://operations-b1-chacomer-inte.crm.dynamics.com`. |
-
-Pendiente:
-
-| # | Pendiente | Por qué bloquea |
-|---|---|---|
-| 1 | **Runtime en `dotnet-isolated 8.0`** | Este proyecto es `net10.0`. Hay que subirlo a `10.0` o el worker no levanta. Conviene hacerlo justo antes de correr el pipeline: el bump rompe el código viejo hasta que entre el nuevo. |
-| 2 | **Consentimiento de admin de los permisos de Graph** | El registration `145fd64d` pide `Sites.ReadWrite.All` y `Files.ReadWrite.All`, pero su service principal tiene **cero** `appRoleAssignments`: nadie consintió. Sin eso Graph responde 403 y el ticket sale siempre `OK_SIN_PDF`. **Lo tiene que otorgar un Global Admin.** |
-| 3 | **La ubicación de documentos de `msauto_serviceappointment`** | `TicketSharePointService` la necesita como padre. Se crea sola al abrir una vez la pestaña Archivos de una Cita. |
-| 4 | **`AZURE_CLIENT_SECRET` en texto plano** | Se borra después de validar el deploy, junto con `DATAVERSE_URL`, `AZURE_TENANT_ID` y `AZURE_CLIENT_ID`, que ya no los lee nadie. Siguen puestos a propósito: son los que usa el código viejo mientras siga desplegado. |
-
-Comandos en `infra/README.md`, sección de INTE.
+El PDF queda bloqueado hasta que un Global Admin asigne `Sites.ReadWrite.All` y
+`Files.ReadWrite.All` **a la managed identity** (para managed identities no hay botón de
+consentimiento en el portal). Mientras tanto la function responde `OK_SIN_PDF`, que es el
+comportamiento correcto.
 
 ## Desarrollo local
 

@@ -42,11 +42,6 @@ crea el template — la diferencia no es la infraestructura sino la configuraci�
 | Storage | `AzureWebJobsStorage` + `DEPLOYMENT_STORAGE_CONNECTION_STRING` (connection string) | `AzureWebJobsStorage__blobServiceUri` + MI |
 | Service Bus | `ServiceBusConnection` (connection string) | `__fullyQualifiedNamespace` + MI |
 | Managed Identity | sólo `fa-axxoncontacts-inte` la tiene | System-Assigned en las 5 |
-
-> **`fa-axxonticketatencion-inte` es la quinta app de INTE creada a mano** y entra en el
-> mismo cutover. Ya tiene System-Assigned MI y el rol `Key Vault Secrets User` sobre
-> `keyvaultinte`; le falta subir el runtime de `dotnet-isolated 8.0` a `10.0`. Ver
-> [Ticket de Atención › Estado del despliegue](../integraciones/ticketatencion.md#estado-del-despliegue).
 | Secretos | Key Vault `keyvaultinte` (ver abajo) | Key Vault `kv-chacomer-eip-inte` |
 | App Service Plan | `ASP-DataverseINTE-*` (uno por app) | `asp-{functionAppName}` |
 | Settings extra | `Schedules*`, `DataverseClientId`, `FoClientId`, `FoTenantId` | no contemplados |
@@ -72,6 +67,12 @@ El orden del cutover, por app:
 
 Mientras tanto los pipelines de integración siguen deployando código a las apps
 de INTE tal como están, vía los overrides `inteAppName` / `deployToInte`.
+
+> **`fa-axxonticketatencion-inte` salió del cutover.** Era la quinta app creada a mano; se
+> borró, así que —como thinkchat— nace administrada por Bicep con su propio toggle
+> `deployTicketAtencionApp`, y con **Managed Identity**: `inte.bicepparam` no declara
+> `dataverseClientId`, así que la app no lleva ningún secreto. Los pasos de alta están en
+> [Ticket de Atención › Estado del despliegue](../integraciones/ticketatencion.md#estado-del-despliegue).
 
 ### Secretos de INTE: `keyvaultinte`, no `kv-chacomer-eip-inte`
 
@@ -104,9 +105,12 @@ que su configuración no puede versionarse en el template:
 > Dataverse INTE y como usuario S2S en F&O con permisos sobre customer groups. Si no,
 > correrla con `-SkipClientIdUnification`.
 
-Cuando INTE pase a `deployFunctionApps = true`, `functionApp.bicep` cablea el
-`keyVaultUri` del vault que crea el propio template: hay que parametrizarlo para que INTE
-siga apuntando a `keyvaultinte`, o migrar los secretos a `kv-chacomer-eip-inte`.
+> **Resuelto.** Esto decía que al pasar INTE a `deployFunctionApps = true` había que
+> parametrizar el `keyVaultUri` para que siguiera apuntando a `keyvaultinte`. Ya no hace
+> falta: verificado el 2026-08-24, **`kv-chacomer-eip-inte` tiene los 8 secretos**, migrados
+> el 2026-08-12 — incluido `SecretNextGenDynamics365Inte`. Las apps que crea el template
+> resuelven sus secretos sin tocar nada. El vault legacy sigue en pie para las cuatro apps
+> que todavía están fuera del Bicep.
 
 ### INTE: thinkchat con los roles a mano
 

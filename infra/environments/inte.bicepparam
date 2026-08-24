@@ -42,9 +42,22 @@ param deployRoleAssignments = false
 param thinkchatBaseUrl = 'https://chacomer.whatsapp.net.py/thinkcomm-x/api/v2/'
 param thinkchatFrom = '595215180000'
 
-// TicketAtencion (GAP-103/227). `fa-axxonticketatencion-inte` ya existe creada a mano y
-// entra en el mismo cutover que las otras apps de INTE (ver infra/README): mientras
-// deployFunctionApps siga en false, el Bicep no la administra y su configuracion se
-// aplica con az CLI. El sitio queda declarado aca para no tener que buscarlo el dia
-// del cutover.
+// TicketAtencion (GAP-103/227). La app creada a mano se borro, asi que —igual que
+// thinkchat— deja de ser deuda del cutover y nace administrada por Bicep. Es el motivo del
+// toggle propio: `deployFunctionApps` sigue en false por las otras cuatro apps de INTE,
+// que todavia no se pueden adoptar.
+//
+// Nace con Managed Identity: este archivo no declara `dataverseClientId`, asi que el
+// template no emite ni `DataverseClientId` ni `GraphClientId` y la app autentica con su
+// propia MI contra Dataverse y contra Graph. Requiere DOS altas que el Bicep no puede
+// hacer, ambas previas al primer uso:
+//   1. La MI como Application User en Dataverse INTE, con rol de seguridad.
+//   2. Los app roles de Graph (Sites.ReadWrite.All, Files.ReadWrite.All) asignados a la MI.
+//      No hay boton en el portal para managed identities: van por Graph API, y los tiene
+//      que otorgar un Global Admin.
+//
+// Y como `deployRoleAssignments` esta en false, la app tambien nace SIN sus roles de
+// Storage y Key Vault. Ese paso no es opcional: AzureWebJobsStorage va por identidad, asi
+// que sin los roles de Storage la app ni siquiera arranca. Comandos en infra/README.md.
+param deployTicketAtencionApp = true
 param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacomer-INTE'

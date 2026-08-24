@@ -130,35 +130,75 @@ ninguno.
 
 ## Estado del despliegue
 
-`fa-axxonticketatencion-inte` ya existía **creada a mano** —es la que consume el web
-resource— así que entra en el mismo cutover que las otras apps de INTE. Tiene su propio
-toggle `deployTicketAtencionApp` porque en TEST no existe, y sin él un deployment la crearía
-de rebote. Ver [Ambientes](../plataforma/ambientes.md).
+`fa-axxonticketatencion-inte` existía **creada a mano** y era la quinta app pendiente del
+[cutover de INTE](../plataforma/ambientes.md). Se borró, así que dejó de ser deuda: nace
+administrada por Bicep con su propio toggle `deployTicketAtencionApp`, igual que thinkchat.
+`deployFunctionApps` sigue en `false` por las otras cuatro.
 
-Ya aplicado sobre la app de INTE: los app settings nuevos y el CORS. La Managed Identity ya
-tenía `Key Vault Secrets User` sobre `keyvaultinte` de antes.
+**Nace con Managed Identity.** `inte.bicepparam` no declara `dataverseClientId`, así que el
+template no emite `DataverseClientId` ni `GraphClientId`: la app autentica con su propia MI
+contra Dataverse y contra Graph, sin ningún secreto. Es el estado deseado y el mismo camino
+que products y thinkchat.
 
-Pendiente:
+El what-if contra `DataverseINTE` da **6 Create**: el storage, su blobService y el container
+`deploymentpackage`, el plan `asp-fa-axxonticketatencion-inte`, la app y su diagnostic
+setting. Usa el Application Insights compartido `appi-eip-inte` y el vault
+`kv-chacomer-eip-inte`.
 
-| # | Qué | Quién |
-|---|---|---|
-| 1 | Runtime `dotnet-isolated 8.0` → `10.0` | Justo antes de correr el pipeline: el bump rompe el código viejo hasta que entre el nuevo. |
-| 2 | Consentimiento de admin de `Sites.ReadWrite.All` y `Files.ReadWrite.All` | Un Global Admin. Ver abajo. |
-| 3 | Ubicación de documentos de `msauto_serviceappointment` en Dataverse | Se crea sola al abrir una vez la pestaña Archivos de una Cita. |
+### Pasos de alta
 
-### Por qué el PDF nunca funcionó
+1. **Crear la app** — pipeline `NextGen - infra INTE`, o `az deployment group create` con
+   `inte.bicepparam`.
+2. **Los 3 roles de la MI, a mano.** `deployRoleAssignments` está en `false` en INTE, así
+   que la app nace sin ellos. **No es opcional**: `AzureWebJobsStorage` va por identidad, así
+   que sin los roles de Storage la app ni siquiera arranca. Son `Storage Blob Data Owner` y
+   `Storage Queue Data Contributor` sobre su storage, y `Key Vault Secrets User` sobre el
+   vault. Comandos en [Infraestructura › Role assignments](../plataforma/infraestructura.md).
+3. **La MI como Application User en Dataverse INTE**, con rol de seguridad. Sin esto la app
+   levanta y falla en el primer llamado.
+4. **Los app roles de Graph asignados a la MI** — ver abajo.
+5. **Desplegar el código** con el pipeline de la integración.
+
+### Los permisos de Graph
+
+`Sites.ReadWrite.All` y `Files.ReadWrite.All`, como permisos de **aplicación**, asignados a
+la managed identity de la app. Para managed identities **no hay botón de "Grant admin
+consent" en el portal**: van por Graph API, y los tiene que otorgar un Global Admin.
+
+```bash
+MI=$(az functionapp identity show -g DataverseINTE -n fa-axxonticketatencion-inte --query principalId -o tsv)
+GRAPH=$(az ad sp show --id 00000003-0000-0000-c000-000000000000 --query id -o tsv)
+for ROL in 9492366f-7969-46a4-8d15-ed1a20078fff 75359482-378d-4052-8f01-80520e7db3cd; do
+  az rest --method post \
+    --url "https://graph.microsoft.com/v1.0/servicePrincipals/$MI/appRoleAssignments" \
+    --headers "Content-Type=application/json" \
+    --body "{\"principalId\":\"$MI\",\"resourceId\":\"$GRAPH\",\"appRoleId\":\"$ROL\"}"
+done
+```
+
+Asignarlos a la MI y no al app registration compartido `145fd64d` tiene una ventaja
+concreta: `Sites.ReadWrite.All` es **tenant-wide**, y colgado del registration compartido le
+daría escritura sobre todo SharePoint a la identidad que usan las otras seis apps de la EiP.
+
+Hasta que estén, Graph responde 403 y el ticket sale con `status = OK_SIN_PDF`: el usuario
+obtiene igual su Word. Es el comportamiento correcto, no un bug.
+
+### Por qué el PDF nunca funcionó en la versión anterior
 
 Dos causas, ninguna en el código de generación del documento:
 
 1. **`SHAREPOINT_SITE_URL` nunca existió como app setting.** La implementación anterior
-   armaba `new Uri("")`, tiraba, y el `catch` de la rama best-effort se lo comía. Ya
-   corregido.
-2. **El app registration `145fd64d` pide `Sites.ReadWrite.All` y `Files.ReadWrite.All` pero
-   su service principal tiene cero `appRoleAssignments`**: nadie consintió esos permisos.
-   Graph responde 403. **Sigue pendiente** — lo tiene que otorgar un Global Admin.
+   armaba `new Uri("")`, tiraba, y el `catch` de la rama best-effort se lo comía. La versión
+   nueva lo recibe del Bicep (`sharePointSiteUrl`).
+2. **Nadie consintió los permisos de Graph.** El registration los pedía, pero su service
+   principal tenía cero `appRoleAssignments`.
 
-Mientras el punto 2 siga abierto, la function responde `OK_SIN_PDF`. Eso es el
-comportamiento correcto, no un bug.
+### Huérfanos de la app borrada
+
+Quedaron tres recursos sin dueño en `DataverseINTE`, que el Bicep no administra y no pisa:
+el storage `dataverseinteticket`, el Application Insights `fa-axxonticketatencion-inte` (la
+app nueva usa el compartido) y su alert rule `Failure Anomalies - …`. Se pueden borrar una
+vez validada la app nueva; nada los referencia.
 
 ## Fuera de este repo
 
