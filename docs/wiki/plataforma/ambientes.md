@@ -3,7 +3,7 @@ sources:
   - infra/environments/**
   - infra/scripts/**
   - pipelines/**
-last_reviewed: 2026-08-24
+last_reviewed: 2026-08-25
 -->
 
 # Ambientes
@@ -112,21 +112,23 @@ que su configuración no puede versionarse en el template:
 > resuelven sus secretos sin tocar nada. El vault legacy sigue en pie para las cuatro apps
 > que todavía están fuera del Bicep.
 
-### INTE: thinkchat con los roles a mano
+### INTE: las apps que nacen con los roles a mano
 
 `inte.bicepparam` va con **`deployRoleAssignments = false`** por el mismo motivo, con el
 SP `b391d418-…` (`sc-chacomer-eip-inte`, objectId `e57cb312-…`), que tiene Contributor
 sobre `DataverseINTE` pero no `roleAssignments/write`. Como en INTE
-`deployFunctionApps = false`, la única app en juego es `thinkchat`.
+`deployFunctionApps = false`, las apps en juego son las dos que el template sí crea:
+**`thinkchat`** y **`ticketatencion`**.
 
 La app nace sin roles, y **sin ellos no arranca**: `AzureWebJobsStorage` va por identidad.
 Después de cada deploy que la (re)cree, correr:
 
 ```bash
 RG=DataverseINTE
-APP=fa-axxonthinkchat-inte
+APP=fa-axxonthinkchat-inte          # o fa-axxonticketatencion-inte
+PREFIJO=stthinkchatinte             # o stticket
 MI=$(az functionapp show -g $RG -n $APP --query identity.principalId -o tsv)
-ST=$(az storage account list -g $RG --query "[?starts_with(name,'stthinkchatinte')].id | [0]" -o tsv)
+ST=$(az storage account list -g $RG --query "[?starts_with(name,'$PREFIJO')].id | [0]" -o tsv)
 KV=$(az keyvault show -n kv-chacomer-eip-inte --query id -o tsv)
 
 az role assignment create --assignee-object-id $MI --assignee-principal-type ServicePrincipal --role "Storage Blob Data Owner"          --scope $ST
@@ -134,12 +136,45 @@ az role assignment create --assignee-object-id $MI --assignee-principal-type Ser
 az role assignment create --assignee-object-id $MI --assignee-principal-type ServicePrincipal --role "Key Vault Secrets User"           --scope $KV
 ```
 
+> **Si `az role assignment create` falla con `MissingSubscription`**, no es un problema de
+> permisos ni de scope: es un bug del CLI (visto en 2.84.0). Falla incluso pasando
+> `--subscription` explícito y con un scope válido. El PUT directo a ARM con los mismos
+> datos entra sin chistar:
+>
+> ```bash
+> SUB=09592883-de3a-4c93-944c-222b3c88e832
+> ROL=4633458b-17de-408a-b874-0445c86b69e6   # Key Vault Secrets User
+> NAME=$(python -c "import uuid;print(uuid.uuid4())")   # el nombre del assignment es un GUID cualquiera
+> az rest --method put \
+>   --url "https://management.azure.com${KV}/providers/Microsoft.Authorization/roleAssignments/${NAME}?api-version=2022-04-01" \
+>   --headers "Content-Type=application/json" \
+>   --body "{\"properties\":{\"roleDefinitionId\":\"/subscriptions/${SUB}/providers/Microsoft.Authorization/roleDefinitions/${ROL}\",\"principalId\":\"${MI}\",\"principalType\":\"ServicePrincipal\"}}"
+> ```
+>
+> Los GUID de los tres roles salen de `var roleIds` en
+> [`functionApp.bicep`](../../../infra/modules/functionApp.bicep), que es la fuente de
+> verdad. Repetir el PUT devuelve `RoleAssignmentExists` y no rompe nada.
+
+Para verificar que quedaron los tres:
+
+```bash
+az rest --method get \
+  --url "https://management.azure.com/subscriptions/09592883-de3a-4c93-944c-222b3c88e832/resourceGroups/$RG/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&\$filter=principalId eq '$MI'" \
+  --query "length(value)" -o tsv
+```
+
 Ninguno de esos tres roles cae en la condición ABAC que restringe a `sebastian.diaz@`
 (sólo le niega `Owner`, `User Access Administrator` y `Role Based Access Control
 Administrator`), así que este paso no depende de nadie más.
 
 Falta además, del lado de Dataverse: la MI de la app tiene que estar dada de alta como
-**Application User en Dataverse INTE** con permisos sobre `axx_metatemplates`. La app va
-sin `dataverseAuthSettings` a propósito (mismo criterio que `products`): habla con
-Dataverse por managed identity, así que sin ese alta levanta pero el sync falla.
+**Application User en Dataverse INTE**. Para thinkchat, con permisos sobre
+`axx_metatemplates`; para ticketatencion, los de
+[su página](../integraciones/ticketatencion.md#el-application-user-en-dataverse). Estas apps
+van sin `dataverseAuthSettings` a propósito (mismo criterio que `products`): hablan con
+Dataverse por managed identity, así que sin ese alta levantan pero fallan al primer llamado.
+
+> **El PPAC pide el Application ID, no el object id.** Son dos GUID distintos de la misma
+> managed identity, y es el error clásico. Cómo obtener cada uno:
+> [Ticket de Atención › Los dos GUID de la managed identity](../integraciones/ticketatencion.md#los-dos-guid-de-la-managed-identity-y-cuál-va-en-cada-lado).
 
