@@ -274,6 +274,9 @@ module customers 'modules/functionApp.bicep' = if (deployFunctionApps) {
     deployRoleAssignments: deployRoleAssignments
     serviceBusNamespaceName: serviceBus.outputs.namespaceName
     needsServiceBus: true
+    // Publica en customer-ltm-sync apenas el customer quedo creado en F&O: ahi recien
+    // existe el CustomerAccount, que es la clave de la fila de LTMCustTable.
+    publishesToServiceBus: true
     appSettings: concat([
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'FoBaseUrl', value: foBaseUrl }
@@ -282,6 +285,9 @@ module customers 'modules/functionApp.bicep' = if (deployFunctionApps) {
       // trigger de QualifyLeadCustomerSyncFunction no resuelve y la app no arranca.
       { name: 'ServiceBusQueueName', value: 'leadcontacts' }
       { name: 'FoSyncServiceBusQueueName', value: 'customer-fo-sync' }
+      // Cola de LTMCustTable: customers la consume (LtmCustSyncFunction) y ademas publica
+      // en ella desde CustomerSyncService despues del write-back.
+      { name: 'LtmSyncServiceBusQueueName', value: 'customer-ltm-sync' }
       // Valor que QualifyLead escribe en msdyn_sellable del contact antes de sincronizar.
       // Sin sellable = true F&O toma el party como prospecto y el alta del customer falla.
       // Sacar el setting apaga el sellado (el contact sincroniza solo si ya venia sellable).

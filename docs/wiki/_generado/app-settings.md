@@ -43,7 +43,7 @@ Suma `dataverseAuthSettings`, que el template emite sólo si el ambiente declara
 - appKey: `customers`
 - instancias máx.: `foBoundMaxInstanceCount`
 - consume Service Bus: si
-- publica en Service Bus: no
+- publica en Service Bus: si
 - se despliega si: `deployFunctionApps`
 
 | Setting | Valor en el template | Default |
@@ -53,6 +53,7 @@ Suma `dataverseAuthSettings`, que el template emite sólo si el ambiente declara
 | `ServiceBusConnection__fullyQualifiedNamespace` | `serviceBus.outputs.fullyQualifiedNamespace` | — |
 | `ServiceBusQueueName` | `'leadcontacts'` | — |
 | `FoSyncServiceBusQueueName` | `'customer-fo-sync'` | — |
+| `LtmSyncServiceBusQueueName` | `'customer-ltm-sync'` | — |
 | `QualifyLeadSellableValue` | `'true'` | — |
 
 Suma `dataverseAuthSettings` y `foAuthSettings`, que el template emite sólo si el ambiente declara el client id correspondiente.

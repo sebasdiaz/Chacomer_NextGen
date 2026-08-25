@@ -7,7 +7,7 @@ sources: []
 > Generado desde el código por [`generate.mjs`](../generate.mjs). Si algo de acá está
 > mal, el que está mal es el código — o el generador. No edites esta página.
 
-Las 20 Azure Functions de la plataforma, con el disparador que declara cada una.
+Las 22 Azure Functions de la plataforma, con el disparador que declara cada una.
 Entre paréntesis, el placeholder tal como está en el atributo; antes, el valor que le
 asigna `infra/main.bicep`.
 
@@ -16,11 +16,13 @@ asigna `infra/main.bicep`.
 | `AccountMasterMatchingFunction` | `fa-axxoncontacts-{env}` | Service Bus | `account-master-matching` _(%AccountServiceBusQueueName%)_ — sessions: no |
 | `ContactMasterMatchingFunction` | `fa-axxoncontacts-{env}` | Service Bus | `contact-master-matching` _(%ServiceBusQueueName%)_ — sessions: no |
 | `CustomerFoSyncFunction` | `fa-axxoncustomers-{env}` | Service Bus | `customer-fo-sync` _(%FoSyncServiceBusQueueName%)_ — sessions: si |
+| `LtmCustSyncFunction` | `fa-axxoncustomers-{env}` | Service Bus | `customer-ltm-sync` _(%LtmSyncServiceBusQueueName%)_ — sessions: si |
 | `QualifyLeadCustomerSyncFunction` | `fa-axxoncustomers-{env}` | Service Bus | `leadcontacts` _(%ServiceBusQueueName%)_ — sessions: no |
 | `CustomerGroupSyncFunction` | `fa-axxoncustomergroups-{env}` | Timer | `0 0 23 * * *` _(%Schedules:CustomerGroupSync%)_ |
 | `ProductGroupSyncFunction` | `fa-axxonproducts-{env}` | Timer | `0 0 23 * * *` _(%Schedules:ProductGroupSync%)_ |
 | `ReleasedProductSyncFunction` | `fa-axxonproducts-{env}` | Timer | `0 0 * * * *` _(%Schedules:ReleasedProductSync%)_ |
 | `ThinkchatTemplateSyncFunction` | `fa-axxonthinkchat-{env}` | Timer | `0 0 */2 * * *` _(%Schedules:ThinkchatTemplateSync%)_ |
+| `LtmCustBackfillFunction` | `fa-axxoncustomers-{env}` | HTTP | POST /api/ltm/backfill — auth: Function |
 | `Set_ConsultaRuc` | `fa-axxonfiscal-{env}` | HTTP | GET /api/set/consulta-ruc — auth: Function |
 | `Set_Options` | `fa-axxonfiscal-{env}` | HTTP | OPTIONS /api/set/{*any} — auth: Anonymous |
 | `Set_ValidezDocumentoMaquinaRegistradora` | `fa-axxonfiscal-{env}` | HTTP | GET /api/set/validez-documento-maquina-registradora — auth: Function |
