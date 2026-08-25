@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - infra/**
-last_reviewed: 2026-08-24
+last_reviewed: 2026-08-25
 -->
 
 # Infraestructura (Bicep)
@@ -50,14 +50,20 @@ es quién las alimenta:
 | `contact-master-matching` | Service Endpoint de Dataverse |
 | `account-master-matching` | Service Endpoint de Dataverse |
 | `customer-fo-sync` | `AxxonContacts.Functions` |
+| `customer-ltm-sync` | `AxxonCustomers.Functions` (tras crear el customer en F&O) |
 | `leadcontacts` | Service Endpoint de Dataverse (QualifyLead) |
 
-**Sólo `customer-fo-sync` lleva sessions.** Es la única cuyo publisher las soporta
-(`EipServiceBusPublisher` setea `SessionId`) y la única cuyo trigger declara
+**Sólo `customer-fo-sync` y `customer-ltm-sync` llevan sessions.** Son las dos que publica
+`EipServiceBusPublisher`, que setea `SessionId`, y las únicas cuyos triggers declaran
 `IsSessionsEnabled = true`. Las otras tres las alimenta el **Service Endpoint OOB de
 Dataverse, que no setea `SessionId`**, y sus triggers declaran `IsSessionsEnabled = false`:
 con `requiresSession` fallan las dos puntas — el publisher no puede enviar
 (`The SessionId was not set on a message`) y un receiver sin sessions tampoco puede leer.
+
+> **`customer-ltm-sync` es la razón por la que `customers` pasó a publicar.** Hasta que
+> existió esa cola, la app sólo consumía, y su módulo iba sin `publishesToServiceBus`. El
+> role assignment **Data Sender** va separado del Receiver a propósito, así que agregar el
+> publisher sin agregar el rol da un 403 en runtime — no al desplegar.
 
 Esto es espejo de **INTE**, donde las 5 colas del namespace `dataverseinte` (`contacts`,
 `accounts`, `leadcontacts`, `custcustomerv3`, `ingest`) son todas `requiresSession = false`.

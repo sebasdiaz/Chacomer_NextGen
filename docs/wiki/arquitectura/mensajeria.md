@@ -3,7 +3,7 @@ sources:
   - docs/contracts/**
   - src/core/Axxon.Eip.Core/Messaging/**
   - infra/modules/servicebus.bicep
-last_reviewed: 2026-08-21
+last_reviewed: 2026-08-25
 -->
 
 # Contratos de mensajería — Enterprise Integration Platform (EiP)
@@ -84,6 +84,7 @@ Constantes en `Axxon.Eip.Core/Messaging/EipConstants.cs` (`EipDeadLetterReason`)
 | Accounts (master matching) | dataverse | account | Queue `account-master-matching` (sessions) | **Interino**: formato nativo |
 | Customers (qualify lead → F&O) | dataverse | customer | Queue (SB trigger) | **Interino** |
 | Customers (legal entities fuera de Dual Write → F&O) | dataverse | account / contact | Queue `customer-fo-sync` (sessions por id de registro) | **Envelope EiP** — payload `CustomerSyncPayload` |
+| Customers (localización PY → `LTMCustTable`) | dataverse | account / contact | Queue `customer-ltm-sync` (sessions por id de registro) | **Envelope EiP** — payload `CustomerSyncPayload` (el mismo: también es una referencia) |
 | CustomerGroups (F&O → Dataverse) | fo | customergroup | Timer (sin SB) | Pull batch, sin envelope |
 | Products (F&O → Dataverse) | fo | product / productgroup | Timer/HTTP (sin SB) | Pull batch, sin envelope |
 
@@ -116,6 +117,9 @@ emitan el **envelope EiP** con el DTO de dominio en `payload`. Camino sugerido:
    arrastra el formato nativo. Su payload es **una referencia, no un snapshot** — solo
    `recordId` y `dataAreaId`; el consumidor relee Dataverse. Un snapshot de un evento
    Update llega parcial (es un delta) y mapear desde ahí escribe mal en el ERP.
+   `customer-ltm-sync` reusa ese mismo `CustomerSyncPayload` por la misma razón, y no
+   define uno propio: lo que necesita el consumidor —el `CustomerAccount`— lo relee del
+   registro, que es la fuente de verdad.
 2. Unificar el lado Dataverse en **un** mecanismo: el plugin thin publica
    `EipMessage<ContactPayload>` (reusando el DTO limpio que ya existe) en lugar del
    Service Endpoint nativo.
