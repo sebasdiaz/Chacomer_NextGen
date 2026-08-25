@@ -17,6 +17,7 @@ lleva sessions) está en
 | `contact-master-matching` | no | `ContactMasterMatchingFunction` |
 | `account-master-matching` | no | `AccountMasterMatchingFunction` |
 | `customer-fo-sync` | si | `CustomerFoSyncFunction` |
+| `customer-ltm-sync` | si | `LtmCustSyncFunction` |
 | `leadcontacts` | no | `QualifyLeadCustomerSyncFunction` |
 
 ### Propiedades, iguales para todas

@@ -30,6 +30,7 @@ namespace AxxonCustomers.Functions.Services
         private readonly IFoCustomerService _foCustomerService;
         private readonly FoPayloadBuilder _payloadBuilder;
         private readonly EntityMapRegistry _maps;
+        private readonly LtmSyncDispatcher _ltmDispatcher;
         private readonly ILogger<CustomerSyncService> _logger;
 
         public CustomerSyncService(
@@ -37,12 +38,14 @@ namespace AxxonCustomers.Functions.Services
             IFoCustomerService foCustomerService,
             FoPayloadBuilder payloadBuilder,
             EntityMapRegistry maps,
+            LtmSyncDispatcher ltmDispatcher,
             ILogger<CustomerSyncService> logger)
         {
             _orgService        = orgService        ?? throw new ArgumentNullException(nameof(orgService));
             _foCustomerService = foCustomerService ?? throw new ArgumentNullException(nameof(foCustomerService));
             _payloadBuilder    = payloadBuilder    ?? throw new ArgumentNullException(nameof(payloadBuilder));
             _maps              = maps              ?? throw new ArgumentNullException(nameof(maps));
+            _ltmDispatcher     = ltmDispatcher     ?? throw new ArgumentNullException(nameof(ltmDispatcher));
             _logger            = logger            ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -96,14 +99,32 @@ namespace AxxonCustomers.Functions.Services
                 map.EntitySet, payload.DataAreaId, partyNumber, writtenBackAccount, cancellationToken);
 
             if (existing is not null)
-                await UpdateExistingAsync(map, recordId, existing, payload, writtenBackAccount, cancellationToken);
-            else
-                await CreateNewAsync(map, recordId, payload, cancellationToken);
+            {
+                await UpdateExistingAsync(
+                    map, recordId, existing, payload, writtenBackAccount, cancellationToken);
+                return;
+            }
+
+            var customerAccount = await CreateNewAsync(map, recordId, payload, cancellationToken);
+
+            // La contraparte de localizacion (LTMCustTable) va por su propia cola: se clavea
+            // con el CustomerAccount, que recien existe aca.
+            //
+            // Solo en el alta. La v1 escribe LTMCustTable con un POST y sin PATCH, asi que
+            // encolar tambien la modificacion produciria un POST sobre una fila existente, un
+            // 400 y un mensaje en el DLQ por cada cambio de cliente (ADR-001).
+            //
+            // Si F&O no devolvio CustomerAccount no se encola: el consumidor no tendria clave
+            // y completaria el mensaje sin hacer nada.
+            if (!string.IsNullOrWhiteSpace(customerAccount))
+                await _ltmDispatcher.DispatchAsync(
+                    map.SourceEntity, recordId, payload.DataAreaId, cancellationToken);
         }
 
         // ── Alta ──────────────────────────────────────────────────────
 
-        private async Task CreateNewAsync(
+        /// <summary>Devuelve el CustomerAccount que genero F&amp;O.</summary>
+        private async Task<string?> CreateNewAsync(
             EntityMap map,
             Guid recordId,
             FoPayload payload,
@@ -122,6 +143,8 @@ namespace AxxonCustomers.Functions.Services
             _logger.LogInformation(
                 "[CustomerSyncService] Fin (alta). {Entity}={RecordId} | CustomerAccount={CustomerAccount}",
                 map.SourceEntity, recordId, created.CustomerAccount ?? "N/A");
+
+            return created.CustomerAccount;
         }
 
         // ── Modificacion ──────────────────────────────────────────────

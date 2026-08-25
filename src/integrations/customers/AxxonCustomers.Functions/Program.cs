@@ -1,6 +1,7 @@
 using Axxon.Eip.Core.Dataverse;
 using Axxon.Eip.Core.FinOps;
 using Axxon.Eip.Core.Hosting;
+using Axxon.Eip.Core.Messaging;
 using AxxonCustomers.Functions.Configuration;
 using AxxonCustomers.Functions.Mapping;
 using AxxonCustomers.Functions.Services;
@@ -43,6 +44,16 @@ builder.Services.AddSingleton<FoSchemaCache>();
 builder.Services.AddTransient<IFoSchemaProvider, FoSchemaProvider>();
 builder.Services.AddTransient<FoPayloadBuilder>();
 
+// Mapeo hacia LTMCustTable. Va en C# y no en un overlay JSON porque navega cadenas de dos
+// saltos, consulta con filtro y sale a una relacion 1:N — nada de eso entra en las cinco
+// primitivas del motor declarativo (ADR-001).
+//
+// El cache de catalogos es singleton: sus dos entradas salen de virtual entities, y cada
+// Retrieve sobre una virtual entity es Dataverse llamando en vivo a F&O.
+builder.Services.AddSingleton<LtmCatalogCache>();
+builder.Services.AddTransient<LtmCatalogResolver>();
+builder.Services.AddTransient<LtmCustPayloadBuilder>();
+
 // Estado de las legal entities respecto de Dual Write (cdm_isenabledfordualwrite).
 // El cache es singleton; el resolver, transient (depende de IOrganizationService).
 builder.Services.AddSingleton<DualWriteCompanyCache>();
@@ -51,6 +62,24 @@ builder.Services.AddTransient<IDualWriteCompanyResolver, DualWriteCompanyResolve
 builder.Services.AddTransient<IFoCustomerService, FoCustomerService>();
 builder.Services.AddTransient<ICustomerSyncService, CustomerSyncService>();
 builder.Services.AddTransient<ISellableStamper, SellableStamper>();
+builder.Services.AddTransient<ILtmCustService, LtmCustService>();
+builder.Services.AddTransient<ILtmCustSyncService, LtmCustSyncService>();
+builder.Services.AddTransient<ILtmCustBackfillService, LtmCustBackfillService>();
+
+// Cola de LTMCustTable. Se valida al arranque igual que en AxxonContacts: sin el nombre de
+// la cola, CustomerSyncService no podria encolar la contraparte de localizacion y el alta
+// quedaria a medias sin que nadie se entere.
+var ltmSyncQueueName = builder.Configuration["LtmSyncServiceBusQueueName"];
+
+if (string.IsNullOrWhiteSpace(ltmSyncQueueName))
+    throw new InvalidOperationException(
+        "La variable de entorno 'LtmSyncServiceBusQueueName' no esta configurada.");
+
+builder.Services.AddEipServiceBusPublisher(builder.Configuration);
+builder.Services.AddTransient(sp => new LtmSyncDispatcher(
+    sp.GetRequiredService<IEipMessagePublisher>(),
+    ltmSyncQueueName,
+    sp.GetRequiredService<ILogger<LtmSyncDispatcher>>()));
 
 var app = builder.Build();
 

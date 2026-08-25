@@ -3,7 +3,7 @@ sources:
   - src/integrations/customers/AxxonCustomers.Functions/**
   - tests/AxxonCustomers.Functions.Tests/**
   - pipelines/azure-pipelines-customers.yml
-last_reviewed: 2026-08-21
+last_reviewed: 2026-08-25
 -->
 
 # Customers — Dataverse → F&O (CustomersV3)
@@ -176,6 +176,89 @@ campos de credito, account solo organizaciones, literales de enum capitalizados)
 **Que fallen despues de un re-export no significa que el export este mal — significa que
 hay que mirarlo y decidir de nuevo.**
 
+## LTMCustTable — la contraparte de localización PY
+
+Después de que el customer existe en F&O hay que completar **`LTMCustTable`**, la tabla de
+localización Paraguay que acompaña a `CustTable`. Es 1:1 con el cliente, con clave
+`(dataAreaId, AccountNum)`, donde `AccountNum` es el `CustomerAccount` que genera F&O.
+
+Va por **cola propia** (`customer-ltm-sync`, con sessions por registro), para que un código
+de localización inválido no re-martille el alta del customer. El detalle está en
+[ADR-001](../arquitectura/decisiones/001-ltmcusttable.md).
+
+### La v1 escribe el alta y nada más
+
+`CustomerSyncService` encola **solo cuando creó el customer**, después del write-back. La
+Function arma el JSON y hace un `POST`: no consulta si la fila existe ni la actualiza. Si
+F&O rechaza, el mensaje va al DLQ como `BusinessRuleFailed` y no se procesa.
+
+**Un cambio de RUC, de tipo de documento o de dirección no llega a `LTMCustTable`.** La
+modificación está fuera de alcance a propósito: sin PATCH, encolarla produciría un POST
+sobre una fila existente, un 400 y un mensaje en el DLQ por cada cambio de cliente. Cuando
+se implemente hará falta un disparador desde contacts que **no** filtre por Dual Write —
+ver el ADR.
+
+### Backfill de lo que ya existe
+
+Los clientes creados antes de esta integración no tienen fila en `LTMCustTable`. Los
+encola `LtmCustBackfillFunction`, un **HTTP trigger** con function key:
+
+```bash
+curl -s -X POST -H "x-functions-key: $KEY" "$APP/api/ltm/backfill?entity=contact"
+```
+
+| Parámetro | Qué hace |
+|---|---|
+| `entity` | `contact` o `account`. Requerido |
+| `dryRun` | Cuenta sin encolar. **Es el default**: para encolar de verdad hay que pasar `dryRun=false` |
+| `max` | Corta después de N registros. Útil para probar con pocos antes de soltar el maestro entero |
+
+Encola los que **ya tienen customer en F&O** (campo de write-back con valor), que no sean
+master y que tengan legal entity — los dos últimos filtros están para no llenar el DLQ con
+registros que nunca iban a andar.
+
+**No procesa: encola.** Cada cliente es un mensaje independiente con el retry y el DLQ de
+`LtmCustSyncFunction`, en vez de un loop que se come el timeout y deja el trabajo por la
+mitad si falla.
+
+> **No es idempotente, y no puede serlo** mientras la escritura sea un POST sin verificar:
+> una segunda corrida manda al DLQ todo lo que la primera escribió. Por eso es un HTTP
+> trigger y no un timer — un timer "que después deshabilitamos" repite el maestro de
+> clientes entero el día que nadie se acuerde de apagarlo.
+
+### La guarda del `AccountNum`
+
+**Sin `CustomerAccount` en el registro, no se sincroniza** y el mensaje se completa sin
+procesar — no va a DLQ. No es un error: es el orden natural del alta, y el consumidor relee
+Dataverse (el payload es una referencia, no un snapshot), así que puede encontrarse con el
+registro todavía sin write-back.
+
+### El mapeo va en C#, no en JSON
+
+A diferencia de `CustomersV3`, este mapeo vive en `LtmCustPayloadBuilder`. No entra en las
+cinco primitivas del motor declarativo: hace una consulta con filtro, sale a una relación
+1:N, y tiene atributos que alimentan dos campos de F&O cada uno. El detalle está en el ADR.
+
+| Campo de LTMCustTable | De dónde sale |
+|---|---|
+| `dataAreaId` | `msdyn_company` → `cdm_companycode` (igual que CustomersV3) |
+| `AccountNum` | `msdyn_contactpersonid` (contact) / `accountnumber` (account) |
+| `CountryDocNum`, `StateDocNum` | `msdyn_identificationnumber` — el mismo RUC en los dos |
+| `CountryDocTypeId`, `TaxPayerTypeId` | lookup `axx_tipodocumento` → los dos campos de la misma fila de `mserp_ltmtaxpayerdoctypeentity` |
+| `AccountTypeGroupId` | `mserp_ltmaccounttypegroupentity` filtrando por company y `CustVendEntity` |
+| `CountryRegionId` | dirección primaria → `axx_pais` → `axx_countryregion` |
+| `StateId` | dirección primaria → `axx_region` → `axx_name` |
+| `Concept1-3`, `Note1-3`, `StateDocTypeId` | no se mapean (vienen vacíos) |
+
+Los nombres físicos viven todos en `LtmCustMapping`, en un solo lugar: los campos de las
+virtual entities los publica el proveedor de F&O por environment y hay que confirmarlos
+contra la metadata del ambiente.
+
+> **Las virtual entities se activan una por una y por ambiente.** Si `mserp_ltm*` no está
+> activada —o el application user no la puede leer— el lookup falla en runtime, no al
+> arranque. Los dos catálogos se cachean por proceso (`LtmCatalogCache`) porque cada
+> Retrieve sobre una virtual entity es Dataverse llamando en vivo a F&O.
+
 ## Manejo de errores (autoComplete = false)
 
 | Situacion                                            | Accion                                  |
@@ -203,6 +286,7 @@ hay que mirarlo y decidir de nuevo.**
 | `ServiceBusConnection`  | Connection string (o config de identity) del namespace de Service Bus |
 | `ServiceBusQueueName`   | `leadcontacts`                                                    |
 | `FoSyncServiceBusQueueName` | `customer-fo-sync`                                            |
+| `LtmSyncServiceBusQueueName` | `customer-ltm-sync`. Sin este setting el host no levanta: `CustomerSyncService` no podria encolar la contraparte de localizacion |
 | `QualifyLeadSellableValue` | Valor que QualifyLead escribe en `msdyn_sellable` del contact antes de sincronizar (`true`). Ausente o no booleano = no se sella nada |
 | `DataverseUrl`          | URL del environment de Dataverse                                  |
 | `DataverseClientId`     | (DESA) Client Id del app registration; vacio => Managed Identity  |
@@ -218,8 +302,8 @@ hay que mirarlo y decidir de nuevo.**
 > (application user) como para F&O (registrar el client id en
 > *System administration > Microsoft Entra applications*).
 
-> **Las dos colas comparten `ServiceBusConnection`**, asi que `leadcontacts` y
-> `customer-fo-sync` tienen que vivir en el **mismo namespace**. Las dos las crea
+> **Las tres colas comparten `ServiceBusConnection`**, asi que `leadcontacts`,
+> `customer-fo-sync` y `customer-ltm-sync` tienen que vivir en el **mismo namespace**. Las dos las crea
 > `infra/modules/servicebus.bicep` en el namespace de la EiP (`sb-chacomer-eip-{env}`):
 > `customer-fo-sync` con sessions, `leadcontacts` sin sessions (el Service Endpoint de
 > Dataverse no setea `SessionId`).
