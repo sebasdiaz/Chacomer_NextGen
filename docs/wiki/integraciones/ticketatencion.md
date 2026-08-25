@@ -5,7 +5,7 @@ sources:
   - src/core/Axxon.Eip.Core/Dataverse/DataverseWebApiClient.cs
   - tests/AxxonTicketAtencion.Functions.Tests/**
   - pipelines/azure-pipelines-ticketatencion.yml
-last_reviewed: 2026-08-24
+last_reviewed: 2026-08-25
 -->
 
 # Ticket de Atención — Orden de Reparación
@@ -151,13 +151,56 @@ setting. Usa el Application Insights compartido `appi-eip-inte` y el vault
    `inte.bicepparam`.
 2. **Los 3 roles de la MI, a mano.** `deployRoleAssignments` está en `false` en INTE, así
    que la app nace sin ellos. **No es opcional**: `AzureWebJobsStorage` va por identidad, así
-   que sin los roles de Storage la app ni siquiera arranca. Son `Storage Blob Data Owner` y
-   `Storage Queue Data Contributor` sobre su storage, y `Key Vault Secrets User` sobre el
-   vault. Comandos en [Infraestructura › Role assignments](../plataforma/infraestructura.md).
-3. **La MI como Application User en Dataverse INTE**, con rol de seguridad. Sin esto la app
-   levanta y falla en el primer llamado.
+   que sin los roles de Storage la app ni siquiera arranca. Receta y el fallback cuando el
+   CLI falla, en [Ambientes › apps de INTE con los roles a mano](../plataforma/ambientes.md#inte-las-apps-que-nacen-con-los-roles-a-mano).
+3. **La MI como Application User en Dataverse INTE** — ver abajo.
 4. **Los app roles de Graph asignados a la MI** — ver abajo.
 5. **Desplegar el código** con el pipeline de la integración.
+
+### Los dos GUID de la managed identity, y cuál va en cada lado
+
+Es el error clásico: son dos identificadores distintos y el PPAC pide el que uno no espera.
+
+```bash
+MI=$(az functionapp identity show -g DataverseINTE -n fa-axxonticketatencion-inte --query principalId -o tsv)
+az ad sp show --id $MI --query "{objectId:id, appId:appId, displayName:displayName}" -o json
+```
+
+| Valor | Para qué |
+|---|---|
+| **Application (client) ID** (`appId`) | **El Application User en Dataverse.** Es el que pide el PPAC. |
+| Object ID / `principalId` | Los role assignments de Azure y los app roles de Graph. |
+
+> **No los hardcodees.** Son de *esta* instancia de la app: si se borra y se recrea, la
+> managed identity es nueva y los dos GUID cambian — hay que rehacer el app user, los tres
+> role assignments y los app roles de Graph. Es exactamente lo que pasó el 2026-08-24 cuando
+> se borró la app creada a mano. Es otra razón para que la app quede administrada por Bicep
+> y no se toque más a mano.
+
+### El Application User en Dataverse
+
+PPAC → **Environments → b1-chacomer-inte → Settings → Users + permissions → Application
+users → + New app user** → *Add an app* → pegar el **Application ID** → business unit → rol
+de seguridad.
+
+Si el buscador no encuentra la app por nombre, pegar el GUID directo: las managed identities
+no siempre aparecen listadas.
+
+El rol de seguridad tiene que cubrir seis lecturas y una sola escritura:
+
+| Tabla | Acceso |
+|---|---|
+| `msauto_serviceappointment` | Read |
+| `msauto_device` y sus lookups (marca, modelo, color, código de producto) | Read |
+| `contact` / `account` / `customeraddress` | Read |
+| `cdm_company` | Read |
+| `msauto_serviceorderjob` | Read |
+| `a365_externalnote` | Read |
+| `msauto_devicemeasurement` | Read |
+| **`sharepointdocumentlocation`** | **Read + Create** |
+
+El único write es el `sharepointdocumentlocation`, y sólo cuando la Cita todavía no tiene
+carpeta de documentos.
 
 ### Los permisos de Graph
 
