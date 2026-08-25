@@ -48,6 +48,16 @@ param queues array = [
     requiresSession: true
   }
   {
+    // Contraparte de localizacion PY del cliente (LTMCustTable). Cola propia y no un
+    // paso mas de customer-fo-sync por dos motivos: un codigo de localizacion invalido
+    // no tiene que re-martillar el alta del customer, y las modificaciones de las legal
+    // entities que SI estan en Dual Write no pasan por customer-fo-sync (las hace Dual
+    // Write), con lo cual la fila quedaria congelada en el alta. Ver ADR-001.
+    // Sessions por id de registro, igual que customer-fo-sync.
+    name: 'customer-ltm-sync'
+    requiresSession: true
+  }
+  {
     // RemoteExecutionContext del mensaje QualifyLead, publicado por un Service
     // Endpoint de Dataverse. SIN sessions: el Service Endpoint no setea SessionId
     // y con requiresSession la publicacion falla.

@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources_new:
   - docs/wiki/arquitectura/decisiones/*.md
-last_reviewed: 2026-08-21
+last_reviewed: 2026-08-25
 -->
 
 # Decisiones
@@ -27,6 +27,7 @@ sólo el link.
 | 11 | `FunctionAppLogs` al workspace es un backstop del host, no un duplicado de OpenTelemetry | [Infraestructura › Diagnostics](../plataforma/infraestructura.md#diagnostics-functionapplogs-al-workspace) |
 | 12 | Si Thinkchat devuelve cero templates no se desactiva nada | [Thinkchat › Dos guardas de seguridad](../integraciones/thinkchat.md#dos-guardas-de-seguridad) |
 | 13 | Se compila una vez y se promueve el mismo artifact INTE → TEST; no se recompila | [Pipelines](../plataforma/pipelines.md) |
+| 14 | `LTMCustTable` va por cola propia con payload de referencia; se descartan el satélite, el JSON en plugin y la tabla espejo | [ADR-001](decisiones/001-ltmcusttable.md) |
 
 ## Cuándo escribir un ADR aparte
 
