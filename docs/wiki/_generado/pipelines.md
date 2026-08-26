@@ -17,7 +17,7 @@ Lo que declara `pipelines/*.yml`. El detalle de cómo funciona la promoción est
 | [azure-pipelines-contacts.yml](../../../pipelines/azure-pipelines-contacts.yml) | `fa-axxoncontacts` | si | si | — |
 | [azure-pipelines-customergroups.yml](../../../pipelines/azure-pipelines-customergroups.yml) | `fa-axxoncustomergroups` | `fa-axxoncustomergroup` | si | — |
 | [azure-pipelines-customers.yml](../../../pipelines/azure-pipelines-customers.yml) | `fa-axxoncustomers` | si | si | `tests/AxxonCustomers.Functions.Tests/AxxonCustomers.Functions.Tests.csproj` |
-| [azure-pipelines-fiscal.yml](../../../pipelines/azure-pipelines-fiscal.yml) | `fa-axxonfiscal` | no | si | — |
+| [azure-pipelines-fiscal.yml](../../../pipelines/azure-pipelines-fiscal.yml) | `fa-axxonfiscal` | si | si | — |
 | [azure-pipelines-products.yml](../../../pipelines/azure-pipelines-products.yml) | `fa-axxonproducts` | si | si | — |
 | [azure-pipelines-thinkchat.yml](../../../pipelines/azure-pipelines-thinkchat.yml) | `fa-axxonthinkchat` | si | no | — |
 | [azure-pipelines-ticketatencion.yml](../../../pipelines/azure-pipelines-ticketatencion.yml) | `fa-axxonticketatencion` | si | no | `tests/AxxonTicketAtencion.Functions.Tests/AxxonTicketAtencion.Functions.Tests.csproj` |

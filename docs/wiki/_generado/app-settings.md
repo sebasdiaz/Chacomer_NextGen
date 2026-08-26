@@ -97,7 +97,7 @@ Suma `dataverseAuthSettings` y `foAuthSettings`, que el template emite sólo si 
 - instancias máx.: `maxInstanceCount`
 - consume Service Bus: no
 - publica en Service Bus: no
-- se despliega si: `deployFunctionApps`
+- se despliega si: `deployFiscalApp`
 
 | Setting | Valor en el template | Default |
 |---|---|---|

@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - pipelines/**
-last_reviewed: 2026-08-24
+last_reviewed: 2026-08-26
 -->
 
 # Pipelines
@@ -26,7 +26,7 @@ Lo que la matriz no explica:
 
 | Caso | Por qué |
 |---|---|
-| `fiscal` no va a INTE | La app `fa-axxonfiscal-inte` no existe: la integración es nueva y en INTE el Bicep no crea Function Apps. Estrena directo en TEST |
+| `fiscal` sí va a INTE, pero la app la crea el Bicep | `fa-axxonfiscal-inte` no existe creada a mano: nace del toggle `deployFiscalApp`. **Este pipeline no la crea** — hasta que no corrió el de infra, el deploy falla |
 | `thinkchat` no va a TEST | `fa-axxonthinkchat-test` todavía no existe. Se prende cuando el pipeline de infra TEST la cree, y después de asignarle los roles a mano |
 | `customergroups` despliega a `fa-axxoncustomergroup` en INTE | Ahí la app se creó a mano con el nombre en singular. Se unifica en el cutover |
 

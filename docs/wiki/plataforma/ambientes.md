@@ -3,7 +3,7 @@ sources:
   - infra/environments/**
   - infra/scripts/**
   - pipelines/**
-last_reviewed: 2026-08-25
+last_reviewed: 2026-08-26
 -->
 
 # Ambientes
@@ -15,7 +15,7 @@ last_reviewed: 2026-08-25
 
 | Ambiente | Resource group | Dataverse | F&O | Service connection | Function Apps |
 |---|---|---|---|---|---|
-| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover), salvo thinkchat |
+| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover), salvo thinkchat, ticketatencion y fiscal |
 | `test` | `dataversetest` | `operations-b1-chacomer-test` | `b1-chacomer-test.sandbox` | `sc-chacomer-eip-test` | administradas por el Bicep |
 | `uat` | *(sin crear)* | — | — | — | — |
 | `prod` | *(sin crear)* | — | — | — | — |
@@ -50,11 +50,17 @@ El template declara la **colección completa** de app settings, así que poner
 `deployFunctionApps = true` sin preparar el terreno **deja las 4 apps caídas**.
 El orden del cutover, por app:
 
-> **`fa-axxonthinkchat-{env}` es la excepción.** Es la única app greenfield: no existe
+> **`fa-axxonthinkchat-{env}` fue la primera excepción.** Es una app greenfield: no existe
 > creada a mano en ningún ambiente, así que no tiene nada que adoptar y puede nacer
 > administrada por Bicep sin esperar al cutover. Por eso tiene su propio toggle
 > `deployThinkchatApp` (default: sigue a `deployFunctionApps`). Para prenderla en INTE
 > hace falta que el SP del pipeline pueda escribir role assignments — ver abajo.
+
+> **`fa-axxonfiscal-inte` sigue el mismo camino.** También es greenfield —nunca se creó a
+> mano— así que estrena en INTE con su propio toggle `deployFiscalApp`, sin esperar al
+> cutover. Nace con **Managed Identity**: `inte.bicepparam` no declara `dataverseClientId`,
+> así que habla con Dataverse por su MI. Ver
+> [Fiscal › Estado del despliegue](../integraciones/fiscal.md#estado-del-despliegue).
 
 1. ✅ **Secretos a Key Vault + System-Assigned MI** — [`infra/scripts/Set-InteKeyVaultAuth.ps1`](../../../infra/scripts/Set-InteKeyVaultAuth.ps1).
 2. Dar de alta la MI como Application User en Dataverse y como usuario S2S en F&O.
@@ -117,16 +123,16 @@ que su configuración no puede versionarse en el template:
 `inte.bicepparam` va con **`deployRoleAssignments = false`** por el mismo motivo, con el
 SP `b391d418-…` (`sc-chacomer-eip-inte`, objectId `e57cb312-…`), que tiene Contributor
 sobre `DataverseINTE` pero no `roleAssignments/write`. Como en INTE
-`deployFunctionApps = false`, las apps en juego son las dos que el template sí crea:
-**`thinkchat`** y **`ticketatencion`**.
+`deployFunctionApps = false`, las apps en juego son las tres que el template sí crea:
+**`thinkchat`**, **`ticketatencion`** y **`fiscal`**.
 
 La app nace sin roles, y **sin ellos no arranca**: `AzureWebJobsStorage` va por identidad.
 Después de cada deploy que la (re)cree, correr:
 
 ```bash
 RG=DataverseINTE
-APP=fa-axxonthinkchat-inte          # o fa-axxonticketatencion-inte
-PREFIJO=stthinkchatinte             # o stticket
+APP=fa-axxonthinkchat-inte          # o fa-axxonticketatencion-inte / fa-axxonfiscal-inte
+PREFIJO=stthinkchatinte             # o stticket / stfiscalinte
 MI=$(az functionapp show -g $RG -n $APP --query identity.principalId -o tsv)
 ST=$(az storage account list -g $RG --query "[?starts_with(name,'$PREFIJO')].id | [0]" -o tsv)
 KV=$(az keyvault show -n kv-chacomer-eip-inte --query id -o tsv)
@@ -170,7 +176,8 @@ Administrator`), así que este paso no depende de nadie más.
 Falta además, del lado de Dataverse: la MI de la app tiene que estar dada de alta como
 **Application User en Dataverse INTE**. Para thinkchat, con permisos sobre
 `axx_metatemplates`; para ticketatencion, los de
-[su página](../integraciones/ticketatencion.md#el-application-user-en-dataverse). Estas apps
+[su página](../integraciones/ticketatencion.md#el-application-user-en-dataverse); para
+fiscal, lectura sobre `contact` y `account`. Estas apps
 van sin `dataverseAuthSettings` a propósito (mismo criterio que `products`): hablan con
 Dataverse por managed identity, así que sin ese alta levantan pero fallan al primer llamado.
 

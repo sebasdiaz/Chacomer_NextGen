@@ -113,8 +113,31 @@ leer contact y account. Sin eso el endpoint devuelve `502`.
 
 ## Estado del despliegue
 
-`fa-axxonfiscal-inte` **no existe**: la integración es nueva y en INTE el Bicep no crea
-Function Apps, así que el pipeline va con `deployToInte: false` y estrena directo en TEST.
+La app va a **los dos ambientes**: `fa-axxonfiscal-test` y `fa-axxonfiscal-inte`, con el
+pipeline en `deployToInte: true`.
+
+INTE llegó después. La app es **greenfield** —nunca existió creada a mano—, así que no
+arrastra el problema de adopción que mantiene `deployFunctionApps = false` en INTE por las
+otras cuatro apps. Por eso tiene su propio toggle, `deployFiscalApp`, prendido en
+`inte.bicepparam`; mismo criterio que thinkchat y ticketatencion.
+
+**El orden importa**: `fa-axxonfiscal-inte` lo crea el pipeline de infra, no este. Hasta que
+ese deployment no corrió, este pipeline falla al desplegar sobre una app inexistente.
+
+Y como INTE va con `deployRoleAssignments = false`, la app **nace sin sus roles y no
+arranca**: `AzureWebJobsStorage` va por identidad. Los tres role assignments van a mano
+después del deploy — comandos en
+[Ambientes › las apps que nacen con los roles a mano](../plataforma/ambientes.md#inte-las-apps-que-nacen-con-los-roles-a-mano).
+
+| Paso | Quién lo hace | Sin esto |
+|---|---|---|
+| Crear la app | pipeline de infra (`deployFiscalApp = true`) | el deploy de la app falla |
+| Storage Blob Data Owner + Storage Queue Data Contributor + Key Vault Secrets User | a mano sobre la MI | la app **no arranca** |
+| MI como Application User en Dataverse INTE (lectura de contact y account) | a mano en el PPAC | `Dataverse_ConsultaRuc` responde `502`; SET/TURUC andan igual |
+
+`SetApiKey` ya está en `kv-chacomer-eip-inte`, así que los endpoints de la SET no necesitan
+nada extra una vez que la MI tiene Key Vault Secrets User.
+
 Ver [Pipelines](../plataforma/pipelines.md) y [Ambientes](../plataforma/ambientes.md).
 
 ## Consumidores
