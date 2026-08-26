@@ -99,7 +99,9 @@ Suma `dataverseAuthSettings` y `foAuthSettings`, que el template emite sólo si 
 - publica en Service Bus: no
 - se despliega si: `deployFunctionApps`
 
-_Sin app settings propios._
+| Setting | Valor en el template | Default |
+|---|---|---|
+| `DataverseUrl` | `dataverseUrl` | — |
 
 ### `fa-axxonthinkchat-{env}`
 
