@@ -7,7 +7,7 @@ sources: []
 > Generado desde el código por [`generate.mjs`](../generate.mjs). Si algo de acá está
 > mal, el que está mal es el código — o el generador. No edites esta página.
 
-Las 22 Azure Functions de la plataforma, con el disparador que declara cada una.
+Las 24 Azure Functions de la plataforma, con el disparador que declara cada una.
 Entre paréntesis, el placeholder tal como está en el atributo; antes, el valor que le
 asigna `infra/main.bicep`.
 
@@ -23,6 +23,8 @@ asigna `infra/main.bicep`.
 | `ReleasedProductSyncFunction` | `fa-axxonproducts-{env}` | Timer | `0 0 * * * *` _(%Schedules:ReleasedProductSync%)_ |
 | `ThinkchatTemplateSyncFunction` | `fa-axxonthinkchat-{env}` | Timer | `0 0 */2 * * *` _(%Schedules:ThinkchatTemplateSync%)_ |
 | `LtmCustBackfillFunction` | `fa-axxoncustomers-{env}` | HTTP | POST /api/ltm/backfill — auth: Function |
+| `Dataverse_ConsultaRuc` | `fa-axxonfiscal-{env}` | HTTP | GET /api/dataverse/consulta-ruc — auth: Function |
+| `Dataverse_Options` | `fa-axxonfiscal-{env}` | HTTP | OPTIONS /api/dataverse/{*any} — auth: Anonymous |
 | `Set_ConsultaRuc` | `fa-axxonfiscal-{env}` | HTTP | GET /api/set/consulta-ruc — auth: Function |
 | `Set_Options` | `fa-axxonfiscal-{env}` | HTTP | OPTIONS /api/set/{*any} — auth: Anonymous |
 | `Set_ValidezDocumentoMaquinaRegistradora` | `fa-axxonfiscal-{env}` | HTTP | GET /api/set/validez-documento-maquina-registradora — auth: Function |

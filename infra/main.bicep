@@ -351,10 +351,11 @@ module products 'modules/functionApp.bicep' = if (deployFunctionApps) {
   }
 }
 
-// App de consultas fiscales (SET/DNIT + TURUC): solo endpoints HTTP.
-// No consume Service Bus ni Dataverse (proxies HTTP puros); superficie publica
-// separada del backbone de mensajeria. SetApiKey se resuelve desde Key Vault
-// (secret "SetApiKey", via AddEipCore) — no se pasa como app setting.
+// App de consultas fiscales (SET/DNIT + TURUC + partes por RUC): solo endpoints HTTP.
+// No consume Service Bus; superficie publica separada del backbone de mensajeria.
+// SI lee Dataverse, pero solo de lectura (Dataverse_ConsultaRuc), asi que sigue sin
+// tocar F&O y conserva el techo de instancias holgado. SetApiKey se resuelve desde
+// Key Vault (secret "SetApiKey", via AddEipCore) — no se pasa como app setting.
 module fiscal 'modules/functionApp.bicep' = if (deployFunctionApps) {
   name: 'fa-fiscal'
   params: {
@@ -372,7 +373,12 @@ module fiscal 'modules/functionApp.bicep' = if (deployFunctionApps) {
     keyVaultUri: keyVault.outputs.keyVaultUri
     deployRoleAssignments: deployRoleAssignments
     needsServiceBus: false
-    appSettings: []
+    // SIN dataverseAuthSettings a proposito, mismo criterio que thinkchat y products:
+    // la app se autentica con Managed Identity. Requiere dar de alta su MI como
+    // Application User en Dataverse antes de usar Dataverse_ConsultaRuc.
+    appSettings: [
+      { name: 'DataverseUrl', value: dataverseUrl }
+    ]
   }
 }
 

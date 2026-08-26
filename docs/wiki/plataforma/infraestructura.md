@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - infra/**
-last_reviewed: 2026-08-25
+last_reviewed: 2026-08-26
 -->
 
 # Infraestructura (Bicep)
@@ -120,9 +120,9 @@ igual que si no lo tuviera.
 `maxConcurrentCalls` de host.json es **por instancia**, así que sin techo de
 instancias la concurrencia real contra F&O se multiplica por N. Por eso las apps
 que llaman a F&O por mensaje (`contacts`, `customers`, `customergroups`,
-`products`) van con `foBoundMaxInstanceCount = 1`; `fiscal` es un proxy HTTP puro
-contra SET/TURUC y `thinkchat` es un timer que no toca F&O, así que ambos escalan con
-`maxInstanceCount = 40`. Los dos son params de `main.bicep`, overrideables por ambiente.
+`products`) van con `foBoundMaxInstanceCount = 1`; `fiscal` sólo consulta SET/TURUC y
+Dataverse (lectura) y `thinkchat` es un timer que tampoco toca F&O, así que ambos escalan
+con `maxInstanceCount = 40`. Los dos son params de `main.bicep`, overrideables por ambiente.
 
 Cada Function App recibe, vía role assignment (least privilege):
 - **Storage Blob Data Owner** + **Storage Queue Data Contributor** sobre su storage (AzureWebJobsStorage y deployment package, todo por identidad).
