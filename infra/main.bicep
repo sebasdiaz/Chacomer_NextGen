@@ -143,6 +143,20 @@ lo haya decidido.
 param deployTicketAtencionApp bool = deployFunctionApps
 
 @description('''
+Toggle propio de la app de Fiscal. Default: sigue a `deployFunctionApps`.
+
+Existe por el mismo motivo que el de thinkchat: es una app GREENFIELD. `fa-axxonfiscal-inte`
+no existe creada a mano, asi que no tiene nada que adoptar y puede nacer administrada por
+Bicep sin esperar al cutover que mantiene `deployFunctionApps = false` en INTE.
+
+Ponerlo en true con `deployRoleAssignments = false` (el caso de INTE) hace que la app nazca
+SIN sus roles de Storage y Key Vault. Ese paso a mano no es opcional: AzureWebJobsStorage va
+por identidad, asi que sin los roles de Storage la app ni siquiera arranca. Comandos en
+docs/wiki/plataforma/ambientes.md.
+''')
+param deployFiscalApp bool = deployFunctionApps
+
+@description('''
 False para que el template NO declare las role assignments de las Function Apps
 (Storage Blob/Queue, Key Vault Secrets User, Service Bus Data Receiver/Sender).
 
@@ -356,7 +370,7 @@ module products 'modules/functionApp.bicep' = if (deployFunctionApps) {
 // SI lee Dataverse, pero solo de lectura (Dataverse_ConsultaRuc), asi que sigue sin
 // tocar F&O y conserva el techo de instancias holgado. SetApiKey se resuelve desde
 // Key Vault (secret "SetApiKey", via AddEipCore) — no se pasa como app setting.
-module fiscal 'modules/functionApp.bicep' = if (deployFunctionApps) {
+module fiscal 'modules/functionApp.bicep' = if (deployFiscalApp) {
   name: 'fa-fiscal'
   params: {
     functionAppName: 'fa-axxonfiscal-${environmentName}'

@@ -61,3 +61,19 @@ param thinkchatFrom = '595215180000'
 // que sin los roles de Storage la app ni siquiera arranca. Comandos en infra/README.md.
 param deployTicketAtencionApp = true
 param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacomer-INTE'
+
+// Fiscal (consultas SET/DNIT + TURUC + partes por RUC contra Dataverse). Es greenfield
+// como thinkchat: `fa-axxonfiscal-inte` no existe creada a mano, asi que no arrastra el
+// problema de adopcion que mantiene `deployFunctionApps` en false por las otras apps.
+//
+// Nace con Managed Identity: este archivo no declara `dataverseClientId`, asi que el
+// template no emite `DataverseClientId` y la app autentica con su propia MI contra
+// Dataverse. Requiere el alta de esa MI como Application User en Dataverse INTE, con
+// lectura sobre contact y account — sin eso `Dataverse_ConsultaRuc` responde 502.
+// El resto de los endpoints (SET/TURUC) no dependen de Dataverse: SetApiKey ya esta en
+// kv-chacomer-eip-inte y se resuelve por Key Vault.
+//
+// Y como `deployRoleAssignments` esta en false, la app tambien nace SIN sus roles de
+// Storage y Key Vault. Ese paso no es opcional: sin los roles de Storage no arranca.
+// Comandos en docs/wiki/plataforma/ambientes.md.
+param deployFiscalApp = true

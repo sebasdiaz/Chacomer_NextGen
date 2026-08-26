@@ -18,6 +18,7 @@ extends:
   parameters:
     appBaseName: 'fa-axxonfiscal'
     projectPath: 'src/integrations/fiscal/AxxonFiscal.Functions/AxxonFiscal.Functions.csproj'
-    # fa-axxonfiscal-inte todavia no existe: la integracion es nueva (#50) y en
-    # INTE el Bicep no crea Function Apps. Estrena directo en TEST.
-    deployToInte: false
+    # fa-axxonfiscal-inte lo crea el Bicep con `deployFiscalApp = true` en
+    # inte.bicepparam. Requiere que el pipeline de infra haya corrido primero: este
+    # pipeline despliega sobre una app que ya tiene que existir.
+    deployToInte: true
