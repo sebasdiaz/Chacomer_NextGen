@@ -49,7 +49,8 @@ namespace AxxonContacts.Functions.Services
                 EmailAddress1 = Str(merged, "emailaddress1"),
                 Description   = Str(merged, "description"),
 
-                AxxLugarComercial = Ref(merged, "axx_lugarcomercial"),
+                AxxLugarComercial         = Ref(merged, "axx_lugarcomercial"),
+                AxxTipoPersoneriaJuridica = Osv(merged, "axx_tipopersoneriajuridica"),
 
                 Address1Line1           = Str(merged, "address1_line1"),
                 Address1Line2           = Str(merged, "address1_line2"),
@@ -149,6 +150,14 @@ namespace AxxonContacts.Functions.Services
             if (!m.TryGetValue(key, out var el) || el.ValueKind != JsonValueKind.Object) return null;
             if (!el.TryGetProperty("Id", out var idEl)) return null;
             return Guid.TryParse(idEl.GetString(), out var g) ? g : null;
+        }
+
+        // OptionSetValue: { "__type": "OptionSetValue:...", "Value": 0 }
+        private static int? Osv(Dictionary<string, JsonElement> m, string key)
+        {
+            if (!m.TryGetValue(key, out var el) || el.ValueKind != JsonValueKind.Object) return null;
+            if (!el.TryGetProperty("Value", out var valEl)) return null;
+            return valEl.ValueKind == JsonValueKind.Number ? valEl.GetInt32() : null;
         }
     }
 }

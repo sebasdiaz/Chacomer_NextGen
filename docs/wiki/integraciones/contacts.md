@@ -3,7 +3,7 @@ sources:
   - src/integrations/contacts/**
   - tests/AxxonContacts.Functions.Tests/**
   - pipelines/azure-pipelines-contacts.yml
-last_reviewed: 2026-08-24
+last_reviewed: 2026-08-27
 -->
 
 # Contacts — Master Contact / Golden Record
@@ -159,11 +159,12 @@ emailaddress1, msdyn_customergroupid, msdyn_partycountry, msdyn_salestaxgroup
 
 ## Configuración de Dataverse
 
-### Campo custom requerido en la tabla `contact`
+### Campos custom requeridos en `contact` y en `account`
 
 | Campo | Tipo | Default |
 |---|---|---|
 | `axx_ismaster` | Boolean | false |
+| `axx_tipopersoneriajuridica` | OptionSet | — |
 
 ### Campos OOB que deben estar presentes
 
@@ -178,6 +179,31 @@ En el Table Map de Contact, agregar Filter Expression (Dataverse → F&O):
 axx_ismaster eq false
 ```
 
+## Que se copia del raw al cliente unico
+
+El master no se edita a mano: nace con una copia de los datos del raw que lo disparo.
+Ademas del nombre y del bloque de domicilio, se copian:
+
+| Campo | Tipo | Nota |
+|---|---|---|
+| `emailaddress1` | Texto | En contact tambien viaja `emailaddress2` |
+| `axx_lugarcomercial` | Lookup | Solo el Id |
+| `axx_tipopersoneriajuridica` | OptionSet | Se copia el valor, no la etiqueta |
+
+> **Estos tres no participan del matching, asi que el PreImage del Step no tiene por que
+> traerlos.** En un evento Update solo viajan si cambiaron en esa misma operacion; si no,
+> el master se crearia sin ellos y **no fallaria nada**. Por eso, justo antes del Create,
+> `EnrichSecondaryFieldsFromDataverseAsync` los relee del raw con un unico `Retrieve` —
+> que se paga una vez por identificacion, no en cada mensaje. **No hace falta agregarlos
+> al Step**: sumarlos a los Filtering Attributes solo generaria mensajes que no cambian
+> nada en el master.
+
+> **Se copian al CREAR el master, y solo ahi.** Cuando el master ya existe, la Function
+> asocia el raw y no vuelve a tocar sus campos: un mail o una personeria que cambian
+> despues en el raw no llegan al cliente unico. La unica escritura posterior sobre el
+> master es la de `SetRucValidationService`, con el resultado de la validacion del RUC
+> contra la SET.
+
 ## Comportamiento end-to-end
 
 | Escenario | Comportamiento |
@@ -187,7 +213,7 @@ axx_ismaster eq false
 | `msdyn_identificationnumber` vacío | Plugin early exit — no publica nada |
 | Dos Raws del mismo cliente al mismo tiempo | Van a la misma Session — se procesan uno a la vez |
 | No existe Master | Function crea Master + BulkAssociate de todos los Raws con misma identification |
-| Existe Master | Function asocia el Raw y propaga solo los campos del ChangedFields al Master |
+| Existe Master | Function asocia el Raw. **No propaga campos**: el master conserva los datos con los que se creo |
 | Function falla | Service Bus reintenta x3 → DLQ |
 | Mensaje no deserializable | Dead Letter inmediato (no reintenta) |
 

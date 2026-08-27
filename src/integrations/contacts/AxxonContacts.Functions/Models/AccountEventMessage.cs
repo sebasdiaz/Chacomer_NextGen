@@ -45,6 +45,12 @@ namespace AxxonContacts.Functions.Models
         [JsonPropertyName("axxLugarComercial")]
         public Guid? AxxLugarComercial { get; set; }
 
+        /// <summary>
+        /// axx_tipopersoneriajuridica. OptionSet: viaja el valor numerico, no la etiqueta.
+        /// </summary>
+        [JsonPropertyName("axxTipoPersoneriaJuridica")]
+        public int? AxxTipoPersoneriaJuridica { get; set; }
+
         // ── Domicilio (bloque address1_*) ────────────────────────────
         // Se copia tal cual del raw al master. Los nombres siguen el logical name
         // de Dataverse: ojo que el campo de departamento/estado es
