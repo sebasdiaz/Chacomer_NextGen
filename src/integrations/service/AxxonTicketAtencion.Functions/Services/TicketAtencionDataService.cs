@@ -38,17 +38,17 @@ namespace AxxonTicketAtencion.Functions.Services
             if (appointment is null)
                 return null;
 
-            var sa       = appointment.Value;
-            var deviceId = GetString(sa, "_msauto_deviceid_value");
-            var accountId = GetString(sa, "_msauto_customerid_account_value");
-            var companyId = GetString(sa, "_a365_company_value");
+            var sa         = appointment.Value;
+            var deviceId   = GetString(sa, "_msauto_deviceid_value");
+            var customerId = GetString(sa, "_msauto_customerid_value");
+            var companyId  = GetString(sa, "_a365_company_value");
 
             // Las cinco secundarias no dependen entre si: van juntas. Con una instancia
             // en frio, en serie son cinco round-trips encadenados contra Dataverse.
             var jobsTask    = GetJobsAsync(serviceAppointmentId, cancellationToken);
             var notesTask   = GetNotesAsync(serviceAppointmentId, cancellationToken);
             var kmTask      = GetLastMeasurementAsync(deviceId, cancellationToken);
-            var addressTask = GetAddressAsync(accountId, cancellationToken);
+            var addressTask = GetAddressAsync(customerId, cancellationToken);
             var companyTask = GetCompanyAsync(companyId, cancellationToken);
 
             await Task.WhenAll(jobsTask, notesTask, kmTask, addressTask, companyTask);
@@ -82,7 +82,7 @@ namespace AxxonTicketAtencion.Functions.Services
 
                 Marca          = GetString(device, "msauto_DeviceBrandId", "msauto_name"),
                 Modelo         = GetString(device, "msauto_DeviceModelId", "msauto_name"),
-                Color          = GetString(device, "a365_ExteriorColorId", "a365_name"),
+                Color          = GetString(device, "a365_deviceexteriorid", "a365_name"),
                 NumeroMotor    = GetString(device, "axx_numeromotor"),
                 NumeroChasis   = GetString(device, "msauto_chassisnumber"),
                 Patente        = GetString(device, "msauto_registrationnumber"),
@@ -90,7 +90,7 @@ namespace AxxonTicketAtencion.Functions.Services
                 KmRecorrido    = kmTask.Result,
 
                 Descripcion    = GetString(sa, "msauto_description"),
-                AsesorServicio = GetString(sa, "msauto_ServiceAdvisorId", "msauto_name"),
+                AsesorServicio = GetString(sa, "a365_arrivalserviceadvisorid", "a365_name"),
                 TextoLegal     = textoLegal,
 
                 Trabajos      = jobsTask.Result,
@@ -103,25 +103,35 @@ namespace AxxonTicketAtencion.Functions.Services
         /// <summary>
         /// Query principal: la Cita con todo lo que se puede traer por $expand.
         ///
-        /// _msauto_customerid_account_value tiene que estar en el $select aunque no se
-        /// muestre en el documento: Dataverse no devuelve lookups que no se pidieron, y sin
-        /// el no hay con que filtrar customeraddresses -> Direccion y Localidad salen vacias.
+        /// _msauto_customerid_value tiene que estar en el $select aunque no se muestre en el
+        /// documento: Dataverse no devuelve lookups que no se pidieron, y sin el no hay con
+        /// que filtrar customeraddresses -> Direccion y Localidad salen vacias. Es el valor
+        /// de un lookup Customer, asi que trae el id del contact o el del account segun el
+        /// caso; no existe una columna _..._account_value para pedir solo uno de los dos.
+        ///
+        /// Los nombres de aca son los de la version de Annata instalada, y no los que uno
+        /// esperaria del modelo generico: el asesor es a365_arrivalserviceadvisorid (no
+        /// msauto_ServiceAdvisorId) y el color a365_deviceexteriorid (no a365_ExteriorColorId).
+        /// Los tests mockean Dataverse, asi que un nombre inexistente no se cae en el build:
+        /// sale como 400 BadRequest recien contra el ambiente.
         /// </summary>
         private static string BuildAppointmentQuery(Guid id)
         {
             const string select =
                 "$select=a365_identifier,axx_receptiondatetime,axx_serviceappointmentphone," +
                 "msauto_description,_msauto_deviceid_value,_a365_company_value," +
-                "_msauto_customerid_account_value";
+                "_msauto_customerid_value";
 
             const string expand =
                 "$expand=msauto_BusinessOperationId($select=msauto_name)," +
-                "msauto_ServiceAdvisorId($select=msauto_name)," +
+                // El de recepcion, no el de entrega (a365_deliveryserviceadvisorid): el
+                // ticket es la orden que se firma al dejar el vehiculo.
+                "a365_arrivalserviceadvisorid($select=a365_name)," +
                 "msauto_DeviceId($select=msauto_chassisnumber,msauto_registrationnumber,axx_numeromotor;" +
                     "$expand=msauto_DeviceBrandId($select=msauto_name)," +
                             "msauto_DeviceModelId($select=msauto_name)," +
                             "msauto_DeviceModelCodeId($select=msauto_description)," +
-                            "a365_ExteriorColorId($select=a365_name))," +
+                            "a365_deviceexteriorid($select=a365_name))," +
                 "msauto_CustomerId_contact($select=msdyn_contactpersonid,firstname,lastname)," +
                 "msauto_CustomerId_account($select=accountnumber,name)";
 
@@ -167,13 +177,20 @@ namespace AxxonTicketAtencion.Functions.Services
             return rows.Count > 0 ? GetString(rows[0], "msauto_value") : string.Empty;
         }
 
+        /// <summary>
+        /// Direccion y localidad del cliente de la Cita.
+        ///
+        /// El id que llega es el del lookup Customer: puede ser un contact o un account. No
+        /// hace falta ramificar porque customeraddress.parentid tambien es polimorfico y
+        /// apunta a las dos, asi que el mismo filtro sirve para persona fisica y juridica.
+        /// </summary>
         private async Task<(string Direccion, string Localidad)> GetAddressAsync(
-            string accountId, CancellationToken cancellationToken)
+            string customerId, CancellationToken cancellationToken)
         {
-            if (!Guid.TryParse(accountId, out var id))
+            if (!Guid.TryParse(customerId, out var id))
             {
                 _logger.LogInformation(
-                    "[TicketAtencion] La Cita no tiene cuenta asociada: el ticket sale sin direccion.");
+                    "[TicketAtencion] La Cita no tiene cliente asociado: el ticket sale sin direccion.");
                 return (string.Empty, string.Empty);
             }
 
