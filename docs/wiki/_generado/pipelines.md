@@ -20,7 +20,7 @@ Lo que declara `pipelines/*.yml`. El detalle de cómo funciona la promoción est
 | [azure-pipelines-fiscal.yml](../../../pipelines/azure-pipelines-fiscal.yml) | `fa-axxonfiscal` | si | si | — |
 | [azure-pipelines-products.yml](../../../pipelines/azure-pipelines-products.yml) | `fa-axxonproducts` | si | si | — |
 | [azure-pipelines-thinkchat.yml](../../../pipelines/azure-pipelines-thinkchat.yml) | `fa-axxonthinkchat` | si | no | — |
-| [azure-pipelines-ticketatencion.yml](../../../pipelines/azure-pipelines-ticketatencion.yml) | `fa-axxonticketatencion` | si | no | `tests/AxxonTicketAtencion.Functions.Tests/AxxonTicketAtencion.Functions.Tests.csproj` |
+| [azure-pipelines-ticketatencion.yml](../../../pipelines/azure-pipelines-ticketatencion.yml) | `fa-axxonticketatencion` | si | si | `tests/AxxonTicketAtencion.Functions.Tests/AxxonTicketAtencion.Functions.Tests.csproj` |
 
 ## Qué dispara cada uno
 

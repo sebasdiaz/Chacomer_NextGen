@@ -48,11 +48,22 @@ param deployRoleAssignments = false
 param thinkchatBaseUrl = 'https://chacomer.whatsapp.net.py/thinkcomm-x/api/v2/'
 param thinkchatFrom = '595215180000'
 
-// TicketAtencion (GAP-103/227). La app vive hoy solo en INTE, creada a mano, y es la que
-// consume el web resource. En TEST todavia no existe: se deja apagada hasta que alguien
-// decida estrenarla ahi, para que un deployment de infra no la cree de rebote.
-param deployTicketAtencionApp = false
+// TicketAtencion (GAP-103/227). Se estrena en TEST despues de que el circuito cerrara en
+// INTE: la query de la Cita, la function key en el web resource y —la ultima— la subida a
+// la biblioteca de la tabla en vez de a la de por defecto.
+//
+// Contra Dataverse autentica con el app registration compartido, como el resto de TEST
+// (`dataverseClientId` arriba). Contra Graph tambien: `graphClientId` no se declara porque
+// su default sigue a `dataverseClientId`, y ese registration ya tiene consentidos
+// Sites.ReadWrite.All y Files.ReadWrite.All —son tenant-wide, asi que valen igual aca—.
+//
+// `graphClientSecretName` SI hace falta: kv-chacomer-eip-test tiene el secreto del
+// registration bajo `DataverseClientSecret`, no bajo el nombre canonico `GraphClientSecret`.
+// Sin la indireccion, EipSecretResolver no lo encuentra, UseClientSecretAuth queda en false
+// y la app cae EN SILENCIO a su managed identity — que no esta dada de alta en ningun lado.
+param deployTicketAtencionApp = true
 param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacomer-TEST'
+param graphClientSecretName = 'DataverseClientSecret'
 
 // Equipo dueño de los masters ("cliente unico"): la BU CLIENTE UNICO existe en TEST
 // (businessunitid 6d07f3e2-49a5-f111-b8de-3833c5e62ee5) y su default team se llama igual

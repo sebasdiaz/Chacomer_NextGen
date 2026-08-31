@@ -179,6 +179,7 @@ dónde corra, y sin fallar en ningún lado.
 | `DataverseUrl` | Environment de Dataverse. |
 | `SharePointSiteUrl` | Sitio donde viven los documentos. **Sin esto la rama de PDF falla siempre.** |
 | `GraphClientId` / `GraphTenantId` | Auth contra Graph, hoy por el app registration compartido `145fd64d`. Salen del param `graphClientId`, que ya **no** se deriva de `dataverseClientId`. |
+| `GraphClientSecretName` | Nombre del secret del vault donde está el client secret de ese registration. En INTE, `DataverseClientSecret`. |
 
 Los `*ClientSecret` salen del Key Vault, nunca de un app setting — ver
 [Secretos y Key Vault](../plataforma/secretos-y-key-vault.md).
@@ -200,6 +201,29 @@ ninguno.
 administrada por Bicep con su propio toggle `deployTicketAtencionApp`, igual que thinkchat.
 `deployFunctionApps` sigue en `false` por las otras cuatro.
 
+En **TEST** la app se estrena recién ahora, con `deployTicketAtencionApp = true` y
+`deployToTest: true` en su pipeline. Ahí no hay problema de adopción —`dataversetest` no
+tenía Function Apps creadas a mano— y la identidad es más simple que en INTE: contra
+Dataverse **y** contra Graph va el app registration compartido, porque TEST ya declara
+`dataverseClientId` y `graphClientId` lo hereda por default.
+
+### Lo que el Bicep no puede hacer al promover a TEST
+
+Verificado el 2026-08-31 contra `operations-b1-chacomer-test`:
+
+| Falta | Por qué importa |
+|---|---|
+| La environment variable **`axx_FUNCTION_URL`** | No existe en TEST (sólo está `axx_D365BaseURL`). Sin ella el botón avisa "Falta configurar axx_FUNCTION_URL" y no llama a nada. |
+| La **biblioteca `msauto_serviceappointment`** en el sitio | TEST tiene **cero** `sharepointdocumentlocation`. Se crea abriendo una vez la pestaña Documentos de una Cita; si no, la función corta con el error explícito de `GetEntityFolderLocationAsync`. |
+| **Republicar el web resource** | El de TEST es del 2026-08-14: no manda la function key ni cae a `wordBase64`. |
+| Los **3 role assignments** de la MI | `deployRoleAssignments` está en `false` en TEST igual que en INTE, así que la app nace sin ellos y sin los de Storage no arranca. |
+| Autorizar la SC y el environment **para el pipeline** | No se heredan — es lo que tuvo a la app de INTE tres días desplegada y vacía. |
+
+Lo que **no** hace falta gestionar: el sitio `B1-Chacomer-TEST` ya está registrado y es el
+default, `msauto_serviceappointment` ya tiene `IsDocumentManagementEnabled = true`, y los
+app roles de Graph del registration compartido son **tenant-wide**, así que los mismos que
+destrabaron INTE valen en TEST sin volver a pedirle nada al Global Admin.
+
 **Autentica con dos identidades distintas, una por servicio.** No es un capricho: cada
 permiso quedó otorgado sobre una identidad distinta, y la app tiene que usar la que
 efectivamente lo tiene.
@@ -214,15 +238,27 @@ Dataverse va por MI— pero sí declara `graphClientId` y `graphTenantId`. Antes
 salían del mismo param y no se podían separar; hoy `graphClientId` tiene como default a
 `dataverseClientId`, de modo que un ambiente que no lo declare se comporta igual que antes.
 
-El secreto del registration va en Key Vault con el **nombre canónico `GraphClientSecret`**,
-no con la indirección `{clave}Name`: el template declara la colección completa de
-`appSettings`, así que un `GraphClientSecretName` puesto a mano lo borra el próximo
-deployment. Bicep no crea valores de secretos — ver
-[Secretos y Key Vault](../plataforma/secretos-y-key-vault.md).
+**El secreto no se duplica.** Es el mismo registration que usa Dataverse, y su client
+secret ya vive en `kv-chacomer-eip-inte` como `DataverseClientSecret`. El param
+`graphClientSecretName` emite el app setting `GraphClientSecretName = DataverseClientSecret`
+y `EipSecretResolver` resuelve `GraphClientSecret` desde ahí, así que **no hay ningún
+`az keyvault secret set` pendiente**.
 
-> Si falta el secret en el vault, `UseClientSecretAuth` queda en `false` y la app cae **en
-> silencio** a la managed identity, que es justamente la que no tiene el permiso de Graph.
-> El síntoma es un `OK_SIN_PDF` idéntico al de antes.
+Cargar una copia con el nombre canónico también funcionaría, pero serían dos lugares que
+rotar: el día que se rote uno solo, la falla aparece en una sola de las dos integraciones y
+la otra sigue andando — que es peor que fallar en las dos. Si algún día Graph pasa a su
+propio registration, ahí sí se carga su secreto como `GraphClientSecret` y el param vuelve
+a vacío.
+
+> **La indirección la emite el template, no se pone a mano.** `functionApp.bicep` declara la
+> colección completa de `appSettings`, así que un `GraphClientSecretName` escrito en el
+> portal lo borra el próximo deployment. Por eso es un param y no un paso manual — ver
+> [Secretos y Key Vault](../plataforma/secretos-y-key-vault.md).
+
+> Si el secret no resuelve, `EipSecretResolver` **lanza** y el host no levanta: es
+> intencional. Lo que sí falla en silencio es no configurar `GraphClientId`, porque ahí
+> `UseClientSecretAuth` queda en `false` y la app cae a la managed identity —justo la que no
+> tiene el permiso de Graph— con un `OK_SIN_PDF` idéntico al de antes.
 
 El what-if contra `DataverseINTE` da **6 Create**: el storage, su blobService y el container
 `deploymentpackage`, el plan `asp-fa-axxonticketatencion-inte`, la app y su diagnostic
@@ -238,9 +274,8 @@ setting. Usa el Application Insights compartido `appi-eip-inte` y el vault
    que sin los roles de Storage la app ni siquiera arranca. Receta y el fallback cuando el
    CLI falla, en [Ambientes › apps de INTE con los roles a mano](../plataforma/ambientes.md#inte-las-apps-que-nacen-con-los-roles-a-mano).
 3. **La MI como Application User en Dataverse INTE** — ver abajo.
-4. **El secreto de Graph en el vault** — `az keyvault secret set --vault-name
-   kv-chacomer-eip-inte --name GraphClientSecret --value "<secret de 145fd64d>"`. Ver abajo
-   sobre qué identidad quedaron los permisos.
+4. **Nada para el secreto de Graph**: sale del `DataverseClientSecret` que ya está en el
+   vault, vía `graphClientSecretName`. Ver abajo sobre qué identidad quedaron los permisos.
 5. **Desplegar el código** con el pipeline de la integración — tener el YAML en el repo
    no alcanza, ver abajo.
 

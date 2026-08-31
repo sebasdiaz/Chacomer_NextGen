@@ -111,6 +111,10 @@ endpoint lo llama un `fetch` desde el formulario de D365, y sin el origen de Dat
 lista el browser bloquea la respuesta antes de que el JS la vea. El origen sale del
 parámetro `dataverseOrigin` de `main.bicep`, que por default es `dataverseUrl`.
 
+Que derive de `dataverseUrl` es lo que hace que promover la app a otro ambiente no requiera
+tocar nada de CORS: cada `*.bicepparam` ya declara su propio environment de Dataverse, así
+que la app de TEST nace con el origen de TEST.
+
 Los headers **no** se emiten desde el código de la Function. Hacer las dos cosas duplica
 `Access-Control-Allow-Origin`, y el browser rechaza una respuesta con el header duplicado
 igual que si no lo tuviera.
@@ -120,7 +124,16 @@ igual que si no lo tuviera.
 Los settings de autenticación los arma `main.bicep` a partir de los params `*ClientId`:
 si el ambiente declara uno, se emite el `ClientId` (y su `TenantId`) y la app autentica por
 Service Principal; si lo deja vacío, no se emite nada y la app cae a su Managed Identity.
-Los `*ClientSecret` nunca van como app setting: salen del Key Vault por nombre canónico.
+Los `*ClientSecret` nunca van como app setting: salen del Key Vault. Por nombre canónico
+—`DataverseClientSecret`, `GraphClientSecret`, `FoClientSecret`— o, cuando dos servicios
+comparten el mismo app registration, con la indirección `{clave}Name` que emite el template:
+`graphClientSecretName = 'DataverseClientSecret'` hace que TicketAtencion resuelva su
+secreto de Graph desde el de Dataverse, sin duplicarlo en el vault.
+
+Esa indirección va **por el template**. `functionApp.bicep` declara la colección completa de
+`appSettings`, así que un `{clave}Name` escrito a mano en el portal lo borra el próximo
+deployment — el motivo por el que
+[Secretos y Key Vault](secretos-y-key-vault.md) desaconseja ponerlo a mano.
 
 Los tres son **independientes entre sí** — `dataverseClientId`, `graphClientId` y
 `foClientId`. Que lo sean importa porque el consentimiento de un permiso se otorga sobre una

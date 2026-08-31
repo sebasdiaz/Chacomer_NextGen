@@ -73,6 +73,21 @@ param graphClientId string = dataverseClientId
 param graphTenantId string = dataverseTenantId
 
 @description('''
+Nombre del secret del Key Vault que guarda el client secret de `graphClientId`, cuando no
+se llama `GraphClientSecret`. Se emite como el app setting `GraphClientSecretName`, que es
+la indireccion que resuelve `EipSecretResolver`.
+
+Sirve para no duplicar en el vault un secreto que ya esta cargado con otro nombre: en INTE
+Graph usa el mismo app registration que Dataverse, cuyo secret ya vive como
+`DataverseClientSecret`. Un secreto duplicado son dos lugares que rotar, y el dia que se
+rote uno solo la falla aparece en una sola de las dos integraciones.
+
+Va por el template y NO a mano: este declara la coleccion completa de `appSettings`, asi
+que un `GraphClientSecretName` puesto en el portal lo borra el proximo deployment.
+''')
+param graphClientSecretName string = ''
+
+@description('''
 Client ID del app registration para la auth S2S contra F&O. Mismo criterio que
 `dataverseClientId`: vacio = Managed Identity. El secreto va en Key Vault (`FoClientSecret`).
 ''')
@@ -233,7 +248,8 @@ var graphAuthSettings = empty(graphClientId)
   ? []
   : concat(
       [ { name: 'GraphClientId', value: graphClientId } ],
-      empty(graphTenantId) ? [] : [ { name: 'GraphTenantId', value: graphTenantId } ]
+      empty(graphTenantId) ? [] : [ { name: 'GraphTenantId', value: graphTenantId } ],
+      empty(graphClientSecretName) ? [] : [ { name: 'GraphClientSecretName', value: graphClientSecretName } ]
     )
 
 var foAuthSettings = empty(foClientId)
