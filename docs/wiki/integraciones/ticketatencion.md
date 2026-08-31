@@ -133,10 +133,30 @@ biblioteca por defecto*. El archivo terminaba en:
 es `OK` y hasta se puede abrir el archivo por URL. Lo único que falla es que la pestaña
 Archivos de la Cita sigue vacía, porque mira la otra biblioteca.
 
-Por eso `GetDriveIdAsync` resuelve el drive por nombre de biblioteca antes de subir, y la
-biblioteca no se asume: sale del `relativeurl` del padre de la ubicación del registro. El
-único que sigue yendo a la biblioteca por defecto es el temporal de la conversión a PDF
+Por eso `GetDriveIdAsync` resuelve el drive de la biblioteca antes de subir, y la biblioteca
+no se asume: sale del `relativeurl` del padre de la ubicación del registro. El único que
+sigue yendo a la biblioteca por defecto es el temporal de la conversión a PDF
 (`Temp/TicketAtencion`), que es scratch y se borra en un `finally`.
+
+### Y la biblioteca se busca por URL, no por nombre
+
+Segunda trampa, encima de la anterior. Lo que Dataverse guarda en `relativeurl` es el
+**segmento de URL** de la biblioteca; lo que Graph devuelve en `drive.name` es el **nombre
+para mostrar, traducido**. Para la misma biblioteca:
+
+| Dataverse (`relativeurl`) | Graph (`drive.name`) |
+|---|---|
+| `msauto_serviceappointment` | `Cita de servicio` |
+| `account` | `Account` |
+| `incident` | `Solicitud de servicio` |
+
+Comparar por `name` **no acierta nunca** con una biblioteca creada por Dataverse, salvo por
+casualidad cuando el nombre en inglés coincide con el logical name. `GetDriveIdAsync` compara
+contra el último segmento de `drive.webUrl`, y deja el `name` como segunda chance para una
+biblioteca creada a mano donde los dos coincidan.
+
+> El mensaje de error de esa excepción lista las bibliotecas del sitio como `url = nombre`.
+> Es lo que hizo visible esta diferencia en el primer intento fallido.
 
 > El log del upload incluye la URL final del archivo. No es adorno: sin ella, un "se subió
 > bien pero no aparece" no se puede diagnosticar sin entrar al sitio a mano.
