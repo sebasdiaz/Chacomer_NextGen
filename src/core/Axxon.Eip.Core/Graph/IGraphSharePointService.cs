@@ -13,19 +13,38 @@ namespace Axxon.Eip.Core.Graph
         Task<string> GetSiteIdAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Sube un archivo al drive por defecto del sitio.
+        /// Resuelve (y cachea) el id del drive de una biblioteca de documentos del sitio,
+        /// por su nombre.
+        ///
+        /// Un sitio tiene VARIAS bibliotecas y <c>sites/{id}/drive</c> devuelve solo la de
+        /// por defecto ("Documentos compartidos"). Dataverse, en cambio, crea una biblioteca
+        /// propia por tabla —<c>msauto_serviceappointment</c>, <c>contact</c>, ...— y sus
+        /// carpetas de registro cuelgan de ahi. Subir a la de por defecto deja el archivo en
+        /// una carpeta del mismo nombre pero en otra biblioteca: existe, se sube sin error, y
+        /// el registro de Dataverse no lo muestra nunca.
+        /// </summary>
+        Task<string> GetDriveIdAsync(string libraryName, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Sube un archivo a un drive del sitio.
         /// </summary>
         /// <param name="drivePath">
         /// Ruta relativa a la raiz del drive, sin barra inicial. Ej: "Temp/ticket-abc.docx".
         /// </param>
+        /// <param name="driveId">
+        /// Drive destino. <c>null</c> = la biblioteca por defecto del sitio.
+        /// </param>
         Task<GraphDriveItem> UploadAsync(
-            string drivePath, byte[] content, string contentType, CancellationToken cancellationToken = default);
+            string drivePath, byte[] content, string contentType,
+            string? driveId = null, CancellationToken cancellationToken = default);
 
         /// <summary>Descarga un item convertido a PDF (<c>/content?format=pdf</c>).</summary>
-        Task<byte[]> DownloadAsPdfAsync(string itemId, CancellationToken cancellationToken = default);
+        Task<byte[]> DownloadAsPdfAsync(
+            string itemId, string? driveId = null, CancellationToken cancellationToken = default);
 
         /// <summary>Borra un item del drive. No lanza si ya no existe.</summary>
-        Task DeleteAsync(string itemId, CancellationToken cancellationToken = default);
+        Task DeleteAsync(
+            string itemId, string? driveId = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Crea la carpeta y todas sus intermedias si no existen. Idempotente.
@@ -34,7 +53,9 @@ namespace Axxon.Eip.Core.Graph
         /// crea los directorios del camino: si falta uno, responde 404 itemNotFound.
         /// </summary>
         /// <param name="folderPath">Ruta relativa a la raiz del drive, sin barra inicial.</param>
-        Task EnsureFolderAsync(string folderPath, CancellationToken cancellationToken = default);
+        /// <param name="driveId">Drive destino. <c>null</c> = la biblioteca por defecto.</param>
+        Task EnsureFolderAsync(
+            string folderPath, string? driveId = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Convierte un documento de Office a PDF: lo sube a una carpeta temporal, pide la
