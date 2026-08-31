@@ -5,7 +5,7 @@ sources:
   - src/core/Axxon.Eip.Core/Dataverse/DataverseWebApiClient.cs
   - tests/AxxonTicketAtencion.Functions.Tests/**
   - pipelines/azure-pipelines-ticketatencion.yml
-last_reviewed: 2026-08-28
+last_reviewed: 2026-08-31
 -->
 
 # Ticket de Atención — Orden de Reparación
@@ -303,9 +303,35 @@ el storage `dataverseinteticket`, el Application Insights `fa-axxonticketatencio
 app nueva usa el compartido) y su alert rule `Failure Anomalies - …`. Se pueden borrar una
 vez validada la app nueva; nada los referencia.
 
+## El botón, y las dos environment variables
+
+El web resource vive en el repo **Chacomer Dataverse** y no se despliega con esta app, así
+que se rompen por separado. Lo que necesita de este lado:
+
+| Environment variable | Para qué |
+|---|---|
+| `axx_FUNCTION_URL` | El endpoint. Ya existe, en la solución `NexGen-GAP-103-227`. |
+| `axx_FUNCTION_KEY` | La function key, que viaja en el header `x-functions-key`. |
+
+Ninguna de las dos va hardcodeada en el JS: cambian por ambiente y la key rota. El web
+resource las lee con una sola query a `environmentvariabledefinition` expandiendo
+`environmentvariabledefinition_environmentvariablevalue`, y cachea el resultado mientras el
+usuario tiene la Cita abierta. El valor del ambiente pisa al `defaultvalue` de la definición.
+
+> **La key es visible para cualquier usuario que pueda apretar el botón.** Es JavaScript de
+> cliente: la key llega al browser sí o sí, y guardarla en una environment variable no la
+> esconde —sólo la saca del código. Lo que compra es poder rotarla sin republicar el web
+> resource. Si algún día hace falta que sea de verdad secreta, el camino es Easy Auth con
+> el token del usuario de D365, no otro escondite del lado del cliente.
+
+**El cliente tiene que caer a `wordBase64` cuando `url` viene vacía.** Con `OK_SIN_PDF` la
+función devuelve `200` y el Word; un cliente que sólo mira `url` le muestra un error al
+usuario teniendo el documento en la mano. Se abre con `Xrm.Navigation.openFile`, cuyo
+`fileSize` va **en KB**, no en bytes.
+
 ## Fuera de este repo
 
 | Componente | Dónde | Rol |
 |---|---|---|
-| `form.js` | `Chacomer Dataverse` → `WebResources/axx_/ServiceAppointment/` | El botón. Falta que mande la function key y que use `wordBase64` cuando `url` viene vacía. |
+| `form.js` | `Chacomer Dataverse` → `WebResources/axx_/ServiceAppointment/` | El botón. Ver [El botón, y las dos environment variables](#el-boton-y-las-dos-environment-variables). |
 | `SetReceptionDateTimePlugin` | `Chacomer Dataverse` → `Plugins/…SetReceptionDateTime/` | Setea `axx_receptiondatetime`. Filtra por `msauto_statuscode` mientras el web resource lee `a365_status` para el mismo valor: confirmar cuál cambia realmente antes de dar por buena la fecha de recepción. |
