@@ -115,6 +115,29 @@ Los headers **no** se emiten desde el código de la Function. Hacer las dos cosa
 `Access-Control-Allow-Origin`, y el browser rechaza una respuesta con el header duplicado
 igual que si no lo tuviera.
 
+### Una identidad por servicio, no una por app
+
+Los settings de autenticación los arma `main.bicep` a partir de los params `*ClientId`:
+si el ambiente declara uno, se emite el `ClientId` (y su `TenantId`) y la app autentica por
+Service Principal; si lo deja vacío, no se emite nada y la app cae a su Managed Identity.
+Los `*ClientSecret` nunca van como app setting: salen del Key Vault por nombre canónico.
+
+Los tres son **independientes entre sí** — `dataverseClientId`, `graphClientId` y
+`foClientId`. Que lo sean importa porque el consentimiento de un permiso se otorga sobre una
+identidad concreta, y no siempre es la misma para todos los servicios de una app. El caso
+real es [Ticket de Atención](../integraciones/ticketatencion.md): su managed identity está
+dada de alta como Application User en Dataverse, pero los app roles de Graph quedaron sobre
+el app registration compartido. Habla con cada servicio por la identidad que tiene el
+permiso.
+
+`graphClientId` tiene como default a `dataverseClientId`, que es como estuvieron acopladas
+hasta el 2026-08-31: un ambiente que no lo declare se comporta igual que antes.
+
+> **El fallback a Managed Identity es silencioso.** Sin `ClientId` —o con el `ClientId` puesto
+> pero el secret ausente del vault— `UseClientSecretAuth` queda en `false` y la app usa su MI
+> sin decir nada. Si esa MI no tiene el permiso, el error aparece recién en la primera
+> llamada, y no menciona la identidad equivocada.
+
 ### Scale-out y límites de F&O
 
 `maxConcurrentCalls` de host.json es **por instancia**, así que sin techo de
