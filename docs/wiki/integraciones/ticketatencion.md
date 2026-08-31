@@ -5,7 +5,7 @@ sources:
   - src/core/Axxon.Eip.Core/Dataverse/DataverseWebApiClient.cs
   - tests/AxxonTicketAtencion.Functions.Tests/**
   - pipelines/azure-pipelines-ticketatencion.yml
-last_reviewed: 2026-08-25
+last_reviewed: 2026-08-28
 -->
 
 # Ticket de Atención — Orden de Reparación
@@ -75,6 +75,35 @@ queda mucho más oscuro. Las otras cinco queries (empresa, dirección, trabajos,
 Un error de cualquiera de las seis **aborta**: `DataverseWebApiClient` lanza en vez de
 devolver vacío. Un ticket al que le faltan los trabajos porque una query falló en silencio
 es peor que un error visible.
+
+## Los nombres de campo son los de la Annata instalada, no los del modelo genérico
+
+La query principal se escribió contra un esquema de Annata distinto al que tiene INTE, y
+tres nombres no existían. Dataverse contesta **400 BadRequest** nombrando sólo el primero
+que no encuentra, así que se corrigen de a uno, volviendo a pedir la query cada vez.
+
+| Lo que uno espera | Lo que hay en INTE |
+|---|---|
+| `_msauto_customerid_account_value` | `_msauto_customerid_value` |
+| `msauto_ServiceAdvisorId` | `a365_arrivalserviceadvisorid` → `a365_serviceadvisor` |
+| `a365_ExteriorColorId` (en `msauto_device`) | `a365_deviceexteriorid` → `a365_deviceexterior` |
+
+El primero no es un rename: **`msauto_customerid` es un lookup de tipo Customer**, y los
+Customer no tienen una columna de valor por target. Se pide `_msauto_customerid_value`, que
+trae el id del contact o el del account según el caso. No hace falta ramificar para buscar
+la dirección, porque `customeraddress.parentid` también es polimórfico y apunta a las dos.
+
+Del asesor hay dos lookups, `a365_arrivalserviceadvisorid` y `a365_deliveryserviceadvisorid`.
+Va el de **recepción**: el ticket es la orden que se firma al dejar el vehículo.
+
+> **Los tests no atajan esto.** La suite arranca desde un `TicketAtencionData` ya poblado, así
+> que cubre el armado del XML y del Word pero no la query ni el mapeo JSON → modelo. Un nombre
+> de campo inexistente compila, pasa los 48 tests y aparece recién como 400 contra el ambiente.
+> Para verificar un nombre antes de escribirlo, la metadata:
+>
+> ```bash
+> curl -s -H "Authorization: Bearer $TOKEN" "$B/EntityDefinitions(LogicalName='msauto_device')/ManyToOneRelationships?\$select=ReferencingAttribute,ReferencedEntity,ReferencingEntityNavigationPropertyName"
+> ```
 
 ## El template
 
@@ -155,7 +184,38 @@ setting. Usa el Application Insights compartido `appi-eip-inte` y el vault
    CLI falla, en [Ambientes › apps de INTE con los roles a mano](../plataforma/ambientes.md#inte-las-apps-que-nacen-con-los-roles-a-mano).
 3. **La MI como Application User en Dataverse INTE** — ver abajo.
 4. **Los app roles de Graph asignados a la MI** — ver abajo.
-5. **Desplegar el código** con el pipeline de la integración.
+5. **Desplegar el código** con el pipeline de la integración — tener el YAML en el repo
+   no alcanza, ver abajo.
+
+### El pipeline no existe hasta que se lo crea en ADO
+
+`pipelines/azure-pipelines-ticketatencion.yml` estuvo en el repo desde el 2026-08-25, pero
+**no había definición de pipeline en Azure DevOps**, así que nunca corrió. La app quedó tres
+días con toda su infraestructura creada y sin una línea de código adentro.
+
+El síntoma engaña: la Function App responde **200 en la raíz** —la página default del host,
+que parece un despliegue sano— y **404 en su endpoint**, y `az functionapp function list`
+vuelve vacío. Verificar siempre contra la app y no contra el pipeline: **401 en el endpoint
+significa desplegada** (está pidiendo la key); 404 significa que no hay código.
+
+Dar de alta un pipeline nuevo son tres pasos, no uno:
+
+1. **Crear la definición.** El MCP de Azure DevOps no sirve para esto: no ve los repos del
+   proyecto y falla con `TF401019`. Va por CLI, que usa el login de `az`:
+
+   ```bash
+   az pipelines create --name "NextGen - ticketatencion" --org https://dev.azure.com/CHACOMER \
+     -p nexgen-ado-d365 --repository Chacomer_NextGen --repository-type tfsgit \
+     --branch main --yml-path pipelines/azure-pipelines-ticketatencion.yml \
+     --folder-path '\NextGen' --skip-first-run true
+   ```
+
+2. **Autorizar la service connection** `sc-chacomer-eip-inte` para ese pipeline.
+3. **Autorizar el environment** `inte`.
+
+Los dos últimos no se heredan: ningún recurso está compartido con todos los pipelines
+(`allPipelines` es `null` en ambos), así que la autorización va de a uno. Sin ellas el build
+compila y el stage de deploy muere con *not authorized to use service connection*.
 
 ### Los dos GUID de la managed identity, y cuál va en cada lado
 
