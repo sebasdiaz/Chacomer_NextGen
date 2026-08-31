@@ -58,8 +58,9 @@ namespace AxxonContacts.Functions.Services
 
         public AccountMasterMatchingService(IOrganizationService service, ILogger logger)
         {
-            _service = service ?? throw new ArgumentNullException(nameof(service));
-            _logger  = logger  ?? throw new ArgumentNullException(nameof(logger));
+            _service           = service           ?? throw new ArgumentNullException(nameof(service));
+            _ownerTeamResolver = ownerTeamResolver ?? throw new ArgumentNullException(nameof(ownerTeamResolver));
+            _logger            = logger            ?? throw new ArgumentNullException(nameof(logger));
         }
 
         /// <summary>
@@ -295,7 +296,8 @@ namespace AxxonContacts.Functions.Services
             await EnrichAddressFromDataverseAsync(message);
             await EnrichSecondaryFieldsFromDataverseAsync(message);
 
-            var master = BuildMasterEntity(message);
+            var ownerTeam = await _ownerTeamResolver.ResolveAsync();
+            var master    = BuildMasterEntity(message, ownerTeam);
 
             try
             {
@@ -393,13 +395,19 @@ namespace AxxonContacts.Functions.Services
         // BuildMasterEntity
         // ────────────────────────────────────────────────────────────
 
-        private static Entity BuildMasterEntity(AccountEventMessage m)
+        private static Entity BuildMasterEntity(AccountEventMessage m, EntityReference? ownerTeam)
         {
             var e = new Entity(EntityLogicalName);
 
             e[IsMaster] = true;
             // Evita sincronizacion via Dual Write en el registro master
             e["customertypecode"] = new OptionSetValue(12);
+
+            // Owner: el equipo configurado en MasterOwnerTeamName (el "cliente unico").
+            // Se asigna en el Create y no despues con un AssignRequest para que el master
+            // nunca exista en la business unit equivocada. Si no hay equipo configurado,
+            // el master queda del usuario con el que corre la app.
+            if (ownerTeam != null) e["ownerid"] = ownerTeam;
 
             // name es ApplicationRequired: usar identification como fallback si viene vacío
             var masterName = !string.IsNullOrEmpty(m.Name)

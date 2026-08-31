@@ -95,6 +95,7 @@ En Power Platform Admin Center:
 | `ServiceBusConnection__fullyQualifiedNamespace` | `tunamespace.servicebus.windows.net` |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | cadena de conexion de App Insights |
 | `KeyVaultUri` | `https://kv-chacomer-eip-{env}.vault.azure.net/` |
+| `MasterOwnerTeamName` | `CLIENTE UNICO` — ver [Owner del master](#owner-del-master-la-business-unit-cliente-unico) |
 
 > Con Managed Identity NO se configura `ServiceBusConnection` como connection string completa.
 > Se usa el formato `__fullyQualifiedNamespace` que activa la auth via MI automáticamente.

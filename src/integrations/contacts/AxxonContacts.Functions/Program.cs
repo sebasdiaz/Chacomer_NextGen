@@ -25,20 +25,39 @@ builder.Services.AddEipDataverse(builder.Configuration);
 // AxxonFiscal.Functions; aca solo se consume SetApiService para el path de mensajeria.
 builder.Services.AddEipSetApi(builder.Configuration);
 
-builder.Services.AddTransient<MasterMatchingService>(sp =>
+// Equipo dueño de los masters: el "cliente unico" queda en la business unit de ese equipo.
+// El setting lleva el nombre del equipo, no su id, porque el GUID cambia por environment
+// y el nombre no. Vacio o ausente = los masters se crean con el owner por defecto, que es
+// como venia funcionando. Ver MasterOwnerTeamResolver.
+var masterOwnerTeamName = builder.Configuration["MasterOwnerTeamName"];
+
+builder.Services.AddSingleton<MasterOwnerTeamCache>();
+
+builder.Services.AddTransient<MasterOwnerTeamResolver>(sp =>
 {
     var factory    = sp.GetRequiredService<DataverseClientFactory>();
     var orgService = factory.CreateOrganizationService();
-    var logger     = sp.GetRequiredService<ILogger<MasterMatchingService>>();
-    return new MasterMatchingService(orgService, logger);
+    var cache      = sp.GetRequiredService<MasterOwnerTeamCache>();
+    var logger     = sp.GetRequiredService<ILogger<MasterOwnerTeamResolver>>();
+    return new MasterOwnerTeamResolver(orgService, cache, masterOwnerTeamName, logger);
+});
+
+builder.Services.AddTransient<MasterMatchingService>(sp =>
+{
+    var factory       = sp.GetRequiredService<DataverseClientFactory>();
+    var orgService    = factory.CreateOrganizationService();
+    var ownerResolver = sp.GetRequiredService<MasterOwnerTeamResolver>();
+    var logger        = sp.GetRequiredService<ILogger<MasterMatchingService>>();
+    return new MasterMatchingService(orgService, ownerResolver, logger);
 });
 
 builder.Services.AddTransient<AccountMasterMatchingService>(sp =>
 {
-    var factory    = sp.GetRequiredService<DataverseClientFactory>();
-    var orgService = factory.CreateOrganizationService();
-    var logger     = sp.GetRequiredService<ILogger<AccountMasterMatchingService>>();
-    return new AccountMasterMatchingService(orgService, logger);
+    var factory       = sp.GetRequiredService<DataverseClientFactory>();
+    var orgService    = factory.CreateOrganizationService();
+    var ownerResolver = sp.GetRequiredService<MasterOwnerTeamResolver>();
+    var logger        = sp.GetRequiredService<ILogger<AccountMasterMatchingService>>();
+    return new AccountMasterMatchingService(orgService, ownerResolver, logger);
 });
 
 builder.Services.AddTransient<SetRucValidationService>(sp =>

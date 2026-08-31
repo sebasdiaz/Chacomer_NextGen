@@ -54,6 +54,24 @@ function balanced(text, from, open, close) {
 
 const esc = (s) => String(s).replace(/\|/g, '\\|');
 const code = (s) => '`' + s + '`';
+
+// Por que el template puede no emitir cada grupo condicional de app settings. El default
+// cubre a los *AuthSettings, que son la mayoria; los que no encajan van explicitos.
+const EXTRA_NOTES = {
+  masterOwnerSettings: 'si el ambiente declara `masterOwnerTeamName`',
+};
+const EXTRA_NOTE_DEFAULT = 'si el ambiente declara el client id correspondiente';
+
+/** Agrupa los grupos condicionales por motivo, conservando el orden de aparicion. */
+function groupExtras(extras) {
+  const grupos = new Map();
+  for (const e of extras) {
+    const nota = EXTRA_NOTES[e] || EXTRA_NOTE_DEFAULT;
+    if (!grupos.has(nota)) grupos.set(nota, []);
+    grupos.get(nota).push(e);
+  }
+  return grupos;
+}
 const yesNo = (b) => (b ? 'si' : 'no');
 
 // ===========================================================================
@@ -148,10 +166,16 @@ function parseApps() {
         settings.push({ name: s[1], value, resolved: resolveExpr(value, objects) });
       }
     }
-    // concat(..., dataverseAuthSettings) agrega settings condicionales.
+    // concat([...], xAuthSettings, ...) agrega grupos de settings condicionales: se leen
+    // los identificadores que van despues del array, no una lista fija, para que un grupo
+    // nuevo no quede afuera de la pagina en silencio.
     const extras = [];
-    if (/concat\([\s\S]*?dataverseAuthSettings/.test(block)) extras.push('dataverseAuthSettings');
-    if (/concat\([\s\S]*?foAuthSettings/.test(block)) extras.push('foAuthSettings');
+    if (asIdx !== -1 && block.slice(asIdx, block.indexOf('[', asIdx)).includes('concat(')) {
+      const tail = block.slice(block.indexOf('[', asIdx) + balanced(block, block.indexOf('[', asIdx), '[', ']').length);
+      const close = tail.indexOf(')');
+      if (close !== -1)
+        for (const hit of tail.slice(0, close).matchAll(/([A-Za-z0-9_]+Settings)/g)) extras.push(hit[1]);
+    }
 
     const raw = (grab('functionAppName') || '').replace(/'/g, '');
     const name = raw.replace(/\$\{environmentName\}/, '{env}');
@@ -399,8 +423,8 @@ function renderSettings(apps, base) {
     } else {
       parts.push('_Sin app settings propios._');
     }
-    if (app.extras.length) {
-      parts.push('', 'Suma ' + app.extras.map(code).join(' y ') + ', que el template emite sólo si el ambiente declara el client id correspondiente.');
+    for (const [nota, grupo] of groupExtras(app.extras)) {
+      parts.push('', 'Suma ' + grupo.map(code).join(' y ') + ', que el template emite sólo ' + nota + '.');
     }
     parts.push('');
   }

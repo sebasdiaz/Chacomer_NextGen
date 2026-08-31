@@ -54,12 +54,17 @@ namespace AxxonContacts.Functions.Services
         ];
 
         private readonly IOrganizationService _service;
+        private readonly MasterOwnerTeamResolver _ownerTeamResolver;
         private readonly ILogger _logger;
 
-        public MasterMatchingService(IOrganizationService service, ILogger logger)
+        public MasterMatchingService(
+            IOrganizationService service,
+            MasterOwnerTeamResolver ownerTeamResolver,
+            ILogger logger)
         {
-            _service = service ?? throw new ArgumentNullException(nameof(service));
-            _logger  = logger  ?? throw new ArgumentNullException(nameof(logger));
+            _service           = service           ?? throw new ArgumentNullException(nameof(service));
+            _ownerTeamResolver = ownerTeamResolver ?? throw new ArgumentNullException(nameof(ownerTeamResolver));
+            _logger            = logger            ?? throw new ArgumentNullException(nameof(logger));
         }
 
         /// <summary>
@@ -321,7 +326,8 @@ namespace AxxonContacts.Functions.Services
             await EnrichAddressFromDataverseAsync(message);
             await EnrichSecondaryFieldsFromDataverseAsync(message);
 
-            var master = BuildMasterEntity(message);
+            var ownerTeam = await _ownerTeamResolver.ResolveAsync();
+            var master    = BuildMasterEntity(message, ownerTeam);
 
             try
             {
@@ -421,13 +427,19 @@ namespace AxxonContacts.Functions.Services
         // msdyn_company y msdyn_sellable siempre quedan en null/false en el master.
         // ────────────────────────────────────────────────────────────
 
-        private static Entity BuildMasterEntity(ContactEventMessage m)
+        private static Entity BuildMasterEntity(ContactEventMessage m, EntityReference? ownerTeam)
         {
             var e = new Entity(EntityLogicalName);
 
             e[IsMaster]              = true;
             e["msdyn_sellable"]      = false;
             e["a365_contacttype"]    = new OptionSetValue(727000001);
+
+            // Owner: el equipo configurado en MasterOwnerTeamName (el "cliente unico").
+            // Se asigna en el Create y no despues con un AssignRequest para que el master
+            // nunca exista en la business unit equivocada. Si no hay equipo configurado,
+            // el master queda del usuario con el que corre la app.
+            if (ownerTeam != null) e["ownerid"] = ownerTeam;
 
             // Datos de persona
             SetString(e, "firstname",     m.FirstName);
