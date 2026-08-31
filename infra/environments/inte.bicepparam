@@ -77,3 +77,11 @@ param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacome
 // Storage y Key Vault. Ese paso no es opcional: sin los roles de Storage no arranca.
 // Comandos en docs/wiki/plataforma/ambientes.md.
 param deployFiscalApp = true
+
+// Equipo dueño de los masters ("cliente unico"): la BU CLIENTE UNICO existe en INTE
+// (businessunitid fe7fa970-48a5-f111-b8de-7c1e525b9d22) y su default team se llama igual
+// (ff7fa970-48a5-f111-b8de-7c1e525b9d22), verificado 2026-08-31. Como aca
+// `deployFunctionApps` esta en false, el template NO administra fa-axxoncontacts-inte:
+// hasta el cutover el app setting `MasterOwnerTeamName` hay que ponerlo a mano en el
+// portal. Este param queda declarado para que el dia que se adopte la app ya este.
+param masterOwnerTeamName = 'CLIENTE UNICO'

@@ -38,6 +38,8 @@ setting puesto a mano en el portal lo borra el próximo deployment.
 
 Suma `dataverseAuthSettings`, que el template emite sólo si el ambiente declara el client id correspondiente.
 
+Suma `masterOwnerSettings`, que el template emite sólo si el ambiente declara `masterOwnerTeamName`.
+
 ### `fa-axxoncustomers-{env}`
 
 - appKey: `customers`
@@ -131,4 +133,4 @@ Suma `dataverseAuthSettings` y `foAuthSettings`, que el template emite sólo si 
 | `DataverseUrl` | `dataverseUrl` | — |
 | `SharePointSiteUrl` | `sharePointSiteUrl` | — |
 
-Suma `dataverseAuthSettings`, que el template emite sólo si el ambiente declara el client id correspondiente.
+Suma `dataverseAuthSettings` y `graphAuthSettings`, que el template emite sólo si el ambiente declara el client id correspondiente.

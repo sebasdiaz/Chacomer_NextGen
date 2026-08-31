@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - infra/**
-last_reviewed: 2026-08-26
+last_reviewed: 2026-08-31
 -->
 
 # Infraestructura (Bicep)

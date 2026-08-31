@@ -53,3 +53,9 @@ param thinkchatFrom = '595215180000'
 // decida estrenarla ahi, para que un deployment de infra no la cree de rebote.
 param deployTicketAtencionApp = false
 param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacomer-TEST'
+
+// Equipo dueño de los masters ("cliente unico"): la BU CLIENTE UNICO existe en TEST
+// (businessunitid 6d07f3e2-49a5-f111-b8de-3833c5e62ee5) y su default team se llama igual
+// (6e07f3e2-49a5-f111-b8de-3833c5e62ee5), verificado 2026-08-31. Si el equipo se renombra
+// o se borra, contacts deja de crear masters y los mensajes caen al DLQ.
+param masterOwnerTeamName = 'CLIENTE UNICO'
