@@ -303,26 +303,29 @@ el storage `dataverseinteticket`, el Application Insights `fa-axxonticketatencio
 app nueva usa el compartido) y su alert rule `Failure Anomalies - …`. Se pueden borrar una
 vez validada la app nueva; nada los referencia.
 
-## El botón, y las dos environment variables
+## El botón, y la environment variable que lo alimenta
 
 El web resource vive en el repo **Chacomer Dataverse** y no se despliega con esta app, así
-que se rompen por separado. Lo que necesita de este lado:
+que se rompen por separado. Lo que necesita de este lado es **una sola** environment
+variable, `axx_FUNCTION_URL`, en la solución `NexGen-GAP-103-227`:
 
-| Environment variable | Para qué |
-|---|---|
-| `axx_FUNCTION_URL` | El endpoint. Ya existe, en la solución `NexGen-GAP-103-227`. |
-| `axx_FUNCTION_KEY` | La function key, que viaja en el header `x-functions-key`. |
+```
+https://fa-axxonticketatencion-inte.azurewebsites.net/api/GenerarTicketAtencion?code=…
+```
 
-Ninguna de las dos va hardcodeada en el JS: cambian por ambiente y la key rota. El web
-resource las lee con una sola query a `environmentvariabledefinition` expandiendo
+**La function key va adentro de la URL, como `?code=`**, no en un header `x-functions-key`
+aparte. Las dos formas son equivalentes para el host de Functions; se eligió la primera
+para tener un solo lugar que tocar cuando la key rota o cuando cambia el ambiente. El web
+resource lee la variable con una query a `environmentvariabledefinition` expandiendo
 `environmentvariabledefinition_environmentvariablevalue`, y cachea el resultado mientras el
 usuario tiene la Cita abierta. El valor del ambiente pisa al `defaultvalue` de la definición.
 
 > **La key es visible para cualquier usuario que pueda apretar el botón.** Es JavaScript de
-> cliente: la key llega al browser sí o sí, y guardarla en una environment variable no la
-> esconde —sólo la saca del código. Lo que compra es poder rotarla sin republicar el web
-> resource. Si algún día hace falta que sea de verdad secreta, el camino es Easy Auth con
-> el token del usuario de D365, no otro escondite del lado del cliente.
+> cliente: llega al browser sí o sí, y la environment variable no la esconde —sólo la saca
+> del código, que es lo que permite rotarla sin republicar el web resource. Yendo en la URL
+> queda además en el historial del browser y en cualquier log que registre la request. Si
+> alguna vez tiene que ser de verdad secreta, el camino es Easy Auth con el token del
+> usuario de D365, no otro escondite del lado del cliente.
 
 **El cliente tiene que caer a `wordBase64` cuando `url` viene vacía.** Con `OK_SIN_PDF` la
 función devuelve `200` y el Word; un cliente que sólo mira `url` le muestra un error al
@@ -333,5 +336,5 @@ usuario teniendo el documento en la mano. Se abre con `Xrm.Navigation.openFile`,
 
 | Componente | Dónde | Rol |
 |---|---|---|
-| `form.js` | `Chacomer Dataverse` → `WebResources/axx_/ServiceAppointment/` | El botón. Ver [El botón, y las dos environment variables](#el-boton-y-las-dos-environment-variables). |
+| `form.js` | `Chacomer Dataverse` → `WebResources/axx_/ServiceAppointment/` | El botón. Ver [El botón, y la environment variable que lo alimenta](#el-boton-y-la-environment-variable-que-lo-alimenta). |
 | `SetReceptionDateTimePlugin` | `Chacomer Dataverse` → `Plugins/…SetReceptionDateTime/` | Setea `axx_receptiondatetime`. Filtra por `msauto_statuscode` mientras el web resource lee `a365_status` para el mismo valor: confirmar cuál cambia realmente antes de dar por buena la fecha de recepción. |
