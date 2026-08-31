@@ -105,7 +105,7 @@ namespace Axxon.Eip.Core.Graph
                 // Se listan todas y se compara en memoria: $filter sobre 'name' de drives no
                 // esta soportado de forma consistente en Graph, y un sitio tiene pocas.
                 var json = await GetJsonAsync(
-                    $"sites/{siteId}/drives?$select=id,name", "GetDrives", cancellationToken);
+                    $"sites/{siteId}/drives?$select=id,name,webUrl", "GetDrives", cancellationToken);
 
                 var drives = json.TryGetProperty("value", out var value)
                     ? value.EnumerateArray().ToList()
@@ -113,11 +113,9 @@ namespace Axxon.Eip.Core.Graph
 
                 foreach (var drive in drives)
                 {
-                    var name = drive.TryGetProperty("name", out var n) ? n.GetString() : null;
-                    var id   = drive.TryGetProperty("id", out var i) ? i.GetString() : null;
+                    var id = drive.TryGetProperty("id", out var i) ? i.GetString() : null;
 
-                    if (name is not null && id is not null &&
-                        string.Equals(name, libraryName, StringComparison.OrdinalIgnoreCase))
+                    if (id is not null && Matches(drive, libraryName))
                     {
                         _driveIds[libraryName] = id;
                         _logger.LogInformation("[Graph] Biblioteca resuelta: {Library}", libraryName);
@@ -125,13 +123,11 @@ namespace Axxon.Eip.Core.Graph
                     }
                 }
 
-                var disponibles = string.Join(", ", drives
-                    .Select(d => d.TryGetProperty("name", out var n) ? n.GetString() : null)
-                    .Where(n => n is not null));
+                var disponibles = string.Join(", ", drives.Select(Describe));
 
                 throw new InvalidOperationException(
-                    $"El sitio no tiene una biblioteca de documentos llamada '{libraryName}'. " +
-                    $"Bibliotecas del sitio: {(string.IsNullOrEmpty(disponibles) ? "(ninguna visible)" : disponibles)}.");
+                    $"El sitio no tiene una biblioteca de documentos cuya URL termine en '{libraryName}'. " +
+                    $"Bibliotecas del sitio (url = nombre): {(string.IsNullOrEmpty(disponibles) ? "(ninguna visible)" : disponibles)}.");
             }
             finally
             {
@@ -297,6 +293,50 @@ namespace Axxon.Eip.Core.Graph
 
             var http = _httpClientFactory.CreateClient(HttpClientName);
             return await http.SendAsync(request, cancellationToken);
+        }
+
+        /// <summary>
+        /// Decide si un drive es la biblioteca buscada.
+        ///
+        /// Se compara contra el ULTIMO SEGMENTO DE <c>webUrl</c>, no contra <c>name</c>:
+        /// Dataverse guarda en el <c>relativeurl</c> de sus ubicaciones el segmento de URL
+        /// de la biblioteca (<c>msauto_serviceappointment</c>), mientras que Graph devuelve
+        /// en <c>name</c> el nombre para mostrar, que esta traducido — la misma biblioteca
+        /// figura como "Cita de servicio". Comparar por <c>name</c> no acierta nunca con una
+        /// biblioteca creada por Dataverse.
+        ///
+        /// El <c>name</c> queda igual como segunda chance, para el caso de una biblioteca
+        /// creada a mano cuyo nombre y URL coinciden.
+        /// </summary>
+        private static bool Matches(JsonElement drive, string libraryName)
+        {
+            if (drive.TryGetProperty("webUrl", out var w) &&
+                w.GetString() is { } webUrl &&
+                string.Equals(LastSegment(webUrl), libraryName, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return drive.TryGetProperty("name", out var n) &&
+                   n.GetString() is { } name &&
+                   string.Equals(name, libraryName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Ultimo segmento de una URL, desescapado. "…/sites/X/msauto_y" -> "msauto_y".</summary>
+        private static string LastSegment(string url)
+        {
+            var trimmed = url.TrimEnd('/');
+            var slash   = trimmed.LastIndexOf('/');
+            var segment = slash >= 0 ? trimmed[(slash + 1)..] : trimmed;
+
+            return Uri.UnescapeDataString(segment);
+        }
+
+        /// <summary>Una biblioteca para el mensaje de error: su segmento de URL y su nombre.</summary>
+        private static string Describe(JsonElement drive)
+        {
+            var name = drive.TryGetProperty("name", out var n) ? n.GetString() : null;
+            var url  = drive.TryGetProperty("webUrl", out var w) ? w.GetString() : null;
+
+            return url is null ? name ?? "(sin nombre)" : $"{LastSegment(url)} = {name}";
         }
 
         /// <summary>
