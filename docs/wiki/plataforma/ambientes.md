@@ -82,8 +82,10 @@ de INTE tal como están, vía los overrides `inteAppName` / `deployToInte`.
 
 > **`fa-axxonticketatencion-inte` salió del cutover.** Era la quinta app creada a mano; se
 > borró, así que —como thinkchat— nace administrada por Bicep con su propio toggle
-> `deployTicketAtencionApp`, y con **Managed Identity**: `inte.bicepparam` no declara
-> `dataverseClientId`, así que la app no lleva ningún secreto. Los pasos de alta están en
+> `deployTicketAtencionApp`. Es la única app del ambiente que autentica con **dos
+> identidades**: Managed Identity contra Dataverse y el app registration `145fd64d` contra
+> Graph, porque el consentimiento de `Sites.ReadWrite.All` quedó sobre el registration. Los
+> pasos de alta están en
 > [Ticket de Atención › Estado del despliegue](../integraciones/ticketatencion.md#estado-del-despliegue).
 
 ### Secretos de INTE: `keyvaultinte`, no `kv-chacomer-eip-inte`
