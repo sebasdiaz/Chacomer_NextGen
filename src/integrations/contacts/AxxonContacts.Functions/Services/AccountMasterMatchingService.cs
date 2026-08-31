@@ -13,6 +13,7 @@ namespace AxxonContacts.Functions.Services
         private const string MasterAccountId      = "axx_masteraccountid";
         private const string IdentificationNumber = "msdyn_identificationnumber";
         private const string LugarComercial       = "axx_lugarcomercial";
+        private const string TipoPersoneria       = "axx_tipopersoneriajuridica";
         private const int    BulkBatchSize        = 1000;
 
         private const string CustomerAddressEntity = "customeraddress";
@@ -42,14 +43,20 @@ namespace AxxonContacts.Functions.Services
             "address1_latitude", "address1_longitude"
         ];
 
-        private readonly IOrganizationService    _service;
-        private readonly MasterOwnerTeamResolver _ownerTeamResolver;
-        private readonly ILogger                 _logger;
+        /// <summary>
+        /// Campos que se copian del raw al master pero no participan del matching, asi que
+        /// el PreImage del Step no tiene por que traerlos. Se releen juntos, en un solo
+        /// Retrieve, cuando el evento no los trajo.
+        /// </summary>
+        private static readonly string[] SecondaryColumns =
+        [
+            "emailaddress1", LugarComercial, TipoPersoneria
+        ];
 
-        public AccountMasterMatchingService(
-            IOrganizationService service,
-            MasterOwnerTeamResolver ownerTeamResolver,
-            ILogger logger)
+        private readonly IOrganizationService _service;
+        private readonly ILogger              _logger;
+
+        public AccountMasterMatchingService(IOrganizationService service, ILogger logger)
         {
             _service           = service           ?? throw new ArgumentNullException(nameof(service));
             _ownerTeamResolver = ownerTeamResolver ?? throw new ArgumentNullException(nameof(ownerTeamResolver));
@@ -208,35 +215,44 @@ namespace AxxonContacts.Functions.Services
         }
 
         // ────────────────────────────────────────────────────────────
-        // EnrichLugarComercialFromDataverse
+        // EnrichSecondaryFieldsFromDataverse
         // ────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Completa axx_lugarcomercial leyendolo del raw en Dataverse cuando no vino en el evento.
+        /// Completa emailaddress1, axx_lugarcomercial y axx_tipopersoneriajuridica leyendolos
+        /// del raw en Dataverse cuando no vinieron en el evento.
         ///
         /// Mismo motivo que el domicilio: el PreImage del Step esta acotado a los campos de
-        /// matching, asi que en un evento Update el lookup solo viaja si cambio en esa misma
-        /// operacion. Sin esto el master se crearia sin lugar comercial y sin que falle nada.
-        /// El Retrieve extra se paga solo al CREAR el master, no en cada mensaje.
+        /// matching, asi que en un evento Update estos solo viajan si cambiaron en esa misma
+        /// operacion. Sin esto el master se crearia sin ellos y sin que falle nada. Van en un
+        /// unico Retrieve, que ademas se paga solo al CREAR el master, no en cada mensaje.
         /// </summary>
-        private async Task EnrichLugarComercialFromDataverseAsync(AccountEventMessage message)
+        private async Task EnrichSecondaryFieldsFromDataverseAsync(AccountEventMessage message)
         {
-            if (message.AxxLugarComercial.HasValue) return;
+            if (!string.IsNullOrWhiteSpace(message.EmailAddress1)
+                && message.AxxLugarComercial.HasValue
+                && message.AxxTipoPersoneriaJuridica.HasValue)
+                return;
 
             try
             {
                 var record = await Task.Run(() =>
-                    _service.Retrieve(EntityLogicalName, message.AccountId, new ColumnSet(LugarComercial)));
+                    _service.Retrieve(EntityLogicalName, message.AccountId, new ColumnSet(SecondaryColumns)));
 
-                message.AxxLugarComercial = record.GetAttributeValue<EntityReference>(LugarComercial)?.Id;
+                if (string.IsNullOrWhiteSpace(message.EmailAddress1))
+                    message.EmailAddress1 = record.GetAttributeValue<string>("emailaddress1");
+                if (!message.AxxLugarComercial.HasValue)
+                    message.AxxLugarComercial = record.GetAttributeValue<EntityReference>(LugarComercial)?.Id;
+                if (!message.AxxTipoPersoneriaJuridica.HasValue)
+                    message.AxxTipoPersoneriaJuridica = record.GetAttributeValue<OptionSetValue>(TipoPersoneria)?.Value;
             }
             catch (Exception ex)
             {
-                // Dato secundario, mismo criterio que el domicilio: si no se puede leer el
-                // master igual se crea y no justifica reintentar el mensaje.
+                // Datos secundarios, mismo criterio que el domicilio: si no se pueden leer,
+                // el master igual se crea y no justifica reintentar el mensaje.
                 _logger.LogWarning(ex,
-                    "[AccountMasterMatchingService] No se pudo recuperar axx_lugarcomercial del raw {RawId}. " +
-                    "El master se crea sin lugar comercial.",
+                    "[AccountMasterMatchingService] No se pudieron recuperar los campos secundarios del raw {RawId}. " +
+                    "El master se crea sin ellos.",
                     message.AccountId);
             }
         }
@@ -278,7 +294,7 @@ namespace AxxonContacts.Functions.Services
         private async Task<EntityReference> CreateMasterAsync(AccountEventMessage message)
         {
             await EnrichAddressFromDataverseAsync(message);
-            await EnrichLugarComercialFromDataverseAsync(message);
+            await EnrichSecondaryFieldsFromDataverseAsync(message);
 
             var ownerTeam = await _ownerTeamResolver.ResolveAsync();
             var master    = BuildMasterEntity(message, ownerTeam);
@@ -418,6 +434,10 @@ namespace AxxonContacts.Functions.Services
 
             // Lugar comercial: lookup a axx_lugarcomercial, se copia tal cual del raw.
             SetRef(e, LugarComercial, "axx_lugarcomercial", m.AxxLugarComercial);
+
+            // Tipo de personeria juridica: OptionSet, se copia el valor tal cual del raw.
+            if (m.AxxTipoPersoneriaJuridica.HasValue)
+                e[TipoPersoneria] = new OptionSetValue(m.AxxTipoPersoneriaJuridica.Value);
 
             // msdyn_company requerido por plugin de Dual Write
             SetRef(e, "msdyn_company", "cdm_company", m.MsdynCompany);

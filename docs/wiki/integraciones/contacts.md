@@ -3,7 +3,7 @@ sources:
   - src/integrations/contacts/**
   - tests/AxxonContacts.Functions.Tests/**
   - pipelines/azure-pipelines-contacts.yml
-last_reviewed: 2026-08-31
+last_reviewed: 2026-08-27
 -->
 
 # Contacts — Master Contact / Golden Record
@@ -160,11 +160,12 @@ emailaddress1, msdyn_customergroupid, msdyn_partycountry, msdyn_salestaxgroup
 
 ## Configuración de Dataverse
 
-### Campo custom requerido en la tabla `contact`
+### Campos custom requeridos en `contact` y en `account`
 
 | Campo | Tipo | Default |
 |---|---|---|
 | `axx_ismaster` | Boolean | false |
+| `axx_tipopersoneriajuridica` | OptionSet | — |
 
 ### Campos OOB que deben estar presentes
 
@@ -179,41 +180,30 @@ En el Table Map de Contact, agregar Filter Expression (Dataverse → F&O):
 axx_ismaster eq false
 ```
 
-## Owner del master: la business unit CLIENTE UNICO
+## Que se copia del raw al cliente unico
 
-Los masters —el "cliente único"— se crean asignados al **owner team** que nombra el app
-setting `MasterOwnerTeamName`. La business unit de un registro es la del equipo que lo
-posee, así que alcanza con el equipo para que todos los masters queden en la misma BU y
-la visibilidad se gobierne desde ahí, sin tocar el código cuando cambien los roles.
+El master no se edita a mano: nace con una copia de los datos del raw que lo disparo.
+Ademas del nombre y del bloque de domicilio, se copian:
 
-**Va el nombre del equipo, no su id**, porque el GUID es distinto en cada environment y el
-nombre es el mismo. El *default team* de una business unit se llama igual que la BU, así
-que `CLIENTE UNICO` resuelve el equipo de esa BU sin tener que crear uno aparte:
-
-| Ambiente | Business unit | Default team (owner) |
+| Campo | Tipo | Nota |
 |---|---|---|
-| INTE | `fe7fa970-48a5-f111-b8de-7c1e525b9d22` | `ff7fa970-48a5-f111-b8de-7c1e525b9d22` |
-| TEST | `6d07f3e2-49a5-f111-b8de-3833c5e62ee5` | `6e07f3e2-49a5-f111-b8de-3833c5e62ee5` |
+| `emailaddress1` | Texto | En contact tambien viaja `emailaddress2` |
+| `axx_lugarcomercial` | Lookup | Solo el Id |
+| `axx_tipopersoneriajuridica` | OptionSet | Se copia el valor, no la etiqueta |
 
-El equipo se resuelve **una vez por instancia** (`MasterOwnerTeamCache`, sin TTL: cambiar
-el app setting recicla la app) y sólo pesa al crear un master, no en cada mensaje. Aplica a
-las dos entidades: contact master y account master.
+> **Estos tres no participan del matching, asi que el PreImage del Step no tiene por que
+> traerlos.** En un evento Update solo viajan si cambiaron en esa misma operacion; si no,
+> el master se crearia sin ellos y **no fallaria nada**. Por eso, justo antes del Create,
+> `EnrichSecondaryFieldsFromDataverseAsync` los relee del raw con un unico `Retrieve` —
+> que se paga una vez por identificacion, no en cada mensaje. **No hace falta agregarlos
+> al Step**: sumarlos a los Filtering Attributes solo generaria mensajes que no cambian
+> nada en el master.
 
-**Sin el setting no se asigna owner** y el master queda del usuario con el que corre la app
-— el comportamiento anterior. Es lo que pasa en un ambiente donde la BU todavía no existe.
-
-**Con el setting puesto y el equipo ausente, el master no se crea**: se lanza, el mensaje
-reintenta y cae al DLQ. Es a propósito. Un master creado en la business unit equivocada no
-falla en ningún lado, queda visible para quien no corresponde, y hay que reasignarlo a mano
-después; el DLQ, en cambio, se ve. El renombrar o borrar el equipo tiene esa consecuencia.
-
-> Sólo aplica a los masters **nuevos**. Los que ya existían quedan con su owner original:
-> moverlos es una reasignación masiva aparte, que este cambio no hace.
-
-En el Bicep es el parámetro `masterOwnerTeamName` (vacío por default), que sólo emite el
-app setting si tiene valor. En INTE el template todavía no administra
-`fa-axxoncontacts-inte` (`deployFunctionApps = false`), así que ahí el setting va **a mano**
-en el portal hasta el cutover — ver [Ambientes](../plataforma/ambientes.md#cutover-de-inte).
+> **Se copian al CREAR el master, y solo ahi.** Cuando el master ya existe, la Function
+> asocia el raw y no vuelve a tocar sus campos: un mail o una personeria que cambian
+> despues en el raw no llegan al cliente unico. La unica escritura posterior sobre el
+> master es la de `SetRucValidationService`, con el resultado de la validacion del RUC
+> contra la SET.
 
 ## Comportamiento end-to-end
 
@@ -223,8 +213,8 @@ en el portal hasta el cutover — ver [Ambientes](../plataforma/ambientes.md#cut
 | Contact es Master (`axx_ismaster = true`) | Plugin early exit — no publica nada |
 | `msdyn_identificationnumber` vacío | Plugin early exit — no publica nada |
 | Dos Raws del mismo cliente al mismo tiempo | Van a la misma Session — se procesan uno a la vez |
-| No existe Master | Function crea Master (owner = equipo de `MasterOwnerTeamName`) + BulkAssociate de todos los Raws con misma identification |
-| Existe Master | Function asocia el Raw y propaga solo los campos del ChangedFields al Master |
+| No existe Master | Function crea Master + BulkAssociate de todos los Raws con misma identification |
+| Existe Master | Function asocia el Raw. **No propaga campos**: el master conserva los datos con los que se creo |
 | Function falla | Service Bus reintenta x3 → DLQ |
 | Mensaje no deserializable | Dead Letter inmediato (no reintenta) |
 
