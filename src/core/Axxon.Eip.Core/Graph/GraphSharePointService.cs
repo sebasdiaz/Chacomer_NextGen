@@ -29,6 +29,12 @@ namespace Axxon.Eip.Core.Graph
         private readonly SemaphoreSlim _siteIdGate = new(1, 1);
         private string? _siteId;
 
+        // Un sitio tiene varias bibliotecas y sus ids tampoco cambian: mismo criterio que
+        // el site id. La clave es el nombre de la biblioteca, sin distinguir mayusculas.
+        private readonly SemaphoreSlim _driveIdGate = new(1, 1);
+        private readonly Dictionary<string, string> _driveIds =
+            new(StringComparer.OrdinalIgnoreCase);
+
         public GraphSharePointService(
             IHttpClientFactory httpClientFactory,
             TokenCredential credential,
@@ -80,11 +86,65 @@ namespace Axxon.Eip.Core.Graph
             }
         }
 
-        public async Task<GraphDriveItem> UploadAsync(
-            string drivePath, byte[] content, string contentType, CancellationToken cancellationToken = default)
+        public async Task<string> GetDriveIdAsync(
+            string libraryName, CancellationToken cancellationToken = default)
         {
-            var siteId = await GetSiteIdAsync(cancellationToken);
-            var url    = $"sites/{siteId}/drive/root:/{EscapePath(drivePath)}:/content";
+            ArgumentException.ThrowIfNullOrWhiteSpace(libraryName);
+
+            if (_driveIds.TryGetValue(libraryName, out var cached))
+                return cached;
+
+            await _driveIdGate.WaitAsync(cancellationToken);
+            try
+            {
+                if (_driveIds.TryGetValue(libraryName, out cached))
+                    return cached;
+
+                var siteId = await GetSiteIdAsync(cancellationToken);
+
+                // Se listan todas y se compara en memoria: $filter sobre 'name' de drives no
+                // esta soportado de forma consistente en Graph, y un sitio tiene pocas.
+                var json = await GetJsonAsync(
+                    $"sites/{siteId}/drives?$select=id,name", "GetDrives", cancellationToken);
+
+                var drives = json.TryGetProperty("value", out var value)
+                    ? value.EnumerateArray().ToList()
+                    : new List<JsonElement>();
+
+                foreach (var drive in drives)
+                {
+                    var name = drive.TryGetProperty("name", out var n) ? n.GetString() : null;
+                    var id   = drive.TryGetProperty("id", out var i) ? i.GetString() : null;
+
+                    if (name is not null && id is not null &&
+                        string.Equals(name, libraryName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _driveIds[libraryName] = id;
+                        _logger.LogInformation("[Graph] Biblioteca resuelta: {Library}", libraryName);
+                        return id;
+                    }
+                }
+
+                var disponibles = string.Join(", ", drives
+                    .Select(d => d.TryGetProperty("name", out var n) ? n.GetString() : null)
+                    .Where(n => n is not null));
+
+                throw new InvalidOperationException(
+                    $"El sitio no tiene una biblioteca de documentos llamada '{libraryName}'. " +
+                    $"Bibliotecas del sitio: {(string.IsNullOrEmpty(disponibles) ? "(ninguna visible)" : disponibles)}.");
+            }
+            finally
+            {
+                _driveIdGate.Release();
+            }
+        }
+
+        public async Task<GraphDriveItem> UploadAsync(
+            string drivePath, byte[] content, string contentType,
+            string? driveId = null, CancellationToken cancellationToken = default)
+        {
+            var root = await DriveRootAsync(driveId, cancellationToken);
+            var url  = $"{root}/root:/{EscapePath(drivePath)}:/content";
 
             using var body = new ByteArrayContent(content);
             body.Headers.ContentType = new MediaTypeHeaderValue(contentType);
@@ -98,10 +158,11 @@ namespace Axxon.Eip.Core.Graph
                 json.TryGetProperty("webUrl", out var w) ? w.GetString() ?? string.Empty : string.Empty);
         }
 
-        public async Task<byte[]> DownloadAsPdfAsync(string itemId, CancellationToken cancellationToken = default)
+        public async Task<byte[]> DownloadAsPdfAsync(
+            string itemId, string? driveId = null, CancellationToken cancellationToken = default)
         {
-            var siteId = await GetSiteIdAsync(cancellationToken);
-            var url    = $"sites/{siteId}/drive/items/{itemId}/content?format=pdf";
+            var root = await DriveRootAsync(driveId, cancellationToken);
+            var url  = $"{root}/items/{itemId}/content?format=pdf";
 
             using var response = await SendAsync(HttpMethod.Get, url, content: null, cancellationToken);
 
@@ -112,12 +173,13 @@ namespace Axxon.Eip.Core.Graph
             return await response.Content.ReadAsByteArrayAsync(cancellationToken);
         }
 
-        public async Task DeleteAsync(string itemId, CancellationToken cancellationToken = default)
+        public async Task DeleteAsync(
+            string itemId, string? driveId = null, CancellationToken cancellationToken = default)
         {
-            var siteId = await GetSiteIdAsync(cancellationToken);
+            var root = await DriveRootAsync(driveId, cancellationToken);
 
             using var response = await SendAsync(
-                HttpMethod.Delete, $"sites/{siteId}/drive/items/{itemId}", content: null, cancellationToken);
+                HttpMethod.Delete, $"{root}/items/{itemId}", content: null, cancellationToken);
 
             if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound)
                 return;
@@ -126,9 +188,10 @@ namespace Axxon.Eip.Core.Graph
                 await response.Content.ReadAsStringAsync(cancellationToken));
         }
 
-        public async Task EnsureFolderAsync(string folderPath, CancellationToken cancellationToken = default)
+        public async Task EnsureFolderAsync(
+            string folderPath, string? driveId = null, CancellationToken cancellationToken = default)
         {
-            var siteId   = await GetSiteIdAsync(cancellationToken);
+            var root     = await DriveRootAsync(driveId, cancellationToken);
             var segments = folderPath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
             var parent   = string.Empty;
 
@@ -136,8 +199,8 @@ namespace Axxon.Eip.Core.Graph
             {
                 // La raiz se direcciona distinto que una subcarpeta: root/children vs root:/{path}:/children.
                 var url = string.IsNullOrEmpty(parent)
-                    ? $"sites/{siteId}/drive/root/children"
-                    : $"sites/{siteId}/drive/root:/{EscapePath(parent)}:/children";
+                    ? $"{root}/root/children"
+                    : $"{root}/root:/{EscapePath(parent)}:/children";
 
                 using var body = JsonContent.Create(new Dictionary<string, object?>
                 {
@@ -173,9 +236,12 @@ namespace Axxon.Eip.Core.Graph
             GraphDriveItem? uploaded = null;
             try
             {
-                await EnsureFolderAsync(tempFolder, cancellationToken);
-                uploaded = await UploadAsync(tempPath, officeDocument, contentType, cancellationToken);
-                return await DownloadAsPdfAsync(uploaded.Id, cancellationToken);
+                // El temporal vive en la biblioteca por defecto: es scratch, no tiene por que
+                // ensuciar la biblioteca de la tabla.
+                await EnsureFolderAsync(tempFolder, driveId: null, cancellationToken);
+                uploaded = await UploadAsync(
+                    tempPath, officeDocument, contentType, driveId: null, cancellationToken);
+                return await DownloadAsPdfAsync(uploaded.Id, driveId: null, cancellationToken);
             }
             finally
             {
@@ -184,7 +250,7 @@ namespace Axxon.Eip.Core.Graph
                     try
                     {
                         // El temporal se borra siempre, incluso si la conversion fallo.
-                        await DeleteAsync(uploaded.Id, CancellationToken.None);
+                        await DeleteAsync(uploaded.Id, driveId: null, CancellationToken.None);
                     }
                     catch (Exception ex)
                     {
@@ -232,6 +298,15 @@ namespace Axxon.Eip.Core.Graph
             var http = _httpClientFactory.CreateClient(HttpClientName);
             return await http.SendAsync(request, cancellationToken);
         }
+
+        /// <summary>
+        /// Prefijo de URL del drive destino: el de por defecto del sitio cuando no se
+        /// especifica uno, o el drive concreto de una biblioteca.
+        /// </summary>
+        private async Task<string> DriveRootAsync(string? driveId, CancellationToken cancellationToken) =>
+            driveId is null
+                ? $"sites/{await GetSiteIdAsync(cancellationToken)}/drive"
+                : $"drives/{driveId}";
 
         /// <summary>
         /// Escapa cada segmento de la ruta dejando las barras: Graph usa el path crudo

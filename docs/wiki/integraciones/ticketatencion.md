@@ -105,6 +105,42 @@ Va el de **recepción**: el ticket es la orden que se firma al dejar el vehícul
 > curl -s -H "Authorization: Bearer $TOKEN" "$B/EntityDefinitions(LogicalName='msauto_device')/ManyToOneRelationships?\$select=ReferencingAttribute,ReferencedEntity,ReferencingEntityNavigationPropertyName"
 > ```
 
+## Dónde va el PDF: una biblioteca por tabla, no una carpeta
+
+La jerarquía de Dataverse es **sitio → biblioteca → carpeta**, y se lee en la cadena de
+`parentsiteorlocation` de los `sharepointdocumentlocation`:
+
+| Ubicación | Padre | Qué nombra su `relativeurl` |
+|---|---|---|
+| `msauto_serviceappointment` | el **sitio** | una **biblioteca de documentos** |
+| `-000011_C159AA9C…` | la anterior | una **carpeta** dentro de esa biblioteca |
+
+Dataverse crea **una biblioteca por tabla** —`msauto_serviceappointment`, `contact`, …— en
+la raíz del sitio, y adentro una carpeta por registro con el formato `{nombre}_{GUID}`, GUID
+sin guiones y en mayúsculas.
+
+Esto es lo que rompió la primera versión que llegó a subir el PDF. `sites/{id}/drive` de
+Graph devuelve **solo la biblioteca por defecto** ("Documentos compartidos"), así que subir a
+`msauto_serviceappointment/{carpeta}` creaba una carpeta con ese nombre *dentro de la
+biblioteca por defecto*. El archivo terminaba en:
+
+```
+/Documentos compartidos/msauto_serviceappointment/-000011_C159AA9C…/Ticket_Atencion_….pdf   ← acá caía
+/msauto_serviceappointment/-000011_C159AA9C…/Ticket_Atencion_….pdf                          ← acá lo busca la Cita
+```
+
+**El síntoma es engañoso**: Graph responde 201, la función loguea "PDF adjuntado", el status
+es `OK` y hasta se puede abrir el archivo por URL. Lo único que falla es que la pestaña
+Archivos de la Cita sigue vacía, porque mira la otra biblioteca.
+
+Por eso `GetDriveIdAsync` resuelve el drive por nombre de biblioteca antes de subir, y la
+biblioteca no se asume: sale del `relativeurl` del padre de la ubicación del registro. El
+único que sigue yendo a la biblioteca por defecto es el temporal de la conversión a PDF
+(`Temp/TicketAtencion`), que es scratch y se borra en un `finally`.
+
+> El log del upload incluye la URL final del archivo. No es adorno: sin ella, un "se subió
+> bien pero no aparece" no se puede diagnosticar sin entrar al sitio a mano.
+
 ## El template
 
 `Templates/template_ticket_atencion.docx`. Los content controls están bindeados por XPath
