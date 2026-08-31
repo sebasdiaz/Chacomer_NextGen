@@ -142,7 +142,8 @@ dónde corra, y sin fallar en ningún lado.
 |---|---|
 | `DataverseUrl` | Environment de Dataverse. |
 | `SharePointSiteUrl` | Sitio donde viven los documentos. **Sin esto la rama de PDF falla siempre.** |
-| `GraphClientId` / `GraphTenantId` / `GraphClientSecretName` | Auth contra Graph. Hoy el mismo app registration que Dataverse; se emiten aparte para poder separarlos sin tocar código. |
+| `GraphClientId` / `GraphTenantId` | Auth contra Graph, hoy por el app registration compartido `145fd64d`. Salen del param `graphClientId`, que ya **no** se deriva de `dataverseClientId`. |
+| `GraphClientSecretName` | Nombre del secret del vault donde está el client secret de ese registration. En INTE, `DataverseClientSecret`. |
 
 Los `*ClientSecret` salen del Key Vault, nunca de un app setting — ver
 [Secretos y Key Vault](../plataforma/secretos-y-key-vault.md).
@@ -164,10 +165,41 @@ ninguno.
 administrada por Bicep con su propio toggle `deployTicketAtencionApp`, igual que thinkchat.
 `deployFunctionApps` sigue en `false` por las otras cuatro.
 
-**Nace con Managed Identity.** `inte.bicepparam` no declara `dataverseClientId`, así que el
-template no emite `DataverseClientId` ni `GraphClientId`: la app autentica con su propia MI
-contra Dataverse y contra Graph, sin ningún secreto. Es el estado deseado y el mismo camino
-que products y thinkchat.
+**Autentica con dos identidades distintas, una por servicio.** No es un capricho: cada
+permiso quedó otorgado sobre una identidad distinta, y la app tiene que usar la que
+efectivamente lo tiene.
+
+| Servicio | Identidad | Por qué |
+|---|---|---|
+| Dataverse | Managed Identity | Es la que está dada de alta como Application User (2026-08-28). |
+| Graph / SharePoint | App registration `145fd64d` | Es la que tiene el consentimiento de `Sites.ReadWrite.All` y `Files.ReadWrite.All`. |
+
+`inte.bicepparam` no declara `dataverseClientId` —así que no se emite `DataverseClientId` y
+Dataverse va por MI— pero sí declara `graphClientId` y `graphTenantId`. Antes los dos lados
+salían del mismo param y no se podían separar; hoy `graphClientId` tiene como default a
+`dataverseClientId`, de modo que un ambiente que no lo declare se comporta igual que antes.
+
+**El secreto no se duplica.** Es el mismo registration que usa Dataverse, y su client
+secret ya vive en `kv-chacomer-eip-inte` como `DataverseClientSecret`. El param
+`graphClientSecretName` emite el app setting `GraphClientSecretName = DataverseClientSecret`
+y `EipSecretResolver` resuelve `GraphClientSecret` desde ahí, así que **no hay ningún
+`az keyvault secret set` pendiente**.
+
+Cargar una copia con el nombre canónico también funcionaría, pero serían dos lugares que
+rotar: el día que se rote uno solo, la falla aparece en una sola de las dos integraciones y
+la otra sigue andando — que es peor que fallar en las dos. Si algún día Graph pasa a su
+propio registration, ahí sí se carga su secreto como `GraphClientSecret` y el param vuelve
+a vacío.
+
+> **La indirección la emite el template, no se pone a mano.** `functionApp.bicep` declara la
+> colección completa de `appSettings`, así que un `GraphClientSecretName` escrito en el
+> portal lo borra el próximo deployment. Por eso es un param y no un paso manual — ver
+> [Secretos y Key Vault](../plataforma/secretos-y-key-vault.md).
+
+> Si el secret no resuelve, `EipSecretResolver` **lanza** y el host no levanta: es
+> intencional. Lo que sí falla en silencio es no configurar `GraphClientId`, porque ahí
+> `UseClientSecretAuth` queda en `false` y la app cae a la managed identity —justo la que no
+> tiene el permiso de Graph— con un `OK_SIN_PDF` idéntico al de antes.
 
 El what-if contra `DataverseINTE` da **6 Create**: el storage, su blobService y el container
 `deploymentpackage`, el plan `asp-fa-axxonticketatencion-inte`, la app y su diagnostic
@@ -183,7 +215,8 @@ setting. Usa el Application Insights compartido `appi-eip-inte` y el vault
    que sin los roles de Storage la app ni siquiera arranca. Receta y el fallback cuando el
    CLI falla, en [Ambientes › apps de INTE con los roles a mano](../plataforma/ambientes.md#inte-las-apps-que-nacen-con-los-roles-a-mano).
 3. **La MI como Application User en Dataverse INTE** — ver abajo.
-4. **Los app roles de Graph asignados a la MI** — ver abajo.
+4. **Nada para el secreto de Graph**: sale del `DataverseClientSecret` que ya está en el
+   vault, vía `graphClientSecretName`. Ver abajo sobre qué identidad quedaron los permisos.
 5. **Desplegar el código** con el pipeline de la integración — tener el YAML en el repo
    no alcanza, ver abajo.
 
@@ -262,29 +295,37 @@ El rol de seguridad tiene que cubrir seis lecturas y una sola escritura:
 El único write es el `sharepointdocumentlocation`, y sólo cuando la Cita todavía no tiene
 carpeta de documentos.
 
-### Los permisos de Graph
+### Los permisos de Graph, y sobre qué identidad quedaron
 
-`Sites.ReadWrite.All` y `Files.ReadWrite.All`, como permisos de **aplicación**, asignados a
-la managed identity de la app. Para managed identities **no hay botón de "Grant admin
-consent" en el portal**: van por Graph API, y los tiene que otorgar un Global Admin.
+`Sites.ReadWrite.All` y `Files.ReadWrite.All` como permisos de **aplicación**. El
+consentimiento se otorgó sobre el **app registration compartido `145fd64d`**, no sobre la
+managed identity de la app: verificado el 2026-08-31, el SP del registration (`6d273be4`)
+tiene los dos app roles y la MI (`1264ad3a`) sigue en cero.
 
 ```bash
-MI=$(az functionapp identity show -g DataverseINTE -n fa-axxonticketatencion-inte --query principalId -o tsv)
-GRAPH=$(az ad sp show --id 00000003-0000-0000-c000-000000000000 --query id -o tsv)
-for ROL in 9492366f-7969-46a4-8d15-ed1a20078fff 75359482-378d-4052-8f01-80520e7db3cd; do
-  az rest --method post \
-    --url "https://graph.microsoft.com/v1.0/servicePrincipals/$MI/appRoleAssignments" \
-    --headers "Content-Type=application/json" \
-    --body "{\"principalId\":\"$MI\",\"resourceId\":\"$GRAPH\",\"appRoleId\":\"$ROL\"}"
-done
+# Sobre qué identidad está cada permiso, sin tocar nada:
+az rest --method get --url "https://graph.microsoft.com/v1.0/servicePrincipals/<objectId>/appRoleAssignments"
 ```
 
-Asignarlos a la MI y no al app registration compartido `145fd64d` tiene una ventaja
-concreta: `Sites.ReadWrite.All` es **tenant-wide**, y colgado del registration compartido le
-daría escritura sobre todo SharePoint a la identidad que usan las otras seis apps de la EiP.
+Por eso la app usa el registration para Graph, vía el param `graphClientId`. **Esto tiene un
+costo que conviene tener escrito**: `Sites.ReadWrite.All` es tenant-wide, y ese registration
+lo comparten las otras seis apps de la EiP, así que todas quedan con escritura sobre todo
+SharePoint.
 
-Hasta que estén, Graph responde 403 y el ticket sale con `status = OK_SIN_PDF`: el usuario
-obtiene igual su Word. Es el comportamiento correcto, no un bug.
+El camino que acota el permiso a esta sola app es mover los dos app roles a su managed
+identity y volver `graphClientId` a vacío. Para managed identities **no hay botón de "Grant
+admin consent" en el portal**: van por Graph API, y no alcanza con Cloud Application
+Administrator —ese rol excluye los app roles de Microsoft Graph—: hace falta Privileged Role
+Administrator o Global Admin.
+
+Los dos app role ids son `9492366f-7969-46a4-8d15-ed1a20078fff` (Sites.ReadWrite.All) y
+`75359482-378d-4052-8f01-80520e7db3cd` (Files.ReadWrite.All), y se postean contra
+`servicePrincipals/{objectId-de-la-MI}/appRoleAssignments` con el objectId del SP de
+Microsoft Graph (`00000003-0000-0000-c000-000000000000`) como `resourceId`.
+
+Mientras la identidad que usa la app no tenga los permisos, Graph responde 403 y el ticket
+sale con `status = OK_SIN_PDF`: el usuario obtiene igual su Word. Es el comportamiento
+correcto, no un bug.
 
 ### Por qué el PDF nunca funcionó en la versión anterior
 

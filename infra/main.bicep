@@ -56,6 +56,38 @@ explicita. Las apps que autentican por Managed Identity lo ignoran.
 param dataverseTenantId string = ''
 
 @description('''
+Client ID del app registration con los app roles de Graph (Sites.ReadWrite.All,
+Files.ReadWrite.All) que usa TicketAtencion. Vacio = Managed Identity.
+
+Por defecto sigue a `dataverseClientId`, que es como estuvo siempre. Se declara aparte
+porque las dos identidades no tienen por que coincidir: el consentimiento de Graph se
+otorga sobre una identidad concreta, y en INTE quedo sobre el app registration compartido
+mientras que el alta de Application User en Dataverse quedo sobre la managed identity de
+la app. Con este param cada lado apunta a la identidad que efectivamente tiene su permiso.
+
+El secreto va en Key Vault, con el nombre canonico `GraphClientSecret`.
+''')
+param graphClientId string = dataverseClientId
+
+@description('Tenant de Entra del app registration de `graphClientId`. Solo se emite junto con el.')
+param graphTenantId string = dataverseTenantId
+
+@description('''
+Nombre del secret del Key Vault que guarda el client secret de `graphClientId`, cuando no
+se llama `GraphClientSecret`. Se emite como el app setting `GraphClientSecretName`, que es
+la indireccion que resuelve `EipSecretResolver`.
+
+Sirve para no duplicar en el vault un secreto que ya esta cargado con otro nombre: en INTE
+Graph usa el mismo app registration que Dataverse, cuyo secret ya vive como
+`DataverseClientSecret`. Un secreto duplicado son dos lugares que rotar, y el dia que se
+rote uno solo la falla aparece en una sola de las dos integraciones.
+
+Va por el template y NO a mano: este declara la coleccion completa de `appSettings`, asi
+que un `GraphClientSecretName` puesto en el portal lo borra el proximo deployment.
+''')
+param graphClientSecretName string = ''
+
+@description('''
 Client ID del app registration para la auth S2S contra F&O. Mismo criterio que
 `dataverseClientId`: vacio = Managed Identity. El secreto va en Key Vault (`FoClientSecret`).
 ''')
@@ -208,15 +240,16 @@ var masterOwnerSettings = empty(masterOwnerTeamName)
   ? []
   : [ { name: 'MasterOwnerTeamName', value: masterOwnerTeamName } ]
 
-// Graph usa HOY el mismo app registration que Dataverse (es el que tiene pedidos
-// Sites.ReadWrite.All y Files.ReadWrite.All). Se emite aparte y no se asume la
-// equivalencia en el codigo: el dia que Graph pase a su propio registration —o a la
-// Managed Identity— se cambia solo esto.
-var graphAuthSettings = empty(dataverseClientId)
+// Graph sale de `graphClientId`, que por defecto sigue a `dataverseClientId` pero puede
+// apuntar a otra identidad. Es lo que permite que TicketAtencion hable con Dataverse por
+// Managed Identity —que es Application User— y con Graph por el app registration, que es
+// el que tiene el consentimiento de Sites.ReadWrite.All y Files.ReadWrite.All.
+var graphAuthSettings = empty(graphClientId)
   ? []
   : concat(
-      [ { name: 'GraphClientId', value: dataverseClientId } ],
-      empty(dataverseTenantId) ? [] : [ { name: 'GraphTenantId', value: dataverseTenantId } ]
+      [ { name: 'GraphClientId', value: graphClientId } ],
+      empty(graphTenantId) ? [] : [ { name: 'GraphTenantId', value: graphTenantId } ],
+      empty(graphClientSecretName) ? [] : [ { name: 'GraphClientSecretName', value: graphClientSecretName } ]
     )
 
 var foAuthSettings = empty(foClientId)
