@@ -50,6 +50,12 @@ namespace AxxonContacts.Functions.Models
         [JsonPropertyName("axxLugarComercial")]
         public Guid? AxxLugarComercial { get; set; }
 
+        /// <summary>
+        /// axx_tipopersoneriajuridica. OptionSet: viaja el valor numerico, no la etiqueta.
+        /// </summary>
+        [JsonPropertyName("axxTipoPersoneriaJuridica")]
+        public int? AxxTipoPersoneriaJuridica { get; set; }
+
         [JsonPropertyName("emailAddress1")]
         public string? EmailAddress1 { get; set; }
 
