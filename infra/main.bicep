@@ -111,6 +111,21 @@ param thinkchatBaseUrl string = ''
 param thinkchatFrom string = ''
 
 @description('''
+Nombre del owner team al que contacts asigna los masters (el "cliente unico"). La business
+unit del master es la del equipo, asi que alcanza con el equipo para dejarlos todos en la
+misma BU.
+
+Va el NOMBRE y no el id porque el GUID del equipo cambia por environment y el nombre no: el
+mismo valor sirve para todos los ambientes. El default team de una business unit se llama
+igual que la BU, asi que 'CLIENTE UNICO' resuelve el equipo de esa BU sin crear uno aparte.
+
+VACIO (default) = los masters se crean con el owner por defecto de la app. Si el nombre esta
+puesto y el equipo no existe en ese Dataverse, el master NO se crea y el mensaje termina en
+el DLQ — es a proposito, ver MasterOwnerTeamResolver.
+''')
+param masterOwnerTeamName string = ''
+
+@description('''
 False para desplegar SOLO los recursos compartidos (monitoring, Key Vault,
 Service Bus) sin tocar las Function Apps. Necesario en ambientes donde las apps
 ya existen creadas a mano: este template declara la coleccion completa de
@@ -188,6 +203,10 @@ var dataverseAuthSettings = empty(dataverseClientId)
       [ { name: 'DataverseClientId', value: dataverseClientId } ],
       empty(dataverseTenantId) ? [] : [ { name: 'DataverseTenantId', value: dataverseTenantId } ]
     )
+
+var masterOwnerSettings = empty(masterOwnerTeamName)
+  ? []
+  : [ { name: 'MasterOwnerTeamName', value: masterOwnerTeamName } ]
 
 // Graph usa HOY el mismo app registration que Dataverse (es el que tiene pedidos
 // Sites.ReadWrite.All y Files.ReadWrite.All). Se emite aparte y no se asume la
@@ -267,7 +286,7 @@ module contacts 'modules/functionApp.bicep' = if (deployFunctionApps) {
       { name: 'AccountServiceBusQueueName', value: 'account-master-matching' }
       { name: 'FoSyncServiceBusQueueName', value: 'customer-fo-sync' }
       // SetApiKey NO va aca: se resuelve desde Key Vault (secret "SetApiKey").
-    ], dataverseAuthSettings)
+    ], dataverseAuthSettings, masterOwnerSettings)
   }
 }
 

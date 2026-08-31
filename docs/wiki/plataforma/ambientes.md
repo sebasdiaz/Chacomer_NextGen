@@ -3,7 +3,7 @@ sources:
   - infra/environments/**
   - infra/scripts/**
   - pipelines/**
-last_reviewed: 2026-08-26
+last_reviewed: 2026-08-31
 -->
 
 # Ambientes
@@ -49,6 +49,12 @@ crea el template — la diferencia no es la infraestructura sino la configuraci�
 El template declara la **colección completa** de app settings, así que poner
 `deployFunctionApps = true` sin preparar el terreno **deja las 4 apps caídas**.
 El orden del cutover, por app:
+
+> **Mientras tanto, lo que el Bicep agrega para INTE hay que ponerlo a mano.** Hoy es
+> `MasterOwnerTeamName = CLIENTE UNICO` en `fa-axxoncontacts-inte`: sin ese setting los
+> masters se siguen creando, pero fuera de la business unit CLIENTE UNICO. El param ya está
+> en `inte.bicepparam` para que el día del cutover no haya que acordarse. Ver
+> [Contacts › Owner del master](../integraciones/contacts.md#owner-del-master-la-business-unit-cliente-unico).
 
 > **`fa-axxonthinkchat-{env}` fue la primera excepción.** Es una app greenfield: no existe
 > creada a mano en ningún ambiente, así que no tiene nada que adoptar y puede nacer

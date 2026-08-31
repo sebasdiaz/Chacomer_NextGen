@@ -3,7 +3,7 @@ sources:
   - src/integrations/contacts/**
   - tests/AxxonContacts.Functions.Tests/**
   - pipelines/azure-pipelines-contacts.yml
-last_reviewed: 2026-08-24
+last_reviewed: 2026-08-31
 -->
 
 # Contacts — Master Contact / Golden Record
@@ -95,6 +95,7 @@ En Power Platform Admin Center:
 | `ServiceBusConnection__fullyQualifiedNamespace` | `tunamespace.servicebus.windows.net` |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | cadena de conexion de App Insights |
 | `KeyVaultUri` | `https://kv-chacomer-eip-{env}.vault.azure.net/` |
+| `MasterOwnerTeamName` | `CLIENTE UNICO` — ver [Owner del master](#owner-del-master-la-business-unit-cliente-unico) |
 
 > Con Managed Identity NO se configura `ServiceBusConnection` como connection string completa.
 > Se usa el formato `__fullyQualifiedNamespace` que activa la auth via MI automáticamente.
@@ -178,6 +179,42 @@ En el Table Map de Contact, agregar Filter Expression (Dataverse → F&O):
 axx_ismaster eq false
 ```
 
+## Owner del master: la business unit CLIENTE UNICO
+
+Los masters —el "cliente único"— se crean asignados al **owner team** que nombra el app
+setting `MasterOwnerTeamName`. La business unit de un registro es la del equipo que lo
+posee, así que alcanza con el equipo para que todos los masters queden en la misma BU y
+la visibilidad se gobierne desde ahí, sin tocar el código cuando cambien los roles.
+
+**Va el nombre del equipo, no su id**, porque el GUID es distinto en cada environment y el
+nombre es el mismo. El *default team* de una business unit se llama igual que la BU, así
+que `CLIENTE UNICO` resuelve el equipo de esa BU sin tener que crear uno aparte:
+
+| Ambiente | Business unit | Default team (owner) |
+|---|---|---|
+| INTE | `fe7fa970-48a5-f111-b8de-7c1e525b9d22` | `ff7fa970-48a5-f111-b8de-7c1e525b9d22` |
+| TEST | `6d07f3e2-49a5-f111-b8de-3833c5e62ee5` | `6e07f3e2-49a5-f111-b8de-3833c5e62ee5` |
+
+El equipo se resuelve **una vez por instancia** (`MasterOwnerTeamCache`, sin TTL: cambiar
+el app setting recicla la app) y sólo pesa al crear un master, no en cada mensaje. Aplica a
+las dos entidades: contact master y account master.
+
+**Sin el setting no se asigna owner** y el master queda del usuario con el que corre la app
+— el comportamiento anterior. Es lo que pasa en un ambiente donde la BU todavía no existe.
+
+**Con el setting puesto y el equipo ausente, el master no se crea**: se lanza, el mensaje
+reintenta y cae al DLQ. Es a propósito. Un master creado en la business unit equivocada no
+falla en ningún lado, queda visible para quien no corresponde, y hay que reasignarlo a mano
+después; el DLQ, en cambio, se ve. El renombrar o borrar el equipo tiene esa consecuencia.
+
+> Sólo aplica a los masters **nuevos**. Los que ya existían quedan con su owner original:
+> moverlos es una reasignación masiva aparte, que este cambio no hace.
+
+En el Bicep es el parámetro `masterOwnerTeamName` (vacío por default), que sólo emite el
+app setting si tiene valor. En INTE el template todavía no administra
+`fa-axxoncontacts-inte` (`deployFunctionApps = false`), así que ahí el setting va **a mano**
+en el portal hasta el cutover — ver [Ambientes](../plataforma/ambientes.md#cutover-de-inte).
+
 ## Comportamiento end-to-end
 
 | Escenario | Comportamiento |
@@ -186,7 +223,7 @@ axx_ismaster eq false
 | Contact es Master (`axx_ismaster = true`) | Plugin early exit — no publica nada |
 | `msdyn_identificationnumber` vacío | Plugin early exit — no publica nada |
 | Dos Raws del mismo cliente al mismo tiempo | Van a la misma Session — se procesan uno a la vez |
-| No existe Master | Function crea Master + BulkAssociate de todos los Raws con misma identification |
+| No existe Master | Function crea Master (owner = equipo de `MasterOwnerTeamName`) + BulkAssociate de todos los Raws con misma identification |
 | Existe Master | Function asocia el Raw y propaga solo los campos del ChangedFields al Master |
 | Function falla | Service Bus reintenta x3 → DLQ |
 | Mensaje no deserializable | Dead Letter inmediato (no reintenta) |
