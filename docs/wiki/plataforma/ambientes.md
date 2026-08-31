@@ -84,9 +84,16 @@ de INTE tal como están, vía los overrides `inteAppName` / `deployToInte`.
 > borró, así que —como thinkchat— nace administrada por Bicep con su propio toggle
 > `deployTicketAtencionApp`. Es la única app del ambiente que autentica con **dos
 > identidades**: Managed Identity contra Dataverse y el app registration `145fd64d` contra
-> Graph, porque el consentimiento de `Sites.ReadWrite.All` quedó sobre el registration. Los
-> pasos de alta están en
+> Graph, porque el consentimiento de `Sites.ReadWrite.All` quedó sobre el registration. Su
+> secreto no se duplica en el vault: sale del `DataverseClientSecret` que ya está cargado,
+> por la indirección `graphClientSecretName`. Los pasos de alta están en
 > [Ticket de Atención › Estado del despliegue](../integraciones/ticketatencion.md#estado-del-despliegue).
+>
+> Desde el 2026-08-31 **también se despliega en TEST**, con `deployTicketAtencionApp` y
+> `deployToTest` prendidos a la vez. Ahí la identidad es más simple —el app registration
+> compartido para Dataverse y para Graph—, pero quedan cuatro altas manuales del lado de
+> Dataverse y de Azure: están en
+> [Lo que el Bicep no puede hacer al promover a TEST](../integraciones/ticketatencion.md#lo-que-el-bicep-no-puede-hacer-al-promover-a-test).
 
 ### Secretos de INTE: `keyvaultinte`, no `kv-chacomer-eip-inte`
 

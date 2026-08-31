@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - pipelines/**
-last_reviewed: 2026-08-26
+last_reviewed: 2026-08-31
 -->
 
 # Pipelines
@@ -120,6 +120,11 @@ Build ──► Deploy_inte (fa-axxon{dominio}-inte) ──► Deploy_test (fa-a
 El binario que llega a TEST es exactamente el que se validó en INTE — no se
 recompila. Para dejar una integración fuera de la promoción, pasarle
 `deployToTest: false` en su pipeline.
+
+**El toggle del pipeline y el del Bicep se prenden juntos.** `deployToTest` sólo dice a
+qué app desplegar; quien la crea es `deploy{Integracion}App` en `test.bicepparam`. Con uno
+solo de los dos, el stage de TEST corre contra una app que no existe y muere en el deploy.
+Hoy es el caso de `ticketatencion`, que se prendió en los dos a la vez.
 
 Alta de un ambiente nuevo, en orden:
 

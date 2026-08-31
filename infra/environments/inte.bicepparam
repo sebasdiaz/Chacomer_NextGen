@@ -60,10 +60,13 @@ param thinkchatFrom = '595215180000'
 // escritura sobre todo SharePoint. El camino que acota el permiso a esta sola app es
 // mover los dos app roles a su managed identity y volver `graphClientId` a vacio.
 //
-// El secreto del registration va en Key Vault con el nombre canonico `GraphClientSecret`.
-// Bicep no lo crea: `az keyvault secret set --vault-name kv-chacomer-eip-inte --name
-// GraphClientSecret --value "<secret>"`. Sin el, `UseClientSecretAuth` queda en false y la
-// app cae en silencio a la MI, que es justamente la que no tiene el permiso.
+// El secreto no se duplica: es el mismo registration que usa Dataverse, y su client secret
+// ya vive en kv-chacomer-eip-inte como `DataverseClientSecret`. `graphClientSecretName`
+// emite la indireccion para que `GraphClientSecret` se resuelva desde ese secret, asi que
+// no hay ningun `az keyvault secret set` pendiente.
+//
+// Si algun dia Graph pasa a su propio app registration, se carga su secreto con el nombre
+// canonico `GraphClientSecret` y este param vuelve a vacio.
 //
 // Y como `deployRoleAssignments` esta en false, la app tambien nace SIN sus roles de
 // Storage y Key Vault. Ese paso no es opcional: AzureWebJobsStorage va por identidad, asi
@@ -72,6 +75,7 @@ param deployTicketAtencionApp = true
 param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacomer-INTE'
 param graphClientId = '145fd64d-3deb-46eb-9f58-736d1ff46a3e'
 param graphTenantId = 'd0e6feed-3ca5-4438-bca3-09cb8ba9814a'
+param graphClientSecretName = 'DataverseClientSecret'
 
 // Fiscal (consultas SET/DNIT + TURUC + partes por RUC contra Dataverse). Es greenfield
 // como thinkchat: `fa-axxonfiscal-inte` no existe creada a mano, asi que no arrastra el
