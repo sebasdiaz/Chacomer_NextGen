@@ -47,20 +47,31 @@ param thinkchatFrom = '595215180000'
 // toggle propio: `deployFunctionApps` sigue en false por las otras cuatro apps de INTE,
 // que todavia no se pueden adoptar.
 //
-// Nace con Managed Identity: este archivo no declara `dataverseClientId`, asi que el
-// template no emite ni `DataverseClientId` ni `GraphClientId` y la app autentica con su
-// propia MI contra Dataverse y contra Graph. Requiere DOS altas que el Bicep no puede
-// hacer, ambas previas al primer uso:
-//   1. La MI como Application User en Dataverse INTE, con rol de seguridad.
-//   2. Los app roles de Graph (Sites.ReadWrite.All, Files.ReadWrite.All) asignados a la MI.
-//      No hay boton en el portal para managed identities: van por Graph API, y los tiene
-//      que otorgar un Global Admin.
+// Autentica con DOS identidades distintas, una por servicio:
+//   - Dataverse, por Managed Identity. Este archivo no declara `dataverseClientId`, asi
+//     que el template no emite `DataverseClientId`. La MI ya esta dada de alta como
+//     Application User en Dataverse INTE (2026-08-28).
+//   - Graph, por el app registration compartido `145fd64d` — es la identidad sobre la que
+//     un Global Admin otorgo Sites.ReadWrite.All y Files.ReadWrite.All. La managed
+//     identity sigue con cero app roles de Graph, asi que por ahi el PDF da 403.
+//
+// El costo de esta decision, para tenerlo escrito: `Sites.ReadWrite.All` es tenant-wide,
+// y ese registration lo comparten las otras seis apps de la EiP — todas quedan con
+// escritura sobre todo SharePoint. El camino que acota el permiso a esta sola app es
+// mover los dos app roles a su managed identity y volver `graphClientId` a vacio.
+//
+// El secreto del registration va en Key Vault con el nombre canonico `GraphClientSecret`.
+// Bicep no lo crea: `az keyvault secret set --vault-name kv-chacomer-eip-inte --name
+// GraphClientSecret --value "<secret>"`. Sin el, `UseClientSecretAuth` queda en false y la
+// app cae en silencio a la MI, que es justamente la que no tiene el permiso.
 //
 // Y como `deployRoleAssignments` esta en false, la app tambien nace SIN sus roles de
 // Storage y Key Vault. Ese paso no es opcional: AzureWebJobsStorage va por identidad, asi
 // que sin los roles de Storage la app ni siquiera arranca. Comandos en infra/README.md.
 param deployTicketAtencionApp = true
 param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacomer-INTE'
+param graphClientId = '145fd64d-3deb-46eb-9f58-736d1ff46a3e'
+param graphTenantId = 'd0e6feed-3ca5-4438-bca3-09cb8ba9814a'
 
 // Fiscal (consultas SET/DNIT + TURUC + partes por RUC contra Dataverse). Es greenfield
 // como thinkchat: `fa-axxonfiscal-inte` no existe creada a mano, asi que no arrastra el
