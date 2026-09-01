@@ -13,8 +13,10 @@ namespace AxxonTicketAtencion.Functions.Services
     /// el otro.
     ///
     /// Dos reglas que el binding impone:
-    ///   - Todo elemento se emite SIEMPRE, aunque venga vacio. Un elemento ausente deja al
-    ///     content control mostrando su placeholder.
+    ///   - Todo elemento se emite SIEMPRE, y NUNCA vacio. Word muestra el placeholder del
+    ///     content control ("Click or tap here to enter text.") tanto cuando el nodo
+    ///     bindeado falta como cuando esta vacio, asi que un dato ausente va como un
+    ///     espacio. Ver <see cref="Element"/>.
     ///   - Todo valor va escapado. Se usa XDocument en lugar de concatenar strings
     ///     justamente para que el escapado no sea opcional.
     /// </summary>
@@ -88,9 +90,23 @@ namespace AxxonTicketAtencion.Functions.Services
             public override System.Text.Encoding Encoding => System.Text.Encoding.UTF8;
         }
 
-        // Un valor null se emite como elemento vacio, nunca se omite: el binding del
-        // template espera el elemento presente.
+        /// <summary>
+        /// Elemento del ticket. Un dato ausente se emite como UN ESPACIO, no como elemento
+        /// vacio.
+        ///
+        /// Emitir el elemento vacio no alcanza: Word muestra el placeholder del content
+        /// control ("Click or tap here to enter text.") tanto cuando el nodo bindeado falta
+        /// como cuando esta vacio. Verificado en el PDF de la cita -000011, donde FECHA REC,
+        /// TELEFONO, MOTOR, CHAPA, ASESOR DE SERVICIO y RAZON SOCIAL salieron con ese texto
+        /// en ingles en vez de en blanco.
+        ///
+        /// El espacio va con xml:space="preserve" para que no lo normalice nadie en el
+        /// camino: sin el atributo, un parser que colapse whitespace deja el nodo vacio otra
+        /// vez y vuelve el placeholder.
+        /// </summary>
         private static XElement Element(string name, string? value) =>
-            new(Ns + name, value ?? string.Empty);
+            string.IsNullOrWhiteSpace(value)
+                ? new XElement(Ns + name, new XAttribute(XNamespace.Xml + "space", "preserve"), " ")
+                : new XElement(Ns + name, value);
     }
 }

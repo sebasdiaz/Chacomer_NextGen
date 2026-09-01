@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Axxon.Eip.Core.Dataverse;
 using AxxonTicketAtencion.Functions.Models;
@@ -174,7 +175,7 @@ namespace AxxonTicketAtencion.Functions.Services
                 "&$select=msauto_value&$orderby=createdon desc&$top=1",
                 "Kilometraje", cancellationToken);
 
-            return rows.Count > 0 ? GetString(rows[0], "msauto_value") : string.Empty;
+            return rows.Count > 0 ? FormatKilometraje(GetString(rows[0], "msauto_value")) : string.Empty;
         }
 
         /// <summary>
@@ -217,6 +218,19 @@ namespace AxxonTicketAtencion.Functions.Services
                 ? (string.Empty, string.Empty)
                 : (GetString(company.Value, "cdm_name"), GetString(company.Value, "axx_legaltext"));
         }
+
+        /// <summary>
+        /// Dataverse devuelve msauto_value como decimal con toda su escala: el ticket salia
+        /// con "KM RECORR: 2100.0000000000". Se recortan los ceros de mas.
+        ///
+        /// Cultura invariante y sin separador de miles a proposito: el valor se imprime tal
+        /// cual en un documento que puede leerse en cualquier lado, y un "2.100" se presta a
+        /// leerse como 2,1 segun de donde sea el que lo mire.
+        /// </summary>
+        private static string FormatKilometraje(string value) =>
+            decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var km)
+                ? km.ToString("0.##", CultureInfo.InvariantCulture)
+                : value;
 
         // -- Lectura de JSON -----------------------------------------------
 

@@ -5,7 +5,7 @@ sources:
   - src/core/Axxon.Eip.Core/Dataverse/DataverseWebApiClient.cs
   - tests/AxxonTicketAtencion.Functions.Tests/**
   - pipelines/azure-pipelines-ticketatencion.yml
-last_reviewed: 2026-08-31
+last_reviewed: 2026-09-01
 -->
 
 # Ticket de Atención — Orden de Reparación
@@ -173,11 +173,26 @@ Dos reglas que el binding impone y que el código respeta:
    `CustomXmlPropertiesPart` y con él el `storeItemID` al que apuntan los `w:dataBinding`.
    Word suele tolerarlo cayendo al binding por namespace; la conversión a PDF de Graph no
    siempre.
-2. **Todo elemento se emite, aunque venga vacío.** Un elemento ausente deja al control
-   mostrando su placeholder.
+2. **Todo elemento se emite, y ninguno va vacío.** Word muestra el placeholder del content
+   control —`Click or tap here to enter text.`— tanto cuando el nodo bindeado **falta** como
+   cuando está **vacío**. Un dato ausente va como un espacio con `xml:space="preserve"`; sin
+   el atributo, cualquier parser que colapse whitespace deja el nodo vacío otra vez.
 
 `TicketDocumentBuilderTests` verifica las dos cosas contra el archivo real que se despliega,
 y el pipeline falla si el `.docx` no quedó en el publish output.
+
+> **La segunda regla se aprendió tarde.** El código emitía el elemento vacío y el test lo
+> daba por bueno, con un comentario que decía que ausente era lo único problemático. El PDF
+> de la cita `-000011` mostró seis campos con el texto en inglés —`FECHA REC`, `TELEFONO`,
+> `MOTOR`, `CHAPA`, `ASESOR DE SERVICIO` y `RAZON SOCIAL`—, todos correspondientes a datos
+> que en Dataverse están efectivamente nulos. El binding nunca estuvo mal.
+
+### Lo que sigue mostrando el placeholder
+
+**Las secciones repetibles.** `Trabajos` y `NotasExternas` son repeating sections: cuando la
+Cita no tiene notas, el elemento va sin hijos y el control imprime una viñeta con el
+placeholder. El espacio no aplica ahí — se arregla emitiendo un ítem en blanco (queda una
+viñeta vacía) o sacando el placeholder del control en el template. Pendiente de decidir.
 
 ## La zona horaria
 

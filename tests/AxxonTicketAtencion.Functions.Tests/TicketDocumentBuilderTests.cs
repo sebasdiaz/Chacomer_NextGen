@@ -113,7 +113,9 @@ namespace AxxonTicketAtencion.Functions.Tests
 
             var root = ReadMappedPart(bytes);
 
-            Assert.Equal(string.Empty, root.Element(Ns + "NumeroCita")!.Value);
+            // Un espacio y no vacio: con el nodo vacio, Word deja el content control
+            // mostrando su placeholder en ingles en vez de imprimir el campo en blanco.
+            Assert.Equal(" ", root.Element(Ns + "NumeroCita")!.Value);
             Assert.Empty(root.Element(Ns + "Trabajos")!.Elements());
         }
 

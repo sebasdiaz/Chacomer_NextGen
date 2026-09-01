@@ -27,12 +27,13 @@ namespace AxxonTicketAtencion.Functions.Tests
         {
             var root = Parse(TicketXmlBuilder.Build(Given.EmptyTicket()));
 
-            // Ausente != vacio: si falta el elemento, el content control se queda con su
-            // placeholder en lugar de mostrarse en blanco.
+            // Ni ausente ni vacio: Word muestra el placeholder del content control en los
+            // dos casos. Un espacio con xml:space="preserve" es lo que lo saca en blanco.
             var found = root.Element(Ns + elemento);
 
             Assert.NotNull(found);
-            Assert.Equal(string.Empty, found!.Value);
+            Assert.Equal(" ", found!.Value);
+            Assert.Equal("preserve", found.Attribute(XNamespace.Xml + "space")?.Value);
         }
 
         [Fact]
