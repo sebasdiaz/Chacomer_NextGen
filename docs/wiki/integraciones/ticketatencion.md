@@ -244,26 +244,34 @@ ninguno.
 administrada por Bicep con su propio toggle `deployTicketAtencionApp`, igual que thinkchat.
 `deployFunctionApps` sigue en `false` por las otras cuatro.
 
-En **TEST** la app se estrena recién ahora, con `deployTicketAtencionApp = true` y
+En **TEST** la app se estrenó el 2026-09-01, con `deployTicketAtencionApp = true` y
 `deployToTest: true` en su pipeline. Ahí no hay problema de adopción —`dataversetest` no
 tenía Function Apps creadas a mano— y la identidad es más simple que en INTE: contra
 Dataverse **y** contra Graph va el app registration compartido, porque TEST ya declara
 `dataverseClientId` y `graphClientId` lo hereda por default.
 
-### Lo que el Bicep no puede hacer al promover a TEST
+> **Los dos toggles del repo no crean la app.** `deployToTest` sólo dice a qué app desplegar;
+> quien la crea es `deployTicketAtencionApp` cuando corre **`NextGen - infra TEST`**, que es
+> otro pipeline. Prender los toggles y no correr infra deja el de la integración en rojo en
+> cada merge, con "La Function App … no existe en el resource group". Pasó con los builds 131
+> y 139.
 
-Verificado el 2026-08-31 contra `operations-b1-chacomer-test`:
+### Estado de TEST
 
-| Falta | Por qué importa |
+Verificado el 2026-09-01 contra `dataversetest` y `operations-b1-chacomer-test`:
+
+| | Estado |
 |---|---|
-| La environment variable **`axx_FUNCTION_URL`** | No existe en TEST (sólo está `axx_D365BaseURL`). Sin ella el botón avisa "Falta configurar axx_FUNCTION_URL" y no llama a nada. |
-| La **biblioteca `msauto_serviceappointment`** en el sitio | TEST tiene **cero** `sharepointdocumentlocation`. Se crea abriendo una vez la pestaña Documentos de una Cita; si no, la función corta con el error explícito de `GetEntityFolderLocationAsync`. |
-| **Republicar el web resource** | El de TEST es del 2026-08-14: no manda la function key ni cae a `wordBase64`. |
-| Los **3 role assignments** de la MI | `deployRoleAssignments` está en `false` en TEST igual que en INTE, así que la app nace sin ellos y sin los de Storage no arranca. |
-| Autorizar la SC y el environment **para el pipeline** | No se heredan — es lo que tuvo a la app de INTE tres días desplegada y vacía. |
+| La app, el plan y su storage | **Hechos** — `NextGen - infra TEST`, build 140. |
+| Los 3 role assignments de la MI (`c348d282-…`) | **Hechos.** |
+| El código | **Desplegado** — `GenerarTicketAtencion` figura en la app y el endpoint responde 401, que es la señal de que hay código. |
+| `GraphClientSecretName` | **Emitido por el template**, así que `GraphClientSecret` se resuelve desde `DataverseClientSecret`. |
+| La biblioteca `msauto_serviceappointment` en el sitio | **Creada** — el org ya tiene sus `sharepointdocumentlocation`. |
+| La environment variable **`axx_FUNCTION_URL`** | **Falta.** En TEST sólo está `axx_D365BaseURL`. Sin ella el botón avisa "Falta configurar axx_FUNCTION_URL" y no llama a nada. |
+| **Republicar el web resource** | **Falta.** El publicado en TEST es del 2026-08-14: no manda la function key ni cae a `wordBase64`. |
 
-Lo que **no** hace falta gestionar: el sitio `B1-Chacomer-TEST` ya está registrado y es el
-default, `msauto_serviceappointment` ya tiene `IsDocumentManagementEnabled = true`, y los
+Lo que nunca hizo falta gestionar: el sitio `B1-Chacomer-TEST` ya estaba registrado y es el
+default, `msauto_serviceappointment` ya tenía `IsDocumentManagementEnabled = true`, y los
 app roles de Graph del registration compartido son **tenant-wide**, así que los mismos que
 destrabaron INTE valen en TEST sin volver a pedirle nada al Global Admin.
 
