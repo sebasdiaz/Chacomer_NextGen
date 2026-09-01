@@ -204,6 +204,20 @@ docs/wiki/plataforma/ambientes.md.
 param deployFiscalApp bool = deployFunctionApps
 
 @description('''
+Toggle propio de la app de Customer Data (consulta de clientes por RUC para satelites).
+Default: sigue a `deployFunctionApps`.
+
+Existe por el mismo motivo que el de fiscal y el de thinkchat: es una app GREENFIELD, no
+hay nada creada a mano que adoptar, asi que puede nacer administrada por Bicep sin esperar
+al cutover que mantiene `deployFunctionApps = false` en INTE.
+
+Con `deployRoleAssignments = false` la app nace SIN sus roles de Storage y Key Vault. Ese
+paso a mano no es opcional: AzureWebJobsStorage va por identidad, asi que sin los roles de
+Storage la app ni siquiera arranca. Comandos en docs/wiki/plataforma/ambientes.md.
+''')
+param deployCustomerDataApp bool = deployFunctionApps
+
+@description('''
 False para que el template NO declare las role assignments de las Function Apps
 (Storage Blob/Queue, Key Vault Secrets User, Service Bus Data Receiver/Sender).
 
@@ -442,6 +456,41 @@ module fiscal 'modules/functionApp.bicep' = if (deployFiscalApp) {
     // SIN dataverseAuthSettings a proposito, mismo criterio que thinkchat y products:
     // la app se autentica con Managed Identity. Requiere dar de alta su MI como
     // Application User en Dataverse antes de usar Dataverse_ConsultaRuc.
+    appSettings: [
+      { name: 'DataverseUrl', value: dataverseUrl }
+    ]
+  }
+}
+
+// Consulta de clientes por RUC para satelites externos: un solo endpoint HTTP de lectura
+// sobre Dataverse. No consume Service Bus y no habla con F&O, asi que conserva el techo de
+// instancias holgado — el mismo criterio que separo a fiscal del backbone de mensajeria.
+//
+// Vive aparte de fa-axxoncustomers a proposito: esa app es F&O-bound y corre con
+// foBoundMaxInstanceCount = 1, asi que colgarle una API publica seria atar el tiempo de
+// respuesta del satelite a la cola de sincronizacion.
+module customerData 'modules/functionApp.bicep' = if (deployCustomerDataApp) {
+  name: 'fa-customerdata'
+  params: {
+    functionAppName: 'fa-axxoncustomerdata-${environmentName}'
+    appKey: 'custdata'
+    environmentName: environmentName
+    location: location
+    tags: tags
+    runtimeVersion: dotnetIsolatedVersion
+    // Solo lectura de Dataverse: no llama a F&O, escala libre.
+    maximumInstanceCount: maxInstanceCount
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
+    keyVaultName: keyVault.outputs.keyVaultName
+    keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
+    needsServiceBus: false
+    // SIN dataverseAuthSettings a proposito, mismo criterio que fiscal y thinkchat: la app
+    // se autentica con Managed Identity. Requiere dar de alta su MI como Application User
+    // en Dataverse antes de la primera consulta.
+    //
+    // Sin allowedOrigins: el consumidor es un satelite server-to-server, no un browser.
     appSettings: [
       { name: 'DataverseUrl', value: dataverseUrl }
     ]

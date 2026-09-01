@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources_new:
   - src/integrations/*/*/*.csproj
-last_reviewed: 2026-08-24
+last_reviewed: 2026-09-01
 -->
 
 # Integraciones
@@ -13,6 +13,7 @@ propio [pipeline](plataforma/pipelines.md).
 |---|---|---|---|
 | [Contacts](integraciones/contacts.md) | Dataverse ↔ Dataverse (+ salida a F&O) | Service Bus | `fa-axxoncontacts-{env}` |
 | [Customers](integraciones/customers.md) | Dataverse → F&O | Service Bus | `fa-axxoncustomers-{env}` |
+| [Customer data](integraciones/customerdata.md) | Dataverse → HTTP | HTTP | `fa-axxoncustomerdata-{env}` |
 | [Customer groups](integraciones/customergroups.md) | F&O → Dataverse | Timer (diario 23:00) | `fa-axxoncustomergroups-{env}` |
 | [Products](integraciones/products.md) | F&O → Dataverse | Timer (diario + horario) | `fa-axxonproducts-{env}` |
 | [Fiscal](integraciones/fiscal.md) | SET/DNIT y TURUC → HTTP | HTTP | `fa-axxonfiscal-{env}` |

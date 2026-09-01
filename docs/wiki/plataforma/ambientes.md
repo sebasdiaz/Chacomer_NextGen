@@ -3,7 +3,7 @@ sources:
   - infra/environments/**
   - infra/scripts/**
   - pipelines/**
-last_reviewed: 2026-08-31
+last_reviewed: 2026-09-01
 -->
 
 # Ambientes
@@ -15,7 +15,7 @@ last_reviewed: 2026-08-31
 
 | Ambiente | Resource group | Dataverse | F&O | Service connection | Function Apps |
 |---|---|---|---|---|---|
-| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover), salvo thinkchat, ticketatencion y fiscal |
+| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover), salvo thinkchat, ticketatencion, fiscal y customerdata |
 | `test` | `dataversetest` | `operations-b1-chacomer-test` | `b1-chacomer-test.sandbox` | `sc-chacomer-eip-test` | administradas por el Bicep |
 | `uat` | *(sin crear)* | — | — | — | — |
 | `prod` | *(sin crear)* | — | — | — | — |
@@ -67,6 +67,13 @@ El orden del cutover, por app:
 > cutover. Nace con **Managed Identity**: `inte.bicepparam` no declara `dataverseClientId`,
 > así que habla con Dataverse por su MI. Ver
 > [Fiscal › Estado del despliegue](../integraciones/fiscal.md#estado-del-despliegue).
+
+> **`fa-axxoncustomerdata-inte` es la última de la serie.** Greenfield igual que las
+> anteriores: estrena en INTE con su toggle `deployCustomerDataApp` y Managed Identity. En
+> **TEST el toggle está explícitamente en `false`** — a diferencia de fiscal y thinkchat, que
+> ahí se crean por default— para que la app no aparezca de rebote antes de que alguien
+> decida promoverla. Ver
+> [Customer data › Estado y despliegue](../integraciones/customerdata.md#estado-y-despliegue).
 
 1. ✅ **Secretos a Key Vault + System-Assigned MI** — [`infra/scripts/Set-InteKeyVaultAuth.ps1`](../../../infra/scripts/Set-InteKeyVaultAuth.ps1).
 2. Dar de alta la MI como Application User en Dataverse y como usuario S2S en F&O.
@@ -146,8 +153,8 @@ Después de cada deploy que la (re)cree, correr:
 
 ```bash
 RG=DataverseINTE
-APP=fa-axxonthinkchat-inte          # o fa-axxonticketatencion-inte / fa-axxonfiscal-inte
-PREFIJO=stthinkchatinte             # o stticket / stfiscalinte
+APP=fa-axxonthinkchat-inte          # o fa-axxonticketatencion-inte / fa-axxonfiscal-inte / fa-axxoncustomerdata-inte
+PREFIJO=stthinkchatinte             # o stticket / stfiscalinte / stcustdatainte
 MI=$(az functionapp show -g $RG -n $APP --query identity.principalId -o tsv)
 ST=$(az storage account list -g $RG --query "[?starts_with(name,'$PREFIJO')].id | [0]" -o tsv)
 KV=$(az keyvault show -n kv-chacomer-eip-inte --query id -o tsv)

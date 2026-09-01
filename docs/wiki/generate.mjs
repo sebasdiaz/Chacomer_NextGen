@@ -252,7 +252,10 @@ function parseFunctions(apps) {
         fn.trigger = 'HTTP';
         const rest = http[2];
         const route = rest.match(/Route\s*=\s*"([^"]*)"/);
-        const methods = [...rest.matchAll(/"([a-z]+)"/g)].map((x) => x[1].toUpperCase());
+        // La ruta se saca ANTES de buscar los verbos: una ruta de una sola palabra en
+        // minuscula ("clientes") matchea igual que un metodo y se colaba como "GET/CLIENTES".
+        const rest2 = rest.replace(/Route\s*=\s*"[^"]*"/, '');
+        const methods = [...rest2.matchAll(/"([a-z]+)"/g)].map((x) => x[1].toUpperCase());
         fn.target = (methods.join('/') || 'ANY') + ' /api/' + (route ? route[1] : '');
         fn.auth = http[1];
       } else {

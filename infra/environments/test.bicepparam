@@ -65,6 +65,16 @@ param deployTicketAtencionApp = true
 param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacomer-TEST'
 param graphClientSecretName = 'DataverseClientSecret'
 
+// Customer Data (consulta de clientes por RUC para satelites). Se estrena en INTE: hasta
+// que ese circuito cierre —la MI dada de alta como Application User y el satelite pegandole
+// de verdad— la app no se crea en TEST.
+//
+// El false es explicito y no un olvido: `deployFunctionApps` esta en true en TEST, asi que
+// sin este param el proximo deploy de infra crearia la app y su storage de rebote, sin que
+// nadie lo haya decidido. Ponerlo en true es el paso de promocion, junto con `deployToTest`
+// en pipelines/azure-pipelines-customerdata.yml.
+param deployCustomerDataApp = false
+
 // Equipo dueño de los masters ("cliente unico"): la BU CLIENTE UNICO existe en TEST
 // (businessunitid 6d07f3e2-49a5-f111-b8de-3833c5e62ee5) y su default team se llama igual
 // (6e07f3e2-49a5-f111-b8de-3833c5e62ee5), verificado 2026-08-31. Si el equipo se renombra

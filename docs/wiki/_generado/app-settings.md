@@ -105,6 +105,18 @@ Suma `dataverseAuthSettings` y `foAuthSettings`, que el template emite sólo si 
 |---|---|---|
 | `DataverseUrl` | `dataverseUrl` | — |
 
+### `fa-axxoncustomerdata-{env}`
+
+- appKey: `custdata`
+- instancias máx.: `maxInstanceCount`
+- consume Service Bus: no
+- publica en Service Bus: no
+- se despliega si: `deployCustomerDataApp`
+
+| Setting | Valor en el template | Default |
+|---|---|---|
+| `DataverseUrl` | `dataverseUrl` | — |
+
 ### `fa-axxonthinkchat-{env}`
 
 - appKey: `thinkchat`

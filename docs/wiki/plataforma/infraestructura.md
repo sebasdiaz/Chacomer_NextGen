@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - infra/**
-last_reviewed: 2026-08-31
+last_reviewed: 2026-09-01
 -->
 
 # Infraestructura (Bicep)
@@ -157,8 +157,14 @@ hasta el 2026-08-31: un ambiente que no lo declare se comporta igual que antes.
 instancias la concurrencia real contra F&O se multiplica por N. Por eso las apps
 que llaman a F&O por mensaje (`contacts`, `customers`, `customergroups`,
 `products`) van con `foBoundMaxInstanceCount = 1`; `fiscal` sólo consulta SET/TURUC y
-Dataverse (lectura) y `thinkchat` es un timer que tampoco toca F&O, así que ambos escalan
-con `maxInstanceCount = 40`. Los dos son params de `main.bicep`, overrideables por ambiente.
+Dataverse (lectura), `customerdata` sólo lee Dataverse y `thinkchat` es un timer que
+tampoco toca F&O, así que los tres escalan con `maxInstanceCount = 40`. Los dos son params
+de `main.bicep`, overrideables por ambiente.
+
+> Es también el motivo por el que la consulta de clientes por RUC no vive dentro de
+> `fa-axxoncustomers`: esa app está capada a una instancia para proteger a F&O, y una API
+> pública ahí adentro queda atada a la cola de sincronización. Ver
+> [Customer data](../integraciones/customerdata.md).
 
 Cada Function App recibe, vía role assignment (least privilege):
 - **Storage Blob Data Owner** + **Storage Queue Data Contributor** sobre su storage (AzureWebJobsStorage y deployment package, todo por identidad).
