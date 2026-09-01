@@ -187,12 +187,20 @@ y el pipeline falla si el `.docx` no quedó en el publish output.
 > `MOTOR`, `CHAPA`, `ASESOR DE SERVICIO` y `RAZON SOCIAL`—, todos correspondientes a datos
 > que en Dataverse están efectivamente nulos. El binding nunca estuvo mal.
 
-### Lo que sigue mostrando el placeholder
+### Las secciones repetibles van con una fila en blanco
 
-**Las secciones repetibles.** `Trabajos` y `NotasExternas` son repeating sections: cuando la
-Cita no tiene notas, el elemento va sin hijos y el control imprime una viñeta con el
-placeholder. El espacio no aplica ahí — se arregla emitiendo un ítem en blanco (queda una
-viñeta vacía) o sacando el placeholder del control en el template. Pendiente de decidir.
+`Trabajos` y `NotasExternas` son repeating sections que envuelven una **fila de tabla**, y un
+repeating section de Word **dibuja siempre al menos un ítem**. Con la lista vacía, el control
+interno no tiene nodo que bindear y muestra su placeholder: en el ticket `CAUT-000200328`, la
+caja NOTAS salió con `Click or tap here to enter text.`
+
+Por eso, cuando la lista viene vacía se emite **un ítem con sus campos en blanco**. El texto
+en inglés desaparece.
+
+> **La fila sigue apareciendo, vacía.** Eso ya no depende del XML: la decide el template, y un
+> content control no sabe de condicionales. Para que la caja NOTAS no muestre nada cuando no
+> hay notas hay que tocar el `.docx` — o aceptar la viñeta vacía, o poner un texto explícito
+> tipo "Sin notas." desde el código.
 
 ## La zona horaria
 
