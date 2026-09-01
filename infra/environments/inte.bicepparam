@@ -93,6 +93,20 @@ param graphClientSecretName = 'DataverseClientSecret'
 // Comandos en docs/wiki/plataforma/ambientes.md.
 param deployFiscalApp = true
 
+// Customer Data (consulta de clientes por RUC para satelites). Greenfield igual que
+// fiscal: no existe creada a mano, asi que nace administrada por Bicep sin arrastrar el
+// problema de adopcion que mantiene `deployFunctionApps` en false.
+//
+// Nace con Managed Identity: este archivo no declara `dataverseClientId`, asi que el
+// template no emite `DataverseClientId` y la app autentica con su propia MI. Requiere el
+// alta de esa MI como Application User en Dataverse INTE, con lectura sobre contact,
+// account y cdm_company — sin eso el endpoint responde 502 en la primera consulta.
+//
+// Y como `deployRoleAssignments` esta en false, la app tambien nace SIN sus roles de
+// Storage y Key Vault. Ese paso no es opcional: sin los roles de Storage no arranca.
+// Comandos en docs/wiki/plataforma/ambientes.md.
+param deployCustomerDataApp = true
+
 // Equipo dueño de los masters ("cliente unico"): la BU CLIENTE UNICO existe en INTE
 // (businessunitid fe7fa970-48a5-f111-b8de-7c1e525b9d22) y su default team se llama igual
 // (ff7fa970-48a5-f111-b8de-7c1e525b9d22), verificado 2026-08-31. Como aca

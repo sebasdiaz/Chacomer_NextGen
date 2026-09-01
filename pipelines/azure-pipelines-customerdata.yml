@@ -1,0 +1,28 @@
+# Pipeline de la integracion Customer Data (consulta de clientes por RUC).
+# Se dispara ante cambios en su proyecto o en el core compartido.
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/integrations/customers/AxxonCustomerData.Functions/**
+      - src/core/**
+      - pipelines/azure-pipelines-customerdata.yml
+      - pipelines/templates/functionapp-build-deploy.yml
+      - pipelines/templates/functionapp-deploy-stage.yml
+
+extends:
+  template: templates/functionapp-build-deploy.yml
+  parameters:
+    appBaseName: 'fa-axxoncustomerdata'
+    projectPath: 'src/integrations/customers/AxxonCustomerData.Functions/AxxonCustomerData.Functions.csproj'
+    # fa-axxoncustomerdata-inte lo crea el Bicep con `deployCustomerDataApp = true` en
+    # inte.bicepparam. Requiere que el pipeline de infra haya corrido primero: este
+    # pipeline despliega sobre una app que ya tiene que existir.
+    deployToInte: true
+    # En TEST la app todavia no existe (`deployCustomerDataApp = false` en test.bicepparam).
+    # Promover es cambiar los dos: el param del Bicep y este flag. Con el flag en true y la
+    # app sin crear, el stage falla en el `config-zip` con un ResourceNotFound.
+    deployToTest: false

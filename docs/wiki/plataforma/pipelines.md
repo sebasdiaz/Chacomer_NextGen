@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - pipelines/**
-last_reviewed: 2026-08-31
+last_reviewed: 2026-09-01
 -->
 
 # Pipelines
@@ -108,7 +108,7 @@ az devops invoke --organization https://dev.azure.com/CHACOMER --area pipelines 
 ## Promoción del código a un ambiente nuevo
 
 La infra crea las Function Apps vacías; el código lo pone el pipeline de cada
-integración. Los 6 pipelines (`azure-pipelines-{contacts,customers,customergroups,products,fiscal,thinkchat}.yml`)
+integración. Los 8 pipelines (`azure-pipelines-{contacts,customers,customerdata,customergroups,products,fiscal,thinkchat,ticketatencion}.yml`)
 extienden `templates/functionapp-build-deploy.yml`, que compila **una sola vez** y
 promueve el mismo artifact en cadena:
 

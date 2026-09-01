@@ -5,7 +5,7 @@ sources_new:
   - src/**/*.csproj
   - src/**/*.pcfproj
   - tests/**/*.csproj
-last_reviewed: 2026-08-24
+last_reviewed: 2026-09-01
 -->
 
 # Visión general de la EiP
@@ -64,6 +64,7 @@ Chacomer_NextGen/
     │   │   └── AxxonContacts.WebResources/
     │   ├── customers/
     │   │   ├── AxxonCustomers.Functions/       (QualifyLead + fo-sync -> CustomersV3)
+    │   │   ├── AxxonCustomerData.Functions/    (HTTP: consulta de clientes por RUC)
     │   │   └── AxxonCustomerGroups.Functions/  (timer F&O -> Dataverse)
     │   ├── fiscal/
     │   │   └── AxxonFiscal.Functions/     (proxy HTTP SET / TURUC)
@@ -81,15 +82,19 @@ Chacomer_NextGen/
         └── MasterContactChildrenGrid/
 ```
 
-## Las seis Function Apps
+## Las Function Apps
 
 Una app por dominio, todas .NET 10 isolated sobre Flex Consumption. El detalle de cada
 una está en su página de [integración](../integraciones.md).
+
+> El título no lleva el número a propósito: venía diciendo "seis" con siete apps en la
+> tabla. La cuenta viva está en el [inventario generado](../_generado/funciones.md).
 
 | Function App | Integración | Disparador |
 |---|---|---|
 | `fa-axxoncontacts-{env}` | [Contacts](../integraciones/contacts.md) | Service Bus — `contact-master-matching`, `account-master-matching` |
 | `fa-axxoncustomers-{env}` | [Customers](../integraciones/customers.md) | Service Bus — `leadcontacts`, `customer-fo-sync` |
+| `fa-axxoncustomerdata-{env}` | [Customer data](../integraciones/customerdata.md) | HTTP — consulta por RUC de un satélite externo |
 | `fa-axxoncustomergroups-{env}` | [Customer groups](../integraciones/customergroups.md) | Timer |
 | `fa-axxonproducts-{env}` | [Products](../integraciones/products.md) | Timer |
 | `fa-axxonfiscal-{env}` | [Fiscal](../integraciones/fiscal.md) | HTTP |

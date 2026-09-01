@@ -3,12 +3,12 @@ sources:
   - src/core/Axxon.Eip.Core/Hosting/**
   - src/integrations/**/host.json
   - infra/modules/monitoring.bicep
-last_reviewed: 2026-08-24
+last_reviewed: 2026-09-01
 -->
 
 # Telemetría
 
-Las 5 apps exportan por **OpenTelemetry** a Application Insights. Son **dos procesos que
+Todas las apps exportan por **OpenTelemetry** a Application Insights (la cuenta viva está en el [inventario generado](../_generado/funciones.md); acá se omite porque venía diciendo 5 con 7 apps desplegadas). Son **dos procesos que
 loguean por separado**, y confundirlos es la causa habitual de "no llega nada":
 
 | | Qué emite | Dónde se configura |
