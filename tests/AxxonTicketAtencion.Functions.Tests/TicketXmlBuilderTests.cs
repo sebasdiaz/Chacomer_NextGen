@@ -92,13 +92,22 @@ namespace AxxonTicketAtencion.Functions.Tests
         }
 
         [Fact]
-        public void Mantiene_los_contenedores_aunque_no_haya_filas()
+        public void Emite_una_fila_en_blanco_cuando_la_seccion_repetible_esta_vacia()
         {
             var root = Parse(TicketXmlBuilder.Build(Given.EmptyTicket()));
 
-            Assert.NotNull(root.Element(Ns + "Trabajos"));
-            Assert.NotNull(root.Element(Ns + "NotasExternas"));
-            Assert.Empty(root.Element(Ns + "Trabajos")!.Elements());
+            // Un repeating section de Word dibuja siempre al menos un item. Sin ninguno,
+            // el control interno muestra su placeholder en ingles: la fila en blanco es lo
+            // que lo evita.
+            var trabajos = root.Element(Ns + "Trabajos")!.Elements(Ns + "Trabajo").ToList();
+            var notas    = root.Element(Ns + "NotasExternas")!.Elements(Ns + "Nota").ToList();
+
+            Assert.Single(trabajos);
+            Assert.Single(notas);
+
+            Assert.Equal(" ", trabajos[0].Element(Ns + "Codigo")!.Value);
+            Assert.Equal(" ", trabajos[0].Element(Ns + "DescripcionTrabajo")!.Value);
+            Assert.Equal(" ", notas[0].Element(Ns + "Texto")!.Value);
         }
 
         [Fact]

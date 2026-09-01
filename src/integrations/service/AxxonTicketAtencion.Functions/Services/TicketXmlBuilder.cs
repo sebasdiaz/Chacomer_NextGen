@@ -57,14 +57,8 @@ namespace AxxonTicketAtencion.Functions.Services
                 Element("AsesorServicio", data.AsesorServicio),
                 Element("TextoLegal",     data.TextoLegal),
 
-                new XElement(Ns + "Trabajos",
-                    data.Trabajos.Select(t => new XElement(Ns + "Trabajo",
-                        Element("Codigo",             t.Codigo),
-                        Element("DescripcionTrabajo", t.Descripcion)))),
-
-                new XElement(Ns + "NotasExternas",
-                    data.NotasExternas.Select(n => new XElement(Ns + "Nota",
-                        Element("Texto", n)))));
+                new XElement(Ns + "Trabajos",  Trabajos(data.Trabajos)),
+                new XElement(Ns + "NotasExternas", Notas(data.NotasExternas)));
 
             var document = new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
 
@@ -83,6 +77,47 @@ namespace AxxonTicketAtencion.Functions.Services
             }
 
             return writer.ToString();
+        }
+
+        /// <summary>
+        /// Items de una seccion repetible, con UNO EN BLANCO cuando la lista viene vacia.
+        ///
+        /// Un repeating section de Word dibuja siempre al menos un item: con la lista vacia
+        /// muestra el placeholder del control interno, que es el mismo texto en ingles que
+        /// aparecia en los campos simples. Verificado en el ticket CAUT-000200328, cuya Cita
+        /// no tiene notas y salio con "Click or tap here to enter text." bajo NOTAS.
+        ///
+        /// La fila en blanco sigue apareciendo —eso lo decide el template, no el XML— pero
+        /// sin texto ajeno adentro.
+        /// </summary>
+        private static IEnumerable<XElement> Trabajos(IReadOnlyList<TicketTrabajo> trabajos)
+        {
+            if (trabajos.Count == 0)
+            {
+                yield return new XElement(Ns + "Trabajo",
+                    Element("Codigo",             null),
+                    Element("DescripcionTrabajo", null));
+
+                yield break;
+            }
+
+            foreach (var trabajo in trabajos)
+                yield return new XElement(Ns + "Trabajo",
+                    Element("Codigo",             trabajo.Codigo),
+                    Element("DescripcionTrabajo", trabajo.Descripcion));
+        }
+
+        /// <inheritdoc cref="Trabajos"/>
+        private static IEnumerable<XElement> Notas(IReadOnlyList<string> notas)
+        {
+            if (notas.Count == 0)
+            {
+                yield return new XElement(Ns + "Nota", Element("Texto", null));
+                yield break;
+            }
+
+            foreach (var nota in notas)
+                yield return new XElement(Ns + "Nota", Element("Texto", nota));
         }
 
         private sealed class Utf8StringWriter : StringWriter
