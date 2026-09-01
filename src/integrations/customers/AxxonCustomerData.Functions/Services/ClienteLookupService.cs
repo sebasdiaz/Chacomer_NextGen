@@ -104,7 +104,9 @@ namespace AxxonCustomerData.Functions.Services
             CustomerAccount        = e.GetAttributeValue<string>(source.CustomerAccountAttribute),
             LegalEntity            = MapLegalEntity(e),
             TipoPersoneriaJuridica = Formatted(e, ClienteAttributes.TipoPersoneria),
-            TipoDocumento          = e.GetAttributeValue<EntityReference>(ClienteAttributes.TipoDocumento)?.Name,
+            // Es un OptionSet, no un lookup: se lee por etiqueta. Y el atributo se llama
+            // distinto en cada tabla, por eso sale de la source y no de las constantes.
+            TipoDocumento          = Formatted(e, source.TipoDocumentoAttribute),
             Email                  = e.GetAttributeValue<string>(ClienteAttributes.Email),
             Telefono               = e.GetAttributeValue<string>(ClienteAttributes.Telefono),
             // statecode 0 = Active en las dos tablas. Si el atributo no vuelve (permisos a

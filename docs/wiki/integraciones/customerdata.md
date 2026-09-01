@@ -93,7 +93,7 @@ raws. Tope de 50 por tabla.
 | `customerAccount` | El write-back de [Customers](customers.md): `msdyn_contactpersonid` / `accountnumber` |
 | `legalEntity` | Lookup `msdyn_company`: id y nombre de la EntityReference, `codigo` de `cdm_companycode` |
 | `tipoPersoneriaJuridica` | Etiqueta de `axx_tipopersoneriajuridica` (OptionSet) |
-| `tipoDocumento` | Nombre de la fila de `axx_tipodocumento` |
+| `tipoDocumento` | Etiqueta del OptionSet: `axx_tipodocumento` en contact, **`axx_tipodedocumento`** en account |
 | `email`, `telefono` | `emailaddress1`, `telephone1` |
 | `activo` | `statecode = 0` |
 
@@ -101,11 +101,20 @@ Tres cosas que confunden si no están escritas:
 
 - **`customerAccount` vacío no significa que el cliente no exista en F&O.** Los masters no
   se sincronizan al ERP, y un raw recién creado puede estar todavía en la cola.
-- **`legalEntity` es null en los masters**, que no tienen compañía. Por eso el link a
-  `cdm_company` es `LeftOuter`: con un inner join la consulta devolvería solo los raws, que
-  es lo contrario de lo que busca quien consulta un RUC.
+- **`legalEntity` puede venir null**, y por eso el link a `cdm_company` es `LeftOuter`: con
+  un inner join esas filas desaparecerían de la respuesta en vez de venir sin compañía.
+  Conceptualmente el master es el que no debería tenerla —es la vista unificada del RUC,
+  no la fila de una legal entity—, pero **en INTE hay masters con `msdyn_company` y hasta
+  con `customerAccount` poblados** (verificado el 2026-09-01 con el RUC `345678`). No
+  asumir que master implica compañía vacía: el consumidor tiene que mirar `esMaster`.
 - **De los OptionSet viaja la etiqueta, no el número.** Del otro lado hay un sistema
   externo: el valor numérico solo tiene sentido con la metadata de Dataverse al lado.
+- **El tipo de documento se llama distinto en cada tabla**: `axx_tipodocumento` en contact
+  y `axx_tipodedocumento` —con el "de" en el medio— en account. Verificado contra la
+  metadata de INTE y de TEST: los dos ambientes lo tienen así, no es el drift de uno. Y en
+  las dos tablas es un **OptionSet**, no un lookup. Pedirle a account el nombre de contact
+  hace que el `RetrieveMultiple` tire, y como accounts se consulta primero, se cae la
+  respuesta entera con un 502.
 
 ### El RUC, con o sin dígito verificador
 

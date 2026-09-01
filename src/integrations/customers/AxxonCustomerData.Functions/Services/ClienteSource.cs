@@ -13,6 +13,7 @@ namespace AxxonCustomerData.Functions.Services
         string NameAttribute,
         string CustomerAccountAttribute,
         string MasterAttribute,
+        string TipoDocumentoAttribute,
         string TipoPersona)
     {
         /// <summary>
@@ -20,14 +21,22 @@ namespace AxxonCustomerData.Functions.Services
         /// a <c>axx_mastercontactid</c>.
         /// </summary>
         public static readonly ClienteSource Contact =
-            new("contact", "fullname", "msdyn_contactpersonid", "axx_mastercontactid", "Fisica");
+            new("contact", "fullname", "msdyn_contactpersonid", "axx_mastercontactid",
+                "axx_tipodocumento", "Fisica");
 
         /// <summary>
         /// account: el write-back va al <c>accountnumber</c> OOB y el master a
         /// <c>axx_masteraccountid</c>.
+        ///
+        /// <b>El tipo de documento se llama distinto que en contact</b>: aca es
+        /// <c>axx_tipodedocumento</c>, con el "de" en el medio. Verificado contra la
+        /// metadata de INTE y de TEST — no es un typo de un ambiente, los dos lo tienen
+        /// asi. Pedirle a account el nombre de contact hace que el RetrieveMultiple tire, y
+        /// como accounts se consulta primero, se cae la respuesta entera.
         /// </summary>
         public static readonly ClienteSource Account =
-            new("account", "name", "accountnumber", "axx_masteraccountid", "Juridica");
+            new("account", "name", "accountnumber", "axx_masteraccountid",
+                "axx_tipodedocumento", "Juridica");
 
         /// <summary>Columnas que pide la consulta, con las comunes a las dos tablas.</summary>
         public string[] Columns =>
@@ -35,11 +44,11 @@ namespace AxxonCustomerData.Functions.Services
             NameAttribute,
             CustomerAccountAttribute,
             MasterAttribute,
+            TipoDocumentoAttribute,
             ClienteAttributes.IdentificationNumber,
             ClienteAttributes.IsMaster,
             ClienteAttributes.Company,
             ClienteAttributes.TipoPersoneria,
-            ClienteAttributes.TipoDocumento,
             ClienteAttributes.Email,
             ClienteAttributes.Telefono,
             ClienteAttributes.StateCode
@@ -56,8 +65,16 @@ namespace AxxonCustomerData.Functions.Services
         public const string IdentificationNumber = "msdyn_identificationnumber";
         public const string IsMaster             = "axx_ismaster";
         public const string Company              = "msdyn_company";
+
+        /// <summary>
+        /// Lookup a la tabla de personerias. Se lee por etiqueta igual que un OptionSet:
+        /// en un lookup, FormattedValues devuelve el nombre primario de la fila apuntada.
+        /// </summary>
         public const string TipoPersoneria       = "axx_tipopersoneriajuridica";
-        public const string TipoDocumento        = "axx_tipodocumento";
+
+        // El tipo de documento NO esta aca: se llama distinto en cada tabla
+        // (axx_tipodocumento / axx_tipodedocumento). Vive en ClienteSource.
+
         public const string Email                = "emailaddress1";
         public const string Telefono             = "telephone1";
         public const string StateCode            = "statecode";

@@ -92,7 +92,11 @@ namespace AxxonCustomerData.Functions.Models
         [JsonPropertyName("tipoPersoneriaJuridica")]
         public string? TipoPersoneriaJuridica { get; init; }
 
-        /// <summary>Nombre de la fila de <c>axx_tipodocumento</c> (el lookup de tipo de documento).</summary>
+        /// <summary>
+        /// Etiqueta del OptionSet de tipo de documento. El atributo se llama distinto en
+        /// cada tabla: <c>axx_tipodocumento</c> en contact y <c>axx_tipodedocumento</c> en
+        /// account.
+        /// </summary>
         [JsonPropertyName("tipoDocumento")]
         public string? TipoDocumento { get; init; }
 
