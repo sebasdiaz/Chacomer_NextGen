@@ -1,0 +1,33 @@
+# Pipeline de la integracion Customer Credit (creditos de clientes desde F&O).
+# Se dispara ante cambios en su proyecto o en el core compartido.
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/integrations/customers/AxxonCustomerCredit.Functions/**
+      - src/core/**
+      - pipelines/azure-pipelines-customercredit.yml
+      - pipelines/templates/functionapp-build-deploy.yml
+      - pipelines/templates/functionapp-deploy-stage.yml
+
+extends:
+  template: templates/functionapp-build-deploy.yml
+  parameters:
+    appBaseName: 'fa-axxoncustomercredit'
+    projectPath: 'src/integrations/customers/AxxonCustomerCredit.Functions/AxxonCustomerCredit.Functions.csproj'
+    # fa-axxoncustomercredit-inte ya existe: lo creo el pipeline de infra con
+    # `deployCustomerCreditApp = true` en inte.bicepparam, y el 2026-09-02 se le asignaron a
+    # mano los roles de Storage y Key Vault que el Bicep no emite mientras
+    # deployRoleAssignments este en false.
+    #
+    # Esos roles no son un tramite: AzureWebJobsStorage va por identidad, asi que sin ellos
+    # el host no arranca. El sintoma es enganoso —el portal dice "We were not able to load
+    # some functions in the list due to errors" y `az functionapp function list` cuelga—
+    # y parece un problema del codigo cuando es de RBAC.
+    deployToInte: true
+    # En TEST la app no existe (`deployCustomerCreditApp = false` en test.bicepparam).
+    # Promover es cambiar los dos: el param del Bicep y este flag.
+    deployToTest: false

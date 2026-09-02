@@ -3,7 +3,7 @@ sources:
   - infra/environments/**
   - infra/scripts/**
   - pipelines/**
-last_reviewed: 2026-09-01
+last_reviewed: 2026-09-02
 -->
 
 # Ambientes
@@ -15,7 +15,7 @@ last_reviewed: 2026-09-01
 
 | Ambiente | Resource group | Dataverse | F&O | Service connection | Function Apps |
 |---|---|---|---|---|---|
-| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover), salvo thinkchat, ticketatencion, fiscal y customerdata |
+| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover), salvo thinkchat, ticketatencion, fiscal, customerdata y customercredit |
 | `test` | `dataversetest` | `operations-b1-chacomer-test` | `b1-chacomer-test.sandbox` | `sc-chacomer-eip-test` | administradas por el Bicep |
 | `uat` | *(sin crear)* | — | — | — | — |
 | `prod` | *(sin crear)* | — | — | — | — |
@@ -74,6 +74,13 @@ El orden del cutover, por app:
 > ahí se crean por default— para que la app no aparezca de rebote antes de que alguien
 > decida promoverla. Ver
 > [Customer data › Estado y despliegue](../integraciones/customerdata.md#estado-y-despliegue).
+
+> **`fa-axxoncustomercredit-inte` sigue el mismo molde, pero todavía no existe.** Greenfield,
+> toggle propio `deployCustomerCreditApp` (ya en `true` en `inte.bicepparam`, en `false` en
+> TEST) y Managed Identity. La diferencia con las anteriores: su MI no se da de alta en
+> Dataverse sino **en F&O**, con lectura sobre las cuatro entidades `DevAxCustCredit*`. El
+> orden en que se prenden las cosas está en
+> [Customer credit › Cómo se estrena](../integraciones/customercredit.md#cómo-se-estrena).
 
 1. ✅ **Secretos a Key Vault + System-Assigned MI** — [`infra/scripts/Set-InteKeyVaultAuth.ps1`](../../../infra/scripts/Set-InteKeyVaultAuth.ps1).
 2. Dar de alta la MI como Application User en Dataverse y como usuario S2S en F&O.
@@ -153,8 +160,8 @@ Después de cada deploy que la (re)cree, correr:
 
 ```bash
 RG=DataverseINTE
-APP=fa-axxonthinkchat-inte          # o fa-axxonticketatencion-inte / fa-axxonfiscal-inte / fa-axxoncustomerdata-inte
-PREFIJO=stthinkchatinte             # o stticket / stfiscalinte / stcustdatainte
+APP=fa-axxonthinkchat-inte          # o fa-axxonticketatencion-inte / fa-axxonfiscal-inte / fa-axxoncustomerdata-inte / fa-axxoncustomercredit-inte
+PREFIJO=stthinkchatinte             # o stticket / stfiscalinte / stcustdatainte / stcustcredit
 MI=$(az functionapp show -g $RG -n $APP --query identity.principalId -o tsv)
 ST=$(az storage account list -g $RG --query "[?starts_with(name,'$PREFIJO')].id | [0]" -o tsv)
 KV=$(az keyvault show -n kv-chacomer-eip-inte --query id -o tsv)

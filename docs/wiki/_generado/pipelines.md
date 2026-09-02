@@ -15,6 +15,7 @@ Lo que declara `pipelines/*.yml`. El detalle de cómo funciona la promoción est
 | Pipeline | App base | INTE | TEST | Tests |
 |---|---|---|---|---|
 | [azure-pipelines-contacts.yml](../../../pipelines/azure-pipelines-contacts.yml) | `fa-axxoncontacts` | si | si | — |
+| [azure-pipelines-customercredit.yml](../../../pipelines/azure-pipelines-customercredit.yml) | `fa-axxoncustomercredit` | si | no | — |
 | [azure-pipelines-customerdata.yml](../../../pipelines/azure-pipelines-customerdata.yml) | `fa-axxoncustomerdata` | si | no | — |
 | [azure-pipelines-customergroups.yml](../../../pipelines/azure-pipelines-customergroups.yml) | `fa-axxoncustomergroups` | `fa-axxoncustomergroup` | si | — |
 | [azure-pipelines-customers.yml](../../../pipelines/azure-pipelines-customers.yml) | `fa-axxoncustomers` | si | si | `tests/AxxonCustomers.Functions.Tests/AxxonCustomers.Functions.Tests.csproj` |
@@ -28,6 +29,7 @@ Lo que declara `pipelines/*.yml`. El detalle de cómo funciona la promoción est
 | App base | paths.include |
 |---|---|
 | `fa-axxoncontacts` | `src/integrations/contacts/AxxonContacts.Functions/**`<br>`src/core/**`<br>`pipelines/azure-pipelines-contacts.yml`<br>`pipelines/templates/functionapp-build-deploy.yml`<br>`pipelines/templates/functionapp-deploy-stage.yml` |
+| `fa-axxoncustomercredit` | `src/integrations/customers/AxxonCustomerCredit.Functions/**`<br>`src/core/**`<br>`pipelines/azure-pipelines-customercredit.yml`<br>`pipelines/templates/functionapp-build-deploy.yml`<br>`pipelines/templates/functionapp-deploy-stage.yml` |
 | `fa-axxoncustomerdata` | `src/integrations/customers/AxxonCustomerData.Functions/**`<br>`src/core/**`<br>`pipelines/azure-pipelines-customerdata.yml`<br>`pipelines/templates/functionapp-build-deploy.yml`<br>`pipelines/templates/functionapp-deploy-stage.yml` |
 | `fa-axxoncustomergroups` | `src/integrations/customers/AxxonCustomerGroups.Functions/**`<br>`src/core/**`<br>`pipelines/azure-pipelines-customergroups.yml`<br>`pipelines/templates/functionapp-build-deploy.yml`<br>`pipelines/templates/functionapp-deploy-stage.yml` |
 | `fa-axxoncustomers` | `src/integrations/customers/AxxonCustomers.Functions/**`<br>`src/core/**`<br>`tests/AxxonCustomers.Functions.Tests/**`<br>`pipelines/azure-pipelines-customers.yml`<br>`pipelines/templates/functionapp-build-deploy.yml`<br>`pipelines/templates/functionapp-deploy-stage.yml` |

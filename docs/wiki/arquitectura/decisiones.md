@@ -28,6 +28,8 @@ sólo el link.
 | 12 | Si Thinkchat devuelve cero templates no se desactiva nada | [Thinkchat › Dos guardas de seguridad](../integraciones/thinkchat.md#dos-guardas-de-seguridad) |
 | 13 | Se compila una vez y se promueve el mismo artifact INTE → TEST; no se recompila | [Pipelines](../plataforma/pipelines.md) |
 | 14 | `LTMCustTable` va por cola propia con payload de referencia; se descartan el satélite, el JSON en plugin y la tabla espejo | [ADR-001](decisiones/001-ltmcusttable.md) |
+| 15 | Una API de lectura que pega a F&O va con un techo de instancias propio (`foReadApiMaxInstanceCount`), ni el de los syncs ni el de las apps que no tocan el ERP | [Customer Credit › El techo de instancias](../integraciones/customercredit.md#el-techo-de-instancias) |
+| 16 | Los endpoints de crédito publican los nombres de campo de F&O sin traducir; un filtro no soportado es `400`, no se ignora | [Customer Credit › Qué devuelve](../integraciones/customercredit.md#qué-devuelve) |
 
 ## Cuándo escribir un ADR aparte
 
