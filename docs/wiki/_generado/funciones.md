@@ -7,7 +7,7 @@ sources: []
 > Generado desde el código por [`generate.mjs`](../generate.mjs). Si algo de acá está
 > mal, el que está mal es el código — o el generador. No edites esta página.
 
-Las 25 Azure Functions de la plataforma, con el disparador que declara cada una.
+Las 29 Azure Functions de la plataforma, con el disparador que declara cada una.
 Entre paréntesis, el placeholder tal como está en el atributo; antes, el valor que le
 asigna `infra/main.bicep`.
 
@@ -22,6 +22,10 @@ asigna `infra/main.bicep`.
 | `ProductGroupSyncFunction` | `fa-axxonproducts-{env}` | Timer | `0 0 23 * * *` _(%Schedules:ProductGroupSync%)_ |
 | `ReleasedProductSyncFunction` | `fa-axxonproducts-{env}` | Timer | `0 0 * * * *` _(%Schedules:ReleasedProductSync%)_ |
 | `ThinkchatTemplateSyncFunction` | `fa-axxonthinkchat-{env}` | Timer | `0 0 */2 * * *` _(%Schedules:ThinkchatTemplateSync%)_ |
+| `Creditos_Clientes` | `fa-axxoncustomercredit-{env}` | HTTP | GET /api/creditos/clientes — auth: Function |
+| `Creditos_Cuotas` | `fa-axxoncustomercredit-{env}` | HTTP | GET /api/creditos/cuotas — auth: Function |
+| `Creditos_Planes` | `fa-axxoncustomercredit-{env}` | HTTP | GET /api/creditos/planes — auth: Function |
+| `Creditos_Resoluciones` | `fa-axxoncustomercredit-{env}` | HTTP | GET /api/creditos/resoluciones — auth: Function |
 | `Clientes_ConsultaPorRuc` | `fa-axxoncustomerdata-{env}` | HTTP | GET /api/clientes — auth: Function |
 | `LtmCustBackfillFunction` | `fa-axxoncustomers-{env}` | HTTP | POST /api/ltm/backfill — auth: Function |
 | `Dataverse_ConsultaRuc` | `fa-axxonfiscal-{env}` | HTTP | GET /api/dataverse/consulta-ruc — auth: Function |

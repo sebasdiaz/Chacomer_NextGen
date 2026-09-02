@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+
+    "FoBaseUrl": "https://b1-chacomer-inte.sandbox.operations.dynamics.com",
+    "FoTenantId": "d0e6feed-3ca5-4438-bca3-09cb8ba9814a",
+    "FoClientId": "145fd64d-3deb-46eb-9f58-736d1ff46a3e",
+    "FoClientSecret": "<solo para desarrollo local — en Azure sale de Key Vault>"
+  }
+}

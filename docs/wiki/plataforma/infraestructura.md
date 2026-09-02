@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - infra/**
-last_reviewed: 2026-09-01
+last_reviewed: 2026-09-02
 -->
 
 # Infraestructura (Bicep)
@@ -154,12 +154,22 @@ hasta el 2026-08-31: un ambiente que no lo declare se comporta igual que antes.
 ### Scale-out y límites de F&O
 
 `maxConcurrentCalls` de host.json es **por instancia**, así que sin techo de
-instancias la concurrencia real contra F&O se multiplica por N. Por eso las apps
-que llaman a F&O por mensaje (`contacts`, `customers`, `customergroups`,
-`products`) van con `foBoundMaxInstanceCount = 1`; `fiscal` sólo consulta SET/TURUC y
-Dataverse (lectura), `customerdata` sólo lee Dataverse y `thinkchat` es un timer que
-tampoco toca F&O, así que los tres escalan con `maxInstanceCount = 40`. Los dos son params
-de `main.bicep`, overrideables por ambiente.
+instancias la concurrencia real contra F&O se multiplica por N. Hay **tres** techos, todos
+params de `main.bicep` overrideables por ambiente:
+
+| Param | Valor | Apps |
+|---|---|---|
+| `foBoundMaxInstanceCount` | 1 | Las que llaman a F&O por mensaje: `contacts`, `customers`, `customergroups`, `products` |
+| `maxInstanceCount` | 40 | Las que **no** tocan F&O: `fiscal` (SET/TURUC + lectura de Dataverse), `customerdata` (sólo Dataverse), `thinkchat` (timer) |
+| `foReadApiMaxInstanceCount` | 5 | `customercredit`, la única API de lectura que sí pega a F&O |
+
+El tercero es el más nuevo y existe porque ninguno de los otros dos servía. Con `1`, la
+latencia de cada consulta del satélite pasa a depender de cuántas haya en vuelo: ese techo
+está pensado para syncs que procesan colas en lote, donde nadie espera del otro lado. Con
+`40`, cuarenta instancias leyendo del ERP le compiten los límites de API a la
+sincronización, que es la que no puede perder. El `5` es conservador y está para revisarse
+con tráfico real: si el satélite empieza a comer `429`, **se sube ese número, no se cambia
+de techo**. Ver [Customer credit](../integraciones/customercredit.md#el-techo-de-instancias).
 
 > Es también el motivo por el que la consulta de clientes por RUC no vive dentro de
 > `fa-axxoncustomers`: esa app está capada a una instancia para proteger a F&O, y una API

@@ -1,0 +1,37 @@
+# Pipeline de la integracion Customer Credit (creditos de clientes desde F&O).
+# Se dispara ante cambios en su proyecto o en el core compartido.
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/integrations/customers/AxxonCustomerCredit.Functions/**
+      - src/core/**
+      - pipelines/azure-pipelines-customercredit.yml
+      - pipelines/templates/functionapp-build-deploy.yml
+      - pipelines/templates/functionapp-deploy-stage.yml
+
+extends:
+  template: templates/functionapp-build-deploy.yml
+  parameters:
+    appBaseName: 'fa-axxoncustomercredit'
+    projectPath: 'src/integrations/customers/AxxonCustomerCredit.Functions/AxxonCustomerCredit.Functions.csproj'
+    # Arranca en false a proposito, aunque inte.bicepparam ya tenga
+    # `deployCustomerCreditApp = true`: la app todavia NO existe en Azure. El Bicep la crea
+    # recien cuando corra el pipeline de infra, y hasta entonces este stage moriria en el
+    # `config-zip` con un ResourceNotFound.
+    #
+    # Se pone en true despues de dos cosas, en este orden:
+    #   1. el pipeline de infra creo fa-axxoncustomercredit-inte (y se le asignaron a mano
+    #      los roles de Storage y Key Vault, porque deployRoleAssignments esta en false);
+    #   2. la Managed Identity de la app quedo dada de alta en F&O INTE con lectura sobre
+    #      las cuatro entidades DevAxCustCredit*.
+    #
+    # Mientras tanto el pipeline igual sirve: el stage de Build compila y valida el proyecto
+    # en cada cambio.
+    deployToInte: false
+    # En TEST la app no existe (`deployCustomerCreditApp = false` en test.bicepparam).
+    # Promover es cambiar los dos: el param del Bicep y este flag.
+    deployToTest: false

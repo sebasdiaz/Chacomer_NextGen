@@ -111,6 +111,25 @@ param foBoundMaxInstanceCount int = 1
 param maxInstanceCount int = 40
 
 @description('''
+Maximo de instancias para las APIs de lectura que SI pegan a F&O (customercredit).
+
+Es un tercer techo a proposito, entre los dos que ya habia, porque ninguno sirve:
+
+- `foBoundMaxInstanceCount` (1) protege a F&O de los syncs, que procesan colas en lote y
+  no tienen a nadie esperando del otro lado. Aplicarselo a una API deja al satelite
+  detras de una sola instancia: la latencia de cada consulta pasa a depender de cuantas
+  esten en vuelo.
+- `maxInstanceCount` (40) es para las apps que NO tocan F&O. Cuarenta instancias de
+  lecturas contra el ERP compiten por sus limites de API con la sincronizacion, que es la
+  que no puede perder.
+
+El valor es conservador y esta para revisarse con trafico real: si el satelite empieza a
+comer 429, el numero se sube aca, no se cambia de techo. Ver
+docs/wiki/arquitectura/decisiones.md.
+''')
+param foReadApiMaxInstanceCount int = 5
+
+@description('''
 CRON de los timer triggers (NCRONTAB de 6 campos: {seg} {min} {hora} {dia} {mes} {dia-semana}, en UTC).
 Van como app settings `Schedules__*`: el doble guion bajo es lo que el host mapea a la
 clave jerarquica `Schedules:*` que piden los bindings `%Schedules:X%`. Sin el setting el
@@ -216,6 +235,19 @@ paso a mano no es opcional: AzureWebJobsStorage va por identidad, asi que sin lo
 Storage la app ni siquiera arranca. Comandos en docs/wiki/plataforma/ambientes.md.
 ''')
 param deployCustomerDataApp bool = deployFunctionApps
+
+@description('''
+Toggle propio de la app de Customer Credit (creditos de clientes desde F&O para satelites).
+Default: sigue a `deployFunctionApps`.
+
+Mismo motivo que fiscal, thinkchat y customerdata: es una app GREENFIELD, no hay nada
+creada a mano que adoptar.
+
+Con `deployRoleAssignments = false` la app nace SIN sus roles de Storage y Key Vault. Ese
+paso a mano no es opcional: AzureWebJobsStorage va por identidad, asi que sin los roles de
+Storage la app ni siquiera arranca. Comandos en docs/wiki/plataforma/ambientes.md.
+''')
+param deployCustomerCreditApp bool = deployFunctionApps
 
 @description('''
 False para que el template NO declare las role assignments de las Function Apps
@@ -494,6 +526,35 @@ module customerData 'modules/functionApp.bicep' = if (deployCustomerDataApp) {
     appSettings: [
       { name: 'DataverseUrl', value: dataverseUrl }
     ]
+  }
+}
+
+// Creditos de clientes (DevAxCustCredit*) para satelites externos: cuatro endpoints HTTP
+// de lectura sobre F&O. No consume Service Bus y no habla con Dataverse.
+//
+// A diferencia de customerdata, esta app SI pega a F&O, asi que no puede escalar libre:
+// va con foReadApiMaxInstanceCount, el techo intermedio que existe justamente para este
+// caso — ver la descripcion de ese param.
+module customerCredit 'modules/functionApp.bicep' = if (deployCustomerCreditApp) {
+  name: 'fa-customercredit'
+  params: {
+    functionAppName: 'fa-axxoncustomercredit-${environmentName}'
+    appKey: 'custcredit'
+    environmentName: environmentName
+    location: location
+    tags: tags
+    runtimeVersion: dotnetIsolatedVersion
+    maximumInstanceCount: foReadApiMaxInstanceCount
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
+    keyVaultName: keyVault.outputs.keyVaultName
+    keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
+    needsServiceBus: false
+    // Sin allowedOrigins: el consumidor es un satelite server-to-server, no un browser.
+    appSettings: concat([
+      { name: 'FoBaseUrl', value: foBaseUrl }
+    ], foAuthSettings)
   }
 }
 

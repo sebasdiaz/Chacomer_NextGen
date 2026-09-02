@@ -5,7 +5,7 @@ sources_new:
   - src/**/*.csproj
   - src/**/*.pcfproj
   - tests/**/*.csproj
-last_reviewed: 2026-09-01
+last_reviewed: 2026-09-02
 -->
 
 # Visión general de la EiP
@@ -94,6 +94,7 @@ una está en su página de [integración](../integraciones.md).
 |---|---|---|
 | `fa-axxoncontacts-{env}` | [Contacts](../integraciones/contacts.md) | Service Bus — `contact-master-matching`, `account-master-matching` |
 | `fa-axxoncustomers-{env}` | [Customers](../integraciones/customers.md) | Service Bus — `leadcontacts`, `customer-fo-sync` |
+| `fa-axxoncustomercredit-{env}` | [Customer credit](../integraciones/customercredit.md) | HTTP — créditos de clientes desde F&O para satélites. **Todavía no creada en ningún ambiente** |
 | `fa-axxoncustomerdata-{env}` | [Customer data](../integraciones/customerdata.md) | HTTP — consulta por RUC de un satélite externo |
 | `fa-axxoncustomergroups-{env}` | [Customer groups](../integraciones/customergroups.md) | Timer |
 | `fa-axxonproducts-{env}` | [Products](../integraciones/products.md) | Timer |
