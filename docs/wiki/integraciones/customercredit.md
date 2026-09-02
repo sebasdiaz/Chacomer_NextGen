@@ -15,10 +15,9 @@ No consume Service Bus, no escribe nada y **no habla con Dataverse**: los datos 
 viven sólo en el ERP. Es la contracara de lectura de [Customers](customers.md), igual que
 [Customer Data](customerdata.md) lo es sobre Dataverse.
 
-> **Estado: sin desplegar.** El código, el Bicep y el pipeline están; la Function App
-> todavía no existe en Azure y los stages de deploy están apagados. Probado end-to-end
-> sólo desde una máquina de desarrollo contra F&O INTE.
-> Ver [Cómo se estrena](#cómo-se-estrena).
+> **Estado: andando en INTE.** `fa-axxoncustomercredit-inte` tiene las cuatro funciones
+> desplegadas y devolviendo datos reales de F&O (verificado el 2026-09-02 con la colección
+> de Postman: 15 requests, 26 assertions en verde). **TEST no existe todavía.**
 
 ## Las cuatro entidades
 
@@ -89,6 +88,14 @@ curl -s -H "x-functions-key: $KEY" "$APP/api/creditos/clientes?cuenta=302001"
 ```bash
 curl -s -H "x-functions-key: $KEY" "$APP/api/creditos/cuotas?cuenta=302001&top=200"
 ```
+
+### Probarlos
+
+Hay una **colección de Postman** versionada, con los cuatro endpoints, sus filtros y tres
+casos que esperan `400`:
+[`src/integrations/customers/AxxonCustomerCredit.Functions/postman/`](../../../src/integrations/customers/AxxonCustomerCredit.Functions/postman/readme.md).
+Trae un environment para INTE y otro para `func start`. La function key **no** viaja en los
+archivos: se completa a mano en el environment.
 
 **Sin CORS**, con el mismo criterio que [Customer Data](customerdata.md): el consumidor
 llama server-to-server con la key, y un preflight anónimo sería superficie pública sin
@@ -207,31 +214,52 @@ de techo**. Ver [Infraestructura › Scale-out](../plataforma/infraestructura.md
 
 ## Cómo se estrena
 
-El código, el Bicep (`deployCustomerCreditApp`) y
-[el pipeline](../../../pipelines/azure-pipelines-customercredit.yml) ya están en el repo,
-pero **los tres stages de deploy están apagados**. La app no existe en Azure todavía.
-Prenderlos fuera de orden es lo que dejó a TicketAtención respondiendo 500 en INTE durante
-días, así que el orden importa:
+Prender las cosas fuera de orden es lo que dejó a TicketAtención respondiendo 500 en INTE
+durante días. Lo que hizo falta en INTE, en orden, el 2026-09-02:
 
-1. **Correr el pipeline de infra de INTE.** `deployCustomerCreditApp = true` ya está en
-   `inte.bicepparam`, así que ese deploy crea `fa-axxoncustomercredit-inte` y su storage.
-2. **Asignar a mano los roles de Storage y Key Vault**, mientras `deployRoleAssignments`
-   siga en `false`. No es opcional: `AzureWebJobsStorage` va por identidad, así que sin los
-   roles de Storage la app ni siquiera arranca. Comandos en
-   [Ambientes](../plataforma/ambientes.md).
-3. **Dar de alta la Managed Identity de la app en F&O INTE**, con lectura sobre las cuatro
-   entidades `DevAxCustCredit*`. Sin eso los endpoints responden `502` sin más pistas.
-4. **Poner `deployToInte: true`** en el pipeline y correrlo.
-5. **Dar de alta la definición del pipeline en Azure DevOps** y autorizarle la service
-   connection y el environment. El YAML en el repo no crea la definición — ver
-   [Doble PR](../runbooks/doble-pr.md).
+1. **Crear la Function App.** El pipeline de infra con `deployCustomerCreditApp = true` en
+   `inte.bicepparam` creó `fa-axxoncustomercredit-inte` y su storage
+   (`stcustcreditinte5uzv3dgp`).
+2. **Asignar a mano los roles de Storage y Key Vault** a la MI
+   `3f2ecbb8-c1d2-4a2e-8102-247701ceb6f4` — Storage Blob Data Owner, Storage Queue Data
+   Contributor y Key Vault Secrets User. Comandos en
+   [Ambientes](../plataforma/ambientes.md). Ver [abajo](#el-paso-2-no-es-un-trámite) por qué
+   éste es el que más cuesta diagnosticar.
+3. **Crear la definición del pipeline en Azure DevOps** — `NextGen - customercredit`, id 17,
+   en la carpeta `NextGen` — y autorizarle la service connection `sc-chacomer-eip-inte` y el
+   environment `inte`. **El YAML en el repo no crea la definición** — ver
+   [Doble PR](../runbooks/doble-pr.md). Éste fue el último bloqueo: con la app creada, los
+   roles puestos y `deployToInte: true` ya mergeado, no pasaba nada porque no había
+   definición que disparar.
 
-Para TEST son otra vez dos cambios, no uno: `deployCustomerCreditApp = true` en
-`test.bicepparam` **y** `deployToTest: true` en el pipeline. Con el flag del pipeline en
-true y la app sin crear, el stage muere en el `config-zip` con un `ResourceNotFound`.
+**El alta de la Managed Identity en F&O INTE no hizo falta.** Estaba anotado acá como paso
+obligatorio y resultó no serlo: el primer request después del deploy devolvió datos, no un
+`502`. No está claro si esa MI ya estaba dada de alta o si el ambiente no lo exige —
+**verificarlo antes de promover a TEST**, donde puede comportarse distinto.
 
-Mientras tanto el pipeline no es inútil: el stage de Build compila el proyecto en cada
-cambio.
+Para TEST son dos cambios, no uno: `deployCustomerCreditApp = true` en `test.bicepparam` **y**
+`deployToTest: true` en el pipeline. Con el flag en true y la app sin crear, el stage muere
+en el `config-zip` con un `ResourceNotFound`.
+
+### El paso 2 no es un trámite
+
+Mientras `deployRoleAssignments` siga en `false`, el Bicep **no** emite los roles y la app
+nace sin ellos. `AzureWebJobsStorage` va por identidad
+(`AzureWebJobsStorage__blobServiceUri`), así que sin `Storage Blob Data Owner` **el host no
+arranca**, y el síntoma no señala a RBAC por ningún lado:
+
+- el portal muestra *"We were not able to load some functions in the list due to errors"*;
+- `az functionapp function list` cuelga sin responder, porque pega a la misma admin API;
+- la raíz de la app responde `200` con la página *"Your Azure Function App is up and
+  running"*, que es la de app vacía.
+
+Parece un problema del código desplegado y es de permisos. Verificado en INTE el
+2026-09-02: antes de los roles, `az role assignment list` sobre esa MI devolvía **cero
+filas**, contra las tres que sí tiene `fa-axxoncustomerdata-inte`.
+
+Con los roles puestos y la app reiniciada, el host levanta y los endpoints devuelven `404`
+—no `502`— hasta que el pipeline suba el código.
+
 
 ## Pendiente de documentar
 

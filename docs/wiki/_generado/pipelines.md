@@ -15,7 +15,7 @@ Lo que declara `pipelines/*.yml`. El detalle de cómo funciona la promoción est
 | Pipeline | App base | INTE | TEST | Tests |
 |---|---|---|---|---|
 | [azure-pipelines-contacts.yml](../../../pipelines/azure-pipelines-contacts.yml) | `fa-axxoncontacts` | si | si | — |
-| [azure-pipelines-customercredit.yml](../../../pipelines/azure-pipelines-customercredit.yml) | `fa-axxoncustomercredit` | no | no | — |
+| [azure-pipelines-customercredit.yml](../../../pipelines/azure-pipelines-customercredit.yml) | `fa-axxoncustomercredit` | si | no | — |
 | [azure-pipelines-customerdata.yml](../../../pipelines/azure-pipelines-customerdata.yml) | `fa-axxoncustomerdata` | si | no | — |
 | [azure-pipelines-customergroups.yml](../../../pipelines/azure-pipelines-customergroups.yml) | `fa-axxoncustomergroups` | `fa-axxoncustomergroup` | si | — |
 | [azure-pipelines-customers.yml](../../../pipelines/azure-pipelines-customers.yml) | `fa-axxoncustomers` | si | si | `tests/AxxonCustomers.Functions.Tests/AxxonCustomers.Functions.Tests.csproj` |
