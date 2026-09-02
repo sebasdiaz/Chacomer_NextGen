@@ -13,6 +13,7 @@ propio [pipeline](plataforma/pipelines.md).
 |---|---|---|---|
 | [Contacts](integraciones/contacts.md) | Dataverse ↔ Dataverse (+ salida a F&O) | Service Bus | `fa-axxoncontacts-{env}` |
 | [Customers](integraciones/customers.md) | Dataverse → F&O | Service Bus | `fa-axxoncustomers-{env}` |
+| [Customer credit](integraciones/customercredit.md) | F&O → HTTP | HTTP | `fa-axxoncustomercredit-{env}` (sin crear) |
 | [Customer data](integraciones/customerdata.md) | Dataverse → HTTP | HTTP | `fa-axxoncustomerdata-{env}` |
 | [Customer groups](integraciones/customergroups.md) | F&O → Dataverse | Timer (diario 23:00) | `fa-axxoncustomergroups-{env}` |
 | [Products](integraciones/products.md) | F&O → Dataverse | Timer (diario + horario) | `fa-axxonproducts-{env}` |

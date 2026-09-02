@@ -117,6 +117,20 @@ Suma `dataverseAuthSettings` y `foAuthSettings`, que el template emite sólo si 
 |---|---|---|
 | `DataverseUrl` | `dataverseUrl` | — |
 
+### `fa-axxoncustomercredit-{env}`
+
+- appKey: `custcredit`
+- instancias máx.: `foReadApiMaxInstanceCount`
+- consume Service Bus: no
+- publica en Service Bus: no
+- se despliega si: `deployCustomerCreditApp`
+
+| Setting | Valor en el template | Default |
+|---|---|---|
+| `FoBaseUrl` | `foBaseUrl` | — |
+
+Suma `foAuthSettings`, que el template emite sólo si el ambiente declara el client id correspondiente.
+
 ### `fa-axxonthinkchat-{env}`
 
 - appKey: `thinkchat`

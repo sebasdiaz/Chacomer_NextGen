@@ -107,6 +107,18 @@ param deployFiscalApp = true
 // Comandos en docs/wiki/plataforma/ambientes.md.
 param deployCustomerDataApp = true
 
+// Customer Credit (creditos de clientes desde F&O para satelites). Se estrena en INTE.
+//
+// Autentica contra F&O con su Managed Identity: este archivo no declara `foClientId`, asi
+// que el template no emite `FoClientId` y no hay secret que rotar. Requiere dar de alta esa
+// MI en F&O INTE con lectura sobre las cuatro entidades DevAxCustCredit* — sin eso los
+// endpoints responden 502 en la primera consulta.
+//
+// Y como `deployRoleAssignments` esta en false, la app tambien nace SIN sus roles de
+// Storage y Key Vault. Ese paso no es opcional: sin los roles de Storage no arranca.
+// Comandos en docs/wiki/plataforma/ambientes.md.
+param deployCustomerCreditApp = true
+
 // Equipo dueño de los masters ("cliente unico"): la BU CLIENTE UNICO existe en INTE
 // (businessunitid fe7fa970-48a5-f111-b8de-7c1e525b9d22) y su default team se llama igual
 // (ff7fa970-48a5-f111-b8de-7c1e525b9d22), verificado 2026-08-31. Como aca

@@ -75,6 +75,15 @@ param graphClientSecretName = 'DataverseClientSecret'
 // en pipelines/azure-pipelines-customerdata.yml.
 param deployCustomerDataApp = false
 
+// Customer Credit (creditos de clientes desde F&O). Mismo criterio que customerdata: se
+// estrena en INTE y no se crea en TEST hasta que ese circuito cierre.
+//
+// El false es explicito y no un olvido: `deployFunctionApps` esta en true en TEST, asi que
+// sin este param el proximo deploy de infra crearia la app y su storage de rebote. Ponerlo
+// en true es el paso de promocion, junto con `deployToTest` en
+// pipelines/azure-pipelines-customercredit.yml.
+param deployCustomerCreditApp = false
+
 // Equipo dueño de los masters ("cliente unico"): la BU CLIENTE UNICO existe en TEST
 // (businessunitid 6d07f3e2-49a5-f111-b8de-3833c5e62ee5) y su default team se llama igual
 // (6e07f3e2-49a5-f111-b8de-3833c5e62ee5), verificado 2026-08-31. Si el equipo se renombra
