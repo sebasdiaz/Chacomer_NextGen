@@ -6,7 +6,26 @@
 | `CustomerCredit-INTE.postman_environment.json` | Apunta a `fa-axxoncustomercredit-inte` |
 | `CustomerCredit-Local.postman_environment.json` | Apunta a `http://localhost:7099` (`func start`) |
 
-Importar los tres en Postman y elegir el environment antes de mandar nada.
+Postman importa los `.json` (arrastrarlos a *Import → Files*). **No importa un `.zip`**:
+ese formato lo acepta sólo para un data dump exportado por el propio Postman.
+
+**La colección funciona sola, sin importar ningún environment**: trae las mismas variables
+como defaults a nivel colección, apuntando a INTE. El environment sigue siendo lo cómodo
+para saltar entre INTE y local, pero es opcional.
+
+### Si el import del environment falla con un error de formato
+
+Le faltan estos dos campos, que es lo que el importador usa para reconocer que el archivo
+es un environment:
+
+```json
+"_postman_exported_at": "2026-09-02T18:00:00.000Z",
+"_postman_exported_using": "Postman/11.19.0"
+```
+
+No alcanza con que el JSON sea válido y con que `_postman_variable_scope` esté puesto:
+Newman carga el archivo igual sin ellos, así que el error aparece **sólo** al importar en la
+app. Un environment escrito a mano los necesita.
 
 ## La function key
 
@@ -32,9 +51,11 @@ ningún request la lleva escrita.
 | `creditId`, `requestId` | Los llena solo **Planes › primeras N filas** cuando hay datos |
 | `top` | 1 a 1000 |
 
-El encadenado usa `pm.environment.set`, no variables de colección: en Postman el environment
-tiene más precedencia, así que una variable de colección quedaría tapada por la del
-environment y el request siguiente viajaría sin filtro.
+El encadenado escribe **donde después se va a leer**: si hay un environment seleccionado va
+ahí, y si no, a la variable de colección. No es un detalle cosmético — en Postman el
+environment le gana en precedencia a la colección, así que escribir en la de colección con
+un environment activo no serviría de nada y el request siguiente viajaría **sin filtro**,
+devolviendo la tabla entera y pareciendo que funcionó.
 
 ## Correrla entera
 
@@ -42,7 +63,8 @@ environment y el request siguiente viajaría sin filtro.
 npx newman run CustomerCredit.postman_collection.json -e CustomerCredit-INTE.postman_environment.json --env-var "functionKey=$KEY"
 ```
 
-Verificado contra INTE el 2026-09-02: 15 requests, 26 assertions, todo en verde.
+Verificado contra INTE el 2026-09-02, **con environment y sin él**: 15 requests, 26
+assertions, todo en verde en los dos modos.
 
 **`planes`, `cuotas` y `resoluciones` devuelven `cantidad: 0` y eso no es una falla**: esas
 tres tablas están vacías en INTE. Por eso sus requests no afirman que haya filas — un test

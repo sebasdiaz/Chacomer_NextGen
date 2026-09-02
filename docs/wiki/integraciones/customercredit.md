@@ -94,8 +94,15 @@ curl -s -H "x-functions-key: $KEY" "$APP/api/creditos/cuotas?cuenta=302001&top=2
 Hay una **colección de Postman** versionada, con los cuatro endpoints, sus filtros y tres
 casos que esperan `400`:
 [`src/integrations/customers/AxxonCustomerCredit.Functions/postman/`](../../../src/integrations/customers/AxxonCustomerCredit.Functions/postman/readme.md).
-Trae un environment para INTE y otro para `func start`. La function key **no** viaja en los
-archivos: se completa a mano en el environment.
+Trae además un environment para INTE y otro para `func start`, aunque **la colección
+funciona sola**: las mismas variables están como defaults a nivel colección.
+
+La function key **no** viaja en ninguno de los archivos: es un secreto y esto está
+versionado, así que se completa a mano.
+
+Un environment escrito a mano necesita `_postman_exported_at` y `_postman_exported_using`
+o el importador de Postman lo rechaza por formato — y eso **no** se detecta corriendo la
+colección con newman, que lo carga igual. Está explicado en el readme de la carpeta.
 
 **Sin CORS**, con el mismo criterio que [Customer Data](customerdata.md): el consumidor
 llama server-to-server con la key, y un preflight anónimo sería superficie pública sin

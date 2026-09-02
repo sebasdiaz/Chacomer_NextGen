@@ -8,9 +8,21 @@
   "auth": {
     "type": "apikey",
     "apikey": [
-      { "key": "key", "value": "x-functions-key", "type": "string" },
-      { "key": "value", "value": "{{functionKey}}", "type": "string" },
-      { "key": "in", "value": "header", "type": "string" }
+      {
+        "key": "key",
+        "value": "x-functions-key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{functionKey}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
     ]
   },
   "event": [
@@ -39,8 +51,38 @@
   ],
   "variable": [
     {
-      "key": "docs",
-      "value": "docs/wiki/integraciones/customercredit.md",
+      "key": "baseUrl",
+      "value": "https://fa-axxoncustomercredit-inte.azurewebsites.net/api",
+      "type": "string"
+    },
+    {
+      "key": "functionKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cuenta",
+      "value": "302001",
+      "type": "string"
+    },
+    {
+      "key": "dataAreaId",
+      "value": "us01",
+      "type": "string"
+    },
+    {
+      "key": "creditId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "requestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "top",
+      "value": "10",
       "type": "string"
     }
   ],
@@ -76,10 +118,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/clientes?top={{top}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "clientes"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "clientes"
+              ],
               "query": [
-                { "key": "top", "value": "{{top}}", "description": "1 a 1000. Default 100." }
+                {
+                  "key": "top",
+                  "value": "{{top}}",
+                  "description": "1 a 1000. Default 100."
+                }
               ]
             },
             "description": "Sin filtros: devuelve la tabla acotada por `top`, de todas las legal entities."
@@ -110,12 +161,30 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/clientes?cuenta={{cuenta}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "clientes"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "clientes"
+              ],
               "query": [
-                { "key": "cuenta", "value": "{{cuenta}}", "description": "CustomerAccount de F&O." },
-                { "key": "dataAreaId", "value": "{{dataAreaId}}", "description": "Legal entity. Activar para acotar a una sola.", "disabled": true },
-                { "key": "top", "value": "{{top}}", "disabled": true }
+                {
+                  "key": "cuenta",
+                  "value": "{{cuenta}}",
+                  "description": "CustomerAccount de F&O."
+                },
+                {
+                  "key": "dataAreaId",
+                  "value": "{{dataAreaId}}",
+                  "description": "Legal entity. Activar para acotar a una sola.",
+                  "disabled": true
+                },
+                {
+                  "key": "top",
+                  "value": "{{top}}",
+                  "disabled": true
+                }
               ]
             },
             "description": "Una cuenta suele existir en **varias legal entities**: la respuesta trae una fila por cada una. Activar `dataAreaId` para quedarse con una."
@@ -144,11 +213,22 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/clientes?cuenta={{cuenta}}&dataAreaId={{dataAreaId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "clientes"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "clientes"
+              ],
               "query": [
-                { "key": "cuenta", "value": "{{cuenta}}" },
-                { "key": "dataAreaId", "value": "{{dataAreaId}}" }
+                {
+                  "key": "cuenta",
+                  "value": "{{cuenta}}"
+                },
+                {
+                  "key": "dataAreaId",
+                  "value": "{{dataAreaId}}"
+                }
               ]
             }
           }
@@ -169,12 +249,21 @@
                 "exec": [
                   "pm.test('200', () => pm.response.to.have.status(200));",
                   "const b = pm.response.json();",
+                  "",
+                  "// Guarda donde se vaya a leer: el environment le gana a la variable de coleccion,",
+                  "// asi que escribir en la de coleccion con un environment activo no serviria de nada.",
+                  "function guardar(clave, valor) {",
+                  "    try {",
+                  "        if (pm.environment && pm.environment.name) { pm.environment.set(clave, valor); return; }",
+                  "    } catch (e) { /* sin environment seleccionado */ }",
+                  "    pm.collectionVariables.set(clave, valor);",
+                  "}",
+                  "",
                   "if (b.cantidad === 0) {",
                   "    console.warn('0 filas. En INTE esta tabla estaba vacia al 2026-09-02: no es un error.');",
                   "} else {",
-                  "    // Guarda el primer CreditId para encadenar con las cuotas.",
-                  "    pm.environment.set('creditId', b.datos[0].CreditId);",
-                  "    pm.environment.set('requestId', b.datos[0].RequestId);",
+                  "    guardar('creditId', b.datos[0].CreditId);",
+                  "    guardar('requestId', b.datos[0].RequestId);",
                   "    console.log('creditId guardado:', b.datos[0].CreditId);",
                   "}"
                 ]
@@ -186,9 +275,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/planes?top={{top}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "planes"],
-              "query": [{ "key": "top", "value": "{{top}}" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "planes"
+              ],
+              "query": [
+                {
+                  "key": "top",
+                  "value": "{{top}}"
+                }
+              ]
             },
             "description": "Si devuelve filas, guarda el primer `CreditId` y `RequestId` en variables de coleccion para encadenar con **Cuotas** y **Resoluciones**."
           }
@@ -200,12 +299,28 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/planes?cuenta={{cuenta}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "planes"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "planes"
+              ],
               "query": [
-                { "key": "cuenta", "value": "{{cuenta}}" },
-                { "key": "dataAreaId", "value": "{{dataAreaId}}", "disabled": true },
-                { "key": "top", "value": "{{top}}", "disabled": true }
+                {
+                  "key": "cuenta",
+                  "value": "{{cuenta}}"
+                },
+                {
+                  "key": "dataAreaId",
+                  "value": "{{dataAreaId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "top",
+                  "value": "{{top}}",
+                  "disabled": true
+                }
               ]
             }
           }
@@ -217,9 +332,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/planes?creditId={{creditId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "planes"],
-              "query": [{ "key": "creditId", "value": "{{creditId}}" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "planes"
+              ],
+              "query": [
+                {
+                  "key": "creditId",
+                  "value": "{{creditId}}"
+                }
+              ]
             },
             "description": "`creditId` se llena solo si antes corriste **Planes - primeras N filas** con datos."
           }
@@ -231,9 +356,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/planes?requestId={{requestId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "planes"],
-              "query": [{ "key": "requestId", "value": "{{requestId}}" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "planes"
+              ],
+              "query": [
+                {
+                  "key": "requestId",
+                  "value": "{{requestId}}"
+                }
+              ]
             },
             "description": "`RequestId` es el mismo id que `SolicitudId` en **Resoluciones**: es por donde se cruza un plan con su resolucion."
           }
@@ -251,9 +386,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/cuotas?top={{top}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "cuotas"],
-              "query": [{ "key": "top", "value": "{{top}}" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "cuotas"
+              ],
+              "query": [
+                {
+                  "key": "top",
+                  "value": "{{top}}"
+                }
+              ]
             }
           }
         },
@@ -264,11 +409,23 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/cuotas?cuenta={{cuenta}}&top=200",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "cuotas"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "cuotas"
+              ],
               "query": [
-                { "key": "cuenta", "value": "{{cuenta}}" },
-                { "key": "top", "value": "200", "description": "Las cuotas son muchas por cliente: subir el top o filtrar por creditId." }
+                {
+                  "key": "cuenta",
+                  "value": "{{cuenta}}"
+                },
+                {
+                  "key": "top",
+                  "value": "200",
+                  "description": "Las cuotas son muchas por cliente: subir el top o filtrar por creditId."
+                }
               ]
             },
             "description": "Se puede pedir por cuenta directamente porque F&O denormaliza `CustomerAccount` en la cuota: no hace falta resolver antes los planes.\n\n**Mirar `truncado`**: con mas de 1000 cuotas hay que filtrar por `creditId`, no hay paginacion."
@@ -296,11 +453,22 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/cuotas?creditId={{creditId}}&top=200",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "cuotas"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "cuotas"
+              ],
               "query": [
-                { "key": "creditId", "value": "{{creditId}}" },
-                { "key": "top", "value": "200" }
+                {
+                  "key": "creditId",
+                  "value": "{{creditId}}"
+                },
+                {
+                  "key": "top",
+                  "value": "200"
+                }
               ]
             }
           }
@@ -318,9 +486,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/resoluciones?top={{top}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "resoluciones"],
-              "query": [{ "key": "top", "value": "{{top}}" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "resoluciones"
+              ],
+              "query": [
+                {
+                  "key": "top",
+                  "value": "{{top}}"
+                }
+              ]
             }
           }
         },
@@ -331,11 +509,24 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/resoluciones?solicitudId={{requestId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "resoluciones"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "resoluciones"
+              ],
               "query": [
-                { "key": "solicitudId", "value": "{{requestId}}", "description": "Es el RequestId del plan." },
-                { "key": "dataAreaId", "value": "{{dataAreaId}}", "disabled": true }
+                {
+                  "key": "solicitudId",
+                  "value": "{{requestId}}",
+                  "description": "Es el RequestId del plan."
+                },
+                {
+                  "key": "dataAreaId",
+                  "value": "{{dataAreaId}}",
+                  "disabled": true
+                }
               ]
             }
           }
@@ -367,9 +558,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/resoluciones?cuenta={{cuenta}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "resoluciones"],
-              "query": [{ "key": "cuenta", "value": "{{cuenta}}" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "resoluciones"
+              ],
+              "query": [
+                {
+                  "key": "cuenta",
+                  "value": "{{cuenta}}"
+                }
+              ]
             },
             "description": "Un filtro no soportado es un error, no algo que se ignora: si devolviera 200 con la tabla entera, el consumidor creeria que filtro por cliente."
           }
@@ -393,9 +594,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/clientes?top=99999",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "clientes"],
-              "query": [{ "key": "top", "value": "99999" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "clientes"
+              ],
+              "query": [
+                {
+                  "key": "top",
+                  "value": "99999"
+                }
+              ]
             }
           }
         },
@@ -420,9 +631,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/creditos/clientes?ruc=80054203-7",
-              "host": ["{{baseUrl}}"],
-              "path": ["creditos", "clientes"],
-              "query": [{ "key": "ruc", "value": "80054203-7" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "clientes"
+              ],
+              "query": [
+                {
+                  "key": "ruc",
+                  "value": "80054203-7"
+                }
+              ]
             },
             "description": "Este endpoint no consulta por RUC. El que si lo hace es **Customer Data**, sobre Dataverse."
           }
