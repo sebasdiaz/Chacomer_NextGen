@@ -18,20 +18,16 @@ extends:
   parameters:
     appBaseName: 'fa-axxoncustomercredit'
     projectPath: 'src/integrations/customers/AxxonCustomerCredit.Functions/AxxonCustomerCredit.Functions.csproj'
-    # Arranca en false a proposito, aunque inte.bicepparam ya tenga
-    # `deployCustomerCreditApp = true`: la app todavia NO existe en Azure. El Bicep la crea
-    # recien cuando corra el pipeline de infra, y hasta entonces este stage moriria en el
-    # `config-zip` con un ResourceNotFound.
+    # fa-axxoncustomercredit-inte ya existe: lo creo el pipeline de infra con
+    # `deployCustomerCreditApp = true` en inte.bicepparam, y el 2026-09-02 se le asignaron a
+    # mano los roles de Storage y Key Vault que el Bicep no emite mientras
+    # deployRoleAssignments este en false.
     #
-    # Se pone en true despues de dos cosas, en este orden:
-    #   1. el pipeline de infra creo fa-axxoncustomercredit-inte (y se le asignaron a mano
-    #      los roles de Storage y Key Vault, porque deployRoleAssignments esta en false);
-    #   2. la Managed Identity de la app quedo dada de alta en F&O INTE con lectura sobre
-    #      las cuatro entidades DevAxCustCredit*.
-    #
-    # Mientras tanto el pipeline igual sirve: el stage de Build compila y valida el proyecto
-    # en cada cambio.
-    deployToInte: false
+    # Esos roles no son un tramite: AzureWebJobsStorage va por identidad, asi que sin ellos
+    # el host no arranca. El sintoma es enganoso —el portal dice "We were not able to load
+    # some functions in the list due to errors" y `az functionapp function list` cuelga—
+    # y parece un problema del codigo cuando es de RBAC.
+    deployToInte: true
     # En TEST la app no existe (`deployCustomerCreditApp = false` en test.bicepparam).
     # Promover es cambiar los dos: el param del Bicep y este flag.
     deployToTest: false

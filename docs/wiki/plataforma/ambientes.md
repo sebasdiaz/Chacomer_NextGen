@@ -161,7 +161,7 @@ Después de cada deploy que la (re)cree, correr:
 ```bash
 RG=DataverseINTE
 APP=fa-axxonthinkchat-inte          # o fa-axxonticketatencion-inte / fa-axxonfiscal-inte / fa-axxoncustomerdata-inte / fa-axxoncustomercredit-inte
-PREFIJO=stthinkchatinte             # o stticket / stfiscalinte / stcustdatainte
+PREFIJO=stthinkchatinte             # o stticket / stfiscalinte / stcustdatainte / stcustcredit
 MI=$(az functionapp show -g $RG -n $APP --query identity.principalId -o tsv)
 ST=$(az storage account list -g $RG --query "[?starts_with(name,'$PREFIJO')].id | [0]" -o tsv)
 KV=$(az keyvault show -n kv-chacomer-eip-inte --query id -o tsv)

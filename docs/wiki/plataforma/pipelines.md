@@ -29,6 +29,7 @@ Lo que la matriz no explica:
 | `fiscal` sí va a INTE, pero la app la crea el Bicep | `fa-axxonfiscal-inte` no existe creada a mano: nace del toggle `deployFiscalApp`. **Este pipeline no la crea** — hasta que no corrió el de infra, el deploy falla |
 | `thinkchat` no va a TEST | `fa-axxonthinkchat-test` todavía no existe. Se prende cuando el pipeline de infra TEST la cree, y después de asignarle los roles a mano |
 | `customergroups` despliega a `fa-axxoncustomergroup` en INTE | Ahí la app se creó a mano con el nombre en singular. Se unifica en el cutover |
+| `customercredit` va a INTE pero no a TEST | La app de TEST no existe (`deployCustomerCreditApp = false`). En INTE el deploy se prendió recién después de que el Bicep creara la app **y** de asignarle los roles a mano: sin ellos el host no arranca y el error no menciona RBAC — ver [Customer credit](../integraciones/customercredit.md#el-paso-2-no-es-un-trámite) |
 
 Todos disparan también ante cambios en su propio `.yml` y en los templates.
 

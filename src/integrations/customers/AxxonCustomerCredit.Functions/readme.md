@@ -59,6 +59,44 @@ curl -s "http://localhost:7099/api/creditos/cuotas?creditId=CRE-0001&top=50"
 curl -s "http://localhost:7099/api/creditos/resoluciones?solicitudId=SOL-0001"
 ```
 
+## Postman
+
+Colección y environments (INTE y local) en [`postman/`](postman/readme.md). La function key
+no viaja en los archivos.
+
+## Si no arrancan las funciones
+
+### `Worker runtime cannot be 'None'. Please set a valid runtime.`
+
+**Falta `local.settings.json`.** El host muere de una y no carga ninguna función. Pasa
+siempre después de clonar o de cambiar de rama: el archivo está en el `.gitignore`, así que
+no viaja en el repo. Lo resuelve el `cp` de arriba.
+
+Es el mismo síntoma si `func start` se corre desde la raíz del repo en vez de desde esta
+carpeta: el host no encuentra el `host.json` ni el `local.settings.json` del proyecto.
+
+### `Process reporting unhealthy ... azure.functions.webjobs.storage`
+
+**No es un error de las funciones: son las 4 rutas mapeadas y respondiendo.** Es
+`AzureWebJobsStorage = UseDevelopmentStorage=true` apuntando a un **Azurite que no está
+corriendo**. Aparece con dos textos según cómo esté el setting:
+
+| Setting | Mensaje |
+|---|---|
+| `UseDevelopmentStorage=true` sin Azurite | `A timeout occurred while running check` (tarda ~15 s) |
+| Sin `AzureWebJobsStorage` | `Unable to create client for AzureWebJobsStorage` (inmediato) |
+
+Para estos endpoints da igual: son HTTP puros, no usan colas ni timers ni estado durable.
+Se puede ignorar, o silenciarlo levantando Azurite:
+
+```bash
+npm install -g azurite
+```
+
+```bash
+azurite --silent
+```
+
 ## Estructura
 
 | Pieza | Rol |
