@@ -6,6 +6,7 @@ namespace Axxon.Eip.Core.Messaging
         public const string Dataverse = "dataverse";
         public const string FinanceOperations = "fo";
         public const string Magento = "magento";
+        public const string Thinkchat = "thinkchat";
         public const string VTex = "vtex";
         public const string Plytix = "plytix";
     }

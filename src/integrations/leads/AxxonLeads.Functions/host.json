@@ -1,0 +1,19 @@
+{
+  "version": "2.0",
+  "telemetryMode": "OpenTelemetry",
+  "logging": {
+    "logLevel": {
+      "default": "Information",
+      "Host.General": "Warning",
+      "Host.Startup": "Warning"
+    }
+  },
+  "extensions": {
+    "serviceBus": {
+      "prefetchCount": 0,
+      "maxConcurrentCalls": 1,
+      "autoCompleteMessages": false,
+      "maxAutoLockRenewalDuration": "00:10:00"
+    }
+  }
+}

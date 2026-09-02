@@ -77,3 +77,27 @@ param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacome
 // Storage y Key Vault. Ese paso no es opcional: sin los roles de Storage no arranca.
 // Comandos en docs/wiki/plataforma/ambientes.md.
 param deployFiscalApp = true
+
+// Leads (alta desde satelites: Thinkchat, sitio web, campanas). Greenfield como thinkchat
+// y fiscal: `fa-axxonleads-inte` no existe creada a mano, asi que no arrastra el problema
+// de adopcion que mantiene `deployFunctionApps` en false por las otras apps.
+//
+// Nace con Managed Identity: este archivo no declara `dataverseClientId`, asi que la app
+// autentica con su propia MI. Requiere el alta de esa MI como Application User en Dataverse
+// INTE con permiso de CREACION sobre `lead` — sin eso cada mensaje termina en el DLQ.
+//
+// Y como `deployRoleAssignments` esta en false, la app tambien nace SIN sus roles de
+// Storage, Key Vault y Service Bus. Ese paso no es opcional: sin los de Storage no arranca,
+// y sin "Azure Service Bus Data Receiver" no puede leer la cola. Comandos en
+// docs/wiki/plataforma/ambientes.md.
+param deployLeadsApp = true
+
+// La columna del RUC/cedula en `lead`. Es el default del template y esta explicito aca
+// porque todavia NO se verifico contra el Dataverse de INTE: si el logical name real es
+// otro, se corrige en esta linea (no en el codigo) y se redeploya la infra.
+param leadIdentificationAttribute = 'msdyn_identificationnumber'
+
+// Vacio: hoy `lead` no tiene una columna de id externo en INTE, asi que la deduplicacion
+// contra Dataverse queda apagada y la unica proteccion es la de la cola. Cuando se cree la
+// columna, poner su logical name aca y la Function empieza a buscar antes de crear.
+param leadExternalIdAttribute = ''

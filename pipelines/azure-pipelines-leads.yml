@@ -1,0 +1,33 @@
+# Pipeline de la integracion Leads (alta de leads desde satelites via lead-intake).
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/integrations/leads/AxxonLeads.Functions/**
+      - tests/AxxonLeads.Functions.Tests/**
+      - src/core/**
+      - pipelines/azure-pipelines-leads.yml
+      - pipelines/templates/functionapp-build-deploy.yml
+      - pipelines/templates/functionapp-deploy-stage.yml
+
+extends:
+  template: templates/functionapp-build-deploy.yml
+  parameters:
+    appBaseName: 'fa-axxonleads'
+    projectPath: 'src/integrations/leads/AxxonLeads.Functions/AxxonLeads.Functions.csproj'
+    # Los tests cubren el contrato del mensaje y la deduplicacion: si dejan de pasar, lo
+    # que se rompe es el alta de leads de todos los satelites. Corren antes del publish.
+    testProjectPath: 'tests/AxxonLeads.Functions.Tests/AxxonLeads.Functions.Tests.csproj'
+    # fa-axxonleads-inte lo crea el Bicep con `deployLeadsApp = true` en inte.bicepparam.
+    # Requiere que el pipeline de infra haya corrido primero —este pipeline despliega
+    # sobre una app que ya tiene que existir— y que a su managed identity se le hayan
+    # asignado a mano los roles de Storage, Key Vault y Service Bus Data Receiver
+    # (INTE va con deployRoleAssignments = false).
+    deployToInte: true
+    # En TEST la app todavia no existe: el stage fallaria al hacer config-zip contra una
+    # app inexistente. Poner en true cuando el pipeline de infra TEST la haya creado (y
+    # despues de asignarle los roles, que TEST tambien va con deployRoleAssignments = false).
+    deployToTest: false

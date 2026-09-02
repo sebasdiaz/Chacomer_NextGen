@@ -73,7 +73,14 @@ function parseQueues() {
     objRe.lastIndex = m.index + obj.length;
     const name = obj.match(/name:\s*'([^']+)'/);
     const sess = obj.match(/requiresSession:\s*(true|false)/);
-    if (name) queues.push({ name: name[1], requiresSession: sess ? sess[1] === 'true' : false });
+    const dedup = obj.match(/requiresDuplicateDetection:\s*(true|false)/);
+    if (name) {
+      queues.push({
+        name: name[1],
+        requiresSession: sess ? sess[1] === 'true' : false,
+        requiresDuplicateDetection: dedup ? dedup[1] === 'true' : false,
+      });
+    }
   }
 
   // Propiedades fijas del recurso, iguales para todas las colas.
@@ -367,13 +374,16 @@ function renderColas(queues, props, functions) {
   }
   const rows = queues.map((q) => {
     const cons = (consumers[q.name] || []).map(code).join(', ') || '_ninguno en este repo_';
-    return '| ' + code(q.name) + ' | ' + yesNo(q.requiresSession) + ' | ' + cons + ' |';
+    return (
+      '| ' + code(q.name) + ' | ' + yesNo(q.requiresSession) + ' | ' +
+      yesNo(q.requiresDuplicateDetection) + ' | ' + cons + ' |'
+    );
   });
   const propRows = Object.entries(props).map(([k, v]) => '| ' + code(k) + ' | ' + code(v) + ' |');
   return page(
     'Colas del Service Bus',
-    GENERADO_NOTE + '\n\nLo que declara `infra/modules/servicebus.bicep` para `sb-chacomer-eip-{env}`, cruzado con\nlas funciones que las consumen. El **porqué** de cada decisión (sobre todo por qué sólo una\nlleva sessions) está en\n[Infraestructura › Queues del namespace](../plataforma/infraestructura.md#queues-del-namespace).',
-    ['| Cola | Sessions | Consumidor |', '|---|---|---|', ...rows, '', '### Propiedades, iguales para todas', '', '| Propiedad | Valor |', '|---|---|', ...propRows].join('\n')
+    GENERADO_NOTE + '\n\nLo que declara `infra/modules/servicebus.bicep` para `sb-chacomer-eip-{env}`, cruzado con\nlas funciones que las consumen. El **porqué** de cada decisión (qué colas llevan sessions, y\npor qué sólo la que alimentan terceros lleva detección de duplicados) está en\n[Infraestructura › Queues del namespace](../plataforma/infraestructura.md#queues-del-namespace).',
+    ['| Cola | Sessions | Dedup | Consumidor |', '|---|---|---|---|', ...rows, '', '### Propiedades, iguales para todas', '', '| Propiedad | Valor |', '|---|---|', ...propRows].join('\n')
   );
 }
 

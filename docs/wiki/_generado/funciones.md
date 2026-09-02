@@ -7,7 +7,7 @@ sources: []
 > Generado desde el código por [`generate.mjs`](../generate.mjs). Si algo de acá está
 > mal, el que está mal es el código — o el generador. No edites esta página.
 
-Las 24 Azure Functions de la plataforma, con el disparador que declara cada una.
+Las 25 Azure Functions de la plataforma, con el disparador que declara cada una.
 Entre paréntesis, el placeholder tal como está en el atributo; antes, el valor que le
 asigna `infra/main.bicep`.
 
@@ -18,6 +18,7 @@ asigna `infra/main.bicep`.
 | `CustomerFoSyncFunction` | `fa-axxoncustomers-{env}` | Service Bus | `customer-fo-sync` _(%FoSyncServiceBusQueueName%)_ — sessions: si |
 | `LtmCustSyncFunction` | `fa-axxoncustomers-{env}` | Service Bus | `customer-ltm-sync` _(%LtmSyncServiceBusQueueName%)_ — sessions: si |
 | `QualifyLeadCustomerSyncFunction` | `fa-axxoncustomers-{env}` | Service Bus | `leadcontacts` _(%ServiceBusQueueName%)_ — sessions: no |
+| `LeadIntakeFunction` | `fa-axxonleads-{env}` | Service Bus | `lead-intake` _(%LeadIntakeServiceBusQueueName%)_ — sessions: no |
 | `CustomerGroupSyncFunction` | `fa-axxoncustomergroups-{env}` | Timer | `0 0 23 * * *` _(%Schedules:CustomerGroupSync%)_ |
 | `ProductGroupSyncFunction` | `fa-axxonproducts-{env}` | Timer | `0 0 23 * * *` _(%Schedules:ProductGroupSync%)_ |
 | `ReleasedProductSyncFunction` | `fa-axxonproducts-{env}` | Timer | `0 0 * * * *` _(%Schedules:ReleasedProductSync%)_ |

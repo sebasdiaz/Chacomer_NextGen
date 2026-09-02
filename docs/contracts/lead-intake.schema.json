@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chacomer.com.py/eip/contracts/lead-intake.schema.json",
+  "title": "Payload de alta de leads (cola lead-intake)",
+  "description": "Contenido de 'payload' del envelope EiP para la cola lead-intake. Es el contrato que cumplen los satelites (Thinkchat, sitio web, campanas) para que la EiP cree un lead en Dataverse. A diferencia del payload de customers, este es un snapshot y no una referencia: el registro todavia no existe en ningun lado, asi que el mensaje es la unica fuente del dato.",
+  "type": "object",
+  "required": ["subject", "identificationNumber"],
+  "anyOf": [
+    { "required": ["lastName"] },
+    { "required": ["companyName"] }
+  ],
+  "properties": {
+    "externalId": {
+      "type": "string",
+      "description": "Id del lead en el sistema origen. Clave de idempotencia: si el org tiene una columna donde guardarlo, la EiP busca por ahi antes de crear y no duplica ante una reentrega.",
+      "maxLength": 100
+    },
+    "subject": {
+      "type": "string",
+      "description": "Tema del lead (subject). Obligatorio.",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "firstName": {
+      "type": "string",
+      "description": "Nombre de la persona (firstname).",
+      "maxLength": 50
+    },
+    "lastName": {
+      "type": "string",
+      "description": "Apellido (lastname). Obligatorio salvo que venga companyName.",
+      "maxLength": 50
+    },
+    "companyName": {
+      "type": "string",
+      "description": "Razon social (companyname). Obligatorio salvo que venga lastName.",
+      "maxLength": 100
+    },
+    "identificationNumber": {
+      "type": "string",
+      "description": "RUC o cedula. Obligatorio: es la clave con la que despues se cruza el lead contra el master de contacts/accounts.",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "jobTitle": {
+      "type": "string",
+      "description": "Cargo (jobtitle).",
+      "maxLength": 100
+    },
+    "emailAddress1": {
+      "type": "string",
+      "description": "Email principal (emailaddress1).",
+      "maxLength": 100
+    },
+    "mobilePhone": {
+      "type": "string",
+      "description": "Celular (mobilephone).",
+      "maxLength": 50
+    },
+    "telephone1": {
+      "type": "string",
+      "description": "Telefono fijo (telephone1).",
+      "maxLength": 50
+    },
+    "description": {
+      "type": "string",
+      "description": "Descripcion libre: la consulta original, el chat, el formulario."
+    },
+    "leadSourceCode": {
+      "type": "integer",
+      "description": "Origen del cliente potencial (leadsourcecode), como valor del optionset. Los valores son propios del org."
+    },
+    "address": {
+      "$ref": "#/$defs/address",
+      "description": "Domicilio. Opcional: si no viene, no se escribe ningun campo de direccion."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "address": {
+      "type": "object",
+      "description": "Mapea contra los campos nativos address1_* de la tabla lead. Cuando el lead se califica, Dataverse arrastra estos campos al contact/account que crea.",
+      "properties": {
+        "name": { "type": "string", "description": "Nombre de la direccion (address1_name). Ej: Casa central.", "maxLength": 200 },
+        "line1": { "type": "string", "description": "Calle (address1_line1).", "maxLength": 250 },
+        "line2": { "type": "string", "description": "Numero, piso, depto (address1_line2).", "maxLength": 250 },
+        "line3": { "type": "string", "description": "Referencia adicional (address1_line3).", "maxLength": 250 },
+        "city": { "type": "string", "description": "Ciudad (address1_city).", "maxLength": 80 },
+        "stateOrProvince": { "type": "string", "description": "Departamento o provincia (address1_stateorprovince).", "maxLength": 50 },
+        "postalCode": { "type": "string", "description": "Codigo postal (address1_postalcode).", "maxLength": 20 },
+        "country": { "type": "string", "description": "Pais (address1_country).", "maxLength": 80 },
+        "telephone": { "type": "string", "description": "Telefono del domicilio (address1_telephone1).", "maxLength": 50 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

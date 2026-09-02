@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - infra/**
-last_reviewed: 2026-08-26
+last_reviewed: 2026-08-27
 -->
 
 # Infraestructura (Bicep)
@@ -52,13 +52,25 @@ es quién las alimenta:
 | `customer-fo-sync` | `AxxonContacts.Functions` |
 | `customer-ltm-sync` | `AxxonCustomers.Functions` (tras crear el customer en F&O) |
 | `leadcontacts` | Service Endpoint de Dataverse (QualifyLead) |
+| `lead-intake` | Sistemas satélite (Thinkchat, sitio web, campañas) |
 
 **Sólo `customer-fo-sync` y `customer-ltm-sync` llevan sessions.** Son las dos que publica
 `EipServiceBusPublisher`, que setea `SessionId`, y las únicas cuyos triggers declaran
-`IsSessionsEnabled = true`. Las otras tres las alimenta el **Service Endpoint OOB de
+`IsSessionsEnabled = true`. Tres de las otras las alimenta el **Service Endpoint OOB de
 Dataverse, que no setea `SessionId`**, y sus triggers declaran `IsSessionsEnabled = false`:
 con `requiresSession` fallan las dos puntas — el publisher no puede enviar
 (`The SessionId was not set on a message`) y un receiver sin sessions tampoco puede leer.
+
+`lead-intake` es la excepción por otro motivo: **cada mensaje crea un lead independiente**,
+no hay dos eventos del mismo registro que puedan cruzarse, y poner sessions serializaría
+todo el intake sin que nada lo necesite. Ver [Leads](../integraciones/leads.md).
+
+> **`lead-intake` es la única cola con `requiresDuplicateDetection`** (ventana de 1 h), y es
+> la única alimentada por **terceros**: un satélite que no recibe el ACK reintenta el envío,
+> y sin esto cada reintento sería un lead duplicado. Igual que `requiresSession`, es
+> **inmutable**: prenderla en una cola ya creada obliga a recrearla. El resto de las colas
+> declara `duplicateDetectionHistoryTimeWindow: PT10M` —el default del servicio— para que el
+> deployment no les genere diff.
 
 > **`customer-ltm-sync` es la razón por la que `customers` pasó a publicar.** Hasta que
 > existió esa cola, la app sólo consumía, y su módulo iba sin `publishesToServiceBus`. El

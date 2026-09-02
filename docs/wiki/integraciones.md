@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources_new:
   - src/integrations/*/*/*.csproj
-last_reviewed: 2026-08-24
+last_reviewed: 2026-08-27
 -->
 
 # Integraciones
@@ -18,6 +18,7 @@ propio [pipeline](plataforma/pipelines.md).
 | [Fiscal](integraciones/fiscal.md) | SET/DNIT y TURUC → HTTP | HTTP | `fa-axxonfiscal-{env}` |
 | [Thinkchat](integraciones/thinkchat.md) | Thinkchat ↔ Dataverse | Timer (cada 2 h) + HTTP | `fa-axxonthinkchat-{env}` |
 | [Ticket de Atención](integraciones/ticketatencion.md) | Dataverse → Word/PDF → SharePoint | HTTP (botón en el formulario de Cita) | `fa-axxonticketatencion-{env}` |
+| [Leads](integraciones/leads.md) | Satélites → Dataverse | Service Bus | `fa-axxonleads-{env}` |
 
 ## Inventario de funciones
 

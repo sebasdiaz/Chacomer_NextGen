@@ -53,3 +53,22 @@ param thinkchatFrom = '595215180000'
 // decida estrenarla ahi, para que un deployment de infra no la cree de rebote.
 param deployTicketAtencionApp = false
 param sharePointSiteUrl = 'https://chacomercompy.sharepoint.com/sites/B1-Chacomer-TEST'
+
+// Leads (alta desde satelites: Thinkchat, sitio web, campanas). Se despliega junto con el
+// resto (deployFunctionApps queda en true), pero con deployRoleAssignments = false la app
+// nace SIN sus roles: al ser nueva no existen de antes, asi que hay que asignarlos a mano
+// (Storage Blob Data Owner + Storage Queue Data Contributor sobre su storage, Key Vault
+// Secrets User sobre el vault, y Azure Service Bus Data Receiver sobre el namespace) o la
+// app no arranca ni lee la cola.
+//
+// A diferencia del resto de las apps de TEST, esta NO usa el app registration: no recibe
+// `dataverseAuthSettings`, asi que autentica con su propia MI. Requiere el alta de esa MI
+// como Application User en Dataverse TEST con permiso de CREACION sobre `lead`.
+param deployLeadsApp = true
+
+// Mismo caso que en INTE: es el default del template, explicito porque todavia no se
+// verifico el logical name real contra el Dataverse de TEST.
+param leadIdentificationAttribute = 'msdyn_identificationnumber'
+
+// Vacio: sin columna de id externo, la deduplicacion contra Dataverse queda apagada.
+param leadExternalIdAttribute = ''

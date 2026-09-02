@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - pipelines/**
-last_reviewed: 2026-08-26
+last_reviewed: 2026-08-27
 -->
 
 # Pipelines
@@ -28,13 +28,14 @@ Lo que la matriz no explica:
 |---|---|
 | `fiscal` sí va a INTE, pero la app la crea el Bicep | `fa-axxonfiscal-inte` no existe creada a mano: nace del toggle `deployFiscalApp`. **Este pipeline no la crea** — hasta que no corrió el de infra, el deploy falla |
 | `thinkchat` no va a TEST | `fa-axxonthinkchat-test` todavía no existe. Se prende cuando el pipeline de infra TEST la cree, y después de asignarle los roles a mano |
+| `leads` tampoco va a TEST, y en INTE depende del Bicep | Mismo caso que `fiscal` + `thinkchat` juntos: `fa-axxonleads-inte` nace del toggle `deployLeadsApp` (el pipeline no la crea) y `fa-axxonleads-test` todavía no existe |
 | `customergroups` despliega a `fa-axxoncustomergroup` en INTE | Ahí la app se creó a mano con el nombre en singular. Se unifica en el cutover |
 
 Todos disparan también ante cambios en su propio `.yml` y en los templates.
 
-> **`src/core/**` dispara los seis.** Un cambio en `Axxon.Eip.Core` reconstruye y redespliega
-> toda la plataforma; es a propósito, porque el core se arrastra por `ProjectReference` y
-> queda embebido en cada artifact.
+> **`src/core/**` los dispara a todos.** Un cambio en `Axxon.Eip.Core` reconstruye y
+> redespliega toda la plataforma; es a propósito, porque el core se arrastra por
+> `ProjectReference` y queda embebido en cada artifact.
 
 > **El pipeline de contacts no corre sus tests.** `tests/AxxonContacts.Functions.Tests`
 > existe, pero el pipeline no le pasa `testProjectPath`, así que nunca se ejecuta.
@@ -108,9 +109,10 @@ az devops invoke --organization https://dev.azure.com/CHACOMER --area pipelines 
 ## Promoción del código a un ambiente nuevo
 
 La infra crea las Function Apps vacías; el código lo pone el pipeline de cada
-integración. Los 6 pipelines (`azure-pipelines-{contacts,customers,customergroups,products,fiscal,thinkchat}.yml`)
-extienden `templates/functionapp-build-deploy.yml`, que compila **una sola vez** y
-promueve el mismo artifact en cadena:
+integración. Todos los `azure-pipelines-{dominio}.yml` —los lista la
+[matriz generada](../_generado/pipelines.md)— extienden
+`templates/functionapp-build-deploy.yml`, que compila **una sola vez** y promueve el mismo
+artifact en cadena:
 
 ```
 Build ──► Deploy_inte (fa-axxon{dominio}-inte) ──► Deploy_test (fa-axxon{dominio}-test)

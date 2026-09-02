@@ -157,6 +157,43 @@ docs/wiki/plataforma/ambientes.md.
 param deployFiscalApp bool = deployFunctionApps
 
 @description('''
+Toggle propio de la app de Leads. Default: sigue a `deployFunctionApps`.
+
+Existe por el mismo motivo que los de thinkchat y fiscal: es una app GREENFIELD.
+`fa-axxonleads-{env}` no existe creada a mano en ningun ambiente, asi que no tiene nada que
+adoptar y puede nacer administrada por Bicep sin esperar al cutover que mantiene
+`deployFunctionApps = false` en INTE.
+
+Ponerlo en true con `deployRoleAssignments = false` (el caso de INTE) hace que la app nazca
+SIN sus roles de Storage, Key Vault y Service Bus. Ese paso a mano no es opcional: sin los
+de Storage la app ni siquiera arranca, y sin Azure Service Bus Data Receiver el trigger no
+puede leer la cola. Comandos en docs/wiki/plataforma/ambientes.md.
+''')
+param deployLeadsApp bool = deployFunctionApps
+
+@description('''
+Nombre logico de la columna de `lead` donde se guarda el RUC/cedula que mandan los
+satelites. Default: el mismo campo que usa el master matching de contacts.
+
+Va por app setting y no hardcodeado en el codigo porque el nombre real se confirma contra
+el environment, y equivocarse no rompe al arrancar: rompe al primer Create, con un mensaje
+en el DLQ por cada lead que mande el satelite.
+''')
+param leadIdentificationAttribute string = 'msdyn_identificationnumber'
+
+@description('''
+Nombre logico de la columna de `lead` donde se guarda el id del lead en el sistema origen.
+VACIO (default) = esa columna no existe en el org y la deduplicacion contra Dataverse queda
+apagada.
+
+Con esto vacio, la unica proteccion contra duplicados es la deteccion de duplicados de la
+cola `lead-intake`, que cubre el reenvio del satelite (mismo MessageId) pero NO el caso de
+un Create exitoso cuyo Complete se pierde: ahi Service Bus reentrega y se crea un segundo
+lead. Cerrarlo pide una columna de id externo en `lead` y declararla aca.
+''')
+param leadExternalIdAttribute string = ''
+
+@description('''
 False para que el template NO declare las role assignments de las Function Apps
 (Storage Blob/Queue, Key Vault Secrets User, Service Bus Data Receiver/Sender).
 
@@ -462,6 +499,46 @@ module ticketAtencion 'modules/functionApp.bicep' = if (deployTicketAtencionApp)
       { name: 'DataverseUrl', value: dataverseUrl }
       { name: 'SharePointSiteUrl', value: sharePointSiteUrl }
     ], dataverseAuthSettings, graphAuthSettings)
+  }
+}
+
+// Alta de leads desde los satelites (Thinkchat, sitio web, campanas): consume la cola
+// `lead-intake` y crea el lead en Dataverse.
+//
+// No habla con F&O ni publica en Service Bus: por eso escala libre y solo pide el rol
+// Data Receiver sobre el namespace. El techo real de concurrencia contra Dataverse lo pone
+// `maxConcurrentCalls: 1` en su host.json — una escritura por instancia.
+//
+// Nace con Managed Identity, mismo criterio que fiscal y thinkchat: este template no le
+// pasa `dataverseAuthSettings`. Requiere el alta de esa MI como Application User en
+// Dataverse con permiso de creacion sobre `lead` — sin eso los mensajes van al DLQ.
+module leads 'modules/functionApp.bicep' = if (deployLeadsApp) {
+  name: 'fa-leads'
+  params: {
+    functionAppName: 'fa-axxonleads-${environmentName}'
+    appKey: 'leads'
+    environmentName: environmentName
+    location: location
+    tags: tags
+    runtimeVersion: dotnetIsolatedVersion
+    maximumInstanceCount: maxInstanceCount
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
+    keyVaultName: keyVault.outputs.keyVaultName
+    keyVaultUri: keyVault.outputs.keyVaultUri
+    deployRoleAssignments: deployRoleAssignments
+    serviceBusNamespaceName: serviceBus.outputs.namespaceName
+    needsServiceBus: true
+    appSettings: [
+      { name: 'DataverseUrl', value: dataverseUrl }
+      { name: 'ServiceBusConnection__fullyQualifiedNamespace', value: serviceBus.outputs.fullyQualifiedNamespace }
+      // Sin este setting el trigger de LeadIntakeFunction no resuelve. Program.cs lo
+      // valida al arrancar para que falte se note ahi y no en el primer mensaje.
+      { name: 'LeadIntakeServiceBusQueueName', value: 'lead-intake' }
+      // Las dos columnas de `lead` que dependen del org. Ver los params homonimos.
+      { name: 'LeadIdentificationAttribute', value: leadIdentificationAttribute }
+      { name: 'LeadExternalIdAttribute', value: leadExternalIdAttribute }
+    ]
   }
 }
 

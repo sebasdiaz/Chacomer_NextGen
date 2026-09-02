@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.0",
+  "messageId": "3f8a1c94-5b2e-4d17-a0c6-9e4b7d2f1a83",
+  "correlationId": "c1e07b52-8f43-4a90-b6d1-2ac5e93f7b04",
+  "source": "thinkchat",
+  "entityType": "lead",
+  "operation": "create",
+  "occurredAt": "2026-08-27T14:22:05Z",
+  "metadata": {
+    "conversationId": "wa-595981234567-4471",
+    "campaign": "Camiones 0km agosto"
+  },
+  "payload": {
+    "externalId": "TC-99321",
+    "subject": "Consulta por camion 0km",
+    "firstName": "Sebastian",
+    "lastName": "Diaz",
+    "companyName": "Ferreteria San Blas S.A.",
+    "identificationNumber": "80012345-6",
+    "jobTitle": "Encargado de compras",
+    "emailAddress1": "compras@sanblas.com.py",
+    "mobilePhone": "0981 234 567",
+    "telephone1": "021 555 000",
+    "description": "Pregunta por financiacion de un camion 0km para reparto.",
+    "leadSourceCode": 3,
+    "address": {
+      "name": "Casa central",
+      "line1": "Avda. Mariscal Lopez",
+      "line2": "1234",
+      "line3": "Piso 3",
+      "city": "Asuncion",
+      "stateOrProvince": "Central",
+      "postalCode": "1209",
+      "country": "Paraguay",
+      "telephone": "021 555 000"
+    }
+  }
+}

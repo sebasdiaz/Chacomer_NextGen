@@ -132,3 +132,19 @@ Suma `dataverseAuthSettings` y `foAuthSettings`, que el template emite sólo si 
 | `SharePointSiteUrl` | `sharePointSiteUrl` | — |
 
 Suma `dataverseAuthSettings`, que el template emite sólo si el ambiente declara el client id correspondiente.
+
+### `fa-axxonleads-{env}`
+
+- appKey: `leads`
+- instancias máx.: `maxInstanceCount`
+- consume Service Bus: si
+- publica en Service Bus: no
+- se despliega si: `deployLeadsApp`
+
+| Setting | Valor en el template | Default |
+|---|---|---|
+| `DataverseUrl` | `dataverseUrl` | — |
+| `ServiceBusConnection__fullyQualifiedNamespace` | `serviceBus.outputs.fullyQualifiedNamespace` | — |
+| `LeadIntakeServiceBusQueueName` | `'lead-intake'` | — |
+| `LeadIdentificationAttribute` | `leadIdentificationAttribute` | — |
+| `LeadExternalIdAttribute` | `leadExternalIdAttribute` | — |

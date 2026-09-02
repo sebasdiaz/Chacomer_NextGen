@@ -3,7 +3,7 @@ sources:
   - infra/environments/**
   - infra/scripts/**
   - pipelines/**
-last_reviewed: 2026-08-26
+last_reviewed: 2026-08-27
 -->
 
 # Ambientes
@@ -15,7 +15,7 @@ last_reviewed: 2026-08-26
 
 | Ambiente | Resource group | Dataverse | F&O | Service connection | Function Apps |
 |---|---|---|---|---|---|
-| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover), salvo thinkchat, ticketatencion y fiscal |
+| `inte` | `DataverseINTE` | `operations-b1-chacomer-inte` | `b1-chacomer-inte.sandbox` | `sc-chacomer-eip-inte` | fuera del Bicep (ver cutover), salvo thinkchat, ticketatencion, fiscal y leads |
 | `test` | `dataversetest` | `operations-b1-chacomer-test` | `b1-chacomer-test.sandbox` | `sc-chacomer-eip-test` | administradas por el Bicep |
 | `uat` | *(sin crear)* | — | — | — | — |
 | `prod` | *(sin crear)* | — | — | — | — |
@@ -61,6 +61,12 @@ El orden del cutover, por app:
 > cutover. Nace con **Managed Identity**: `inte.bicepparam` no declara `dataverseClientId`,
 > así que habla con Dataverse por su MI. Ver
 > [Fiscal › Estado del despliegue](../integraciones/fiscal.md#estado-del-despliegue).
+
+> **`fa-axxonleads-inte` también.** Greenfield, toggle propio `deployLeadsApp`, Managed
+> Identity. Es la primera de las greenfield que **consume Service Bus**, así que a la lista
+> de roles a mano le suma **Azure Service Bus Data Receiver** sobre el namespace — sin él
+> la app arranca pero no lee la cola `lead-intake`. Ver
+> [Leads › Autenticación](../integraciones/leads.md#autenticación).
 
 1. ✅ **Secretos a Key Vault + System-Assigned MI** — [`infra/scripts/Set-InteKeyVaultAuth.ps1`](../../../infra/scripts/Set-InteKeyVaultAuth.ps1).
 2. Dar de alta la MI como Application User en Dataverse y como usuario S2S en F&O.
@@ -123,16 +129,16 @@ que su configuración no puede versionarse en el template:
 `inte.bicepparam` va con **`deployRoleAssignments = false`** por el mismo motivo, con el
 SP `b391d418-…` (`sc-chacomer-eip-inte`, objectId `e57cb312-…`), que tiene Contributor
 sobre `DataverseINTE` pero no `roleAssignments/write`. Como en INTE
-`deployFunctionApps = false`, las apps en juego son las tres que el template sí crea:
-**`thinkchat`**, **`ticketatencion`** y **`fiscal`**.
+`deployFunctionApps = false`, las apps en juego son las cuatro que el template sí crea:
+**`thinkchat`**, **`ticketatencion`**, **`fiscal`** y **`leads`**.
 
 La app nace sin roles, y **sin ellos no arranca**: `AzureWebJobsStorage` va por identidad.
 Después de cada deploy que la (re)cree, correr:
 
 ```bash
 RG=DataverseINTE
-APP=fa-axxonthinkchat-inte          # o fa-axxonticketatencion-inte / fa-axxonfiscal-inte
-PREFIJO=stthinkchatinte             # o stticket / stfiscalinte
+APP=fa-axxonthinkchat-inte          # o fa-axxonticketatencion-inte / fa-axxonfiscal-inte / fa-axxonleads-inte
+PREFIJO=stthinkchatinte             # o stticket / stfiscalinte / stleadsinte
 MI=$(az functionapp show -g $RG -n $APP --query identity.principalId -o tsv)
 ST=$(az storage account list -g $RG --query "[?starts_with(name,'$PREFIJO')].id | [0]" -o tsv)
 KV=$(az keyvault show -n kv-chacomer-eip-inte --query id -o tsv)
@@ -140,6 +146,13 @@ KV=$(az keyvault show -n kv-chacomer-eip-inte --query id -o tsv)
 az role assignment create --assignee-object-id $MI --assignee-principal-type ServicePrincipal --role "Storage Blob Data Owner"          --scope $ST
 az role assignment create --assignee-object-id $MI --assignee-principal-type ServicePrincipal --role "Storage Queue Data Contributor"   --scope $ST
 az role assignment create --assignee-object-id $MI --assignee-principal-type ServicePrincipal --role "Key Vault Secrets User"           --scope $KV
+```
+
+**Sólo para `leads`**, que además consume Service Bus:
+
+```bash
+SB=$(az servicebus namespace show -g $RG -n sb-chacomer-eip-inte --query id -o tsv)
+az role assignment create --assignee-object-id $MI --assignee-principal-type ServicePrincipal --role "Azure Service Bus Data Receiver" --scope $SB
 ```
 
 > **Si `az role assignment create` falla con `MissingSubscription`**, no es un problema de
@@ -161,7 +174,7 @@ az role assignment create --assignee-object-id $MI --assignee-principal-type Ser
 > [`functionApp.bicep`](../../../infra/modules/functionApp.bicep), que es la fuente de
 > verdad. Repetir el PUT devuelve `RoleAssignmentExists` y no rompe nada.
 
-Para verificar que quedaron los tres:
+Para verificar que quedaron los tres (cuatro en `leads`):
 
 ```bash
 az rest --method get \
@@ -177,7 +190,7 @@ Falta además, del lado de Dataverse: la MI de la app tiene que estar dada de al
 **Application User en Dataverse INTE**. Para thinkchat, con permisos sobre
 `axx_metatemplates`; para ticketatencion, los de
 [su página](../integraciones/ticketatencion.md#el-application-user-en-dataverse); para
-fiscal, lectura sobre `contact` y `account`. Estas apps
+fiscal, lectura sobre `contact` y `account`; para leads, **creación sobre `lead`**. Estas apps
 van sin `dataverseAuthSettings` a propósito (mismo criterio que `products`): hablan con
 Dataverse por managed identity, así que sin ese alta levantan pero fallan al primer llamado.
 

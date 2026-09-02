@@ -3,7 +3,7 @@ sources:
   - docs/contracts/**
   - src/core/Axxon.Eip.Core/Messaging/**
   - infra/modules/servicebus.bicep
-last_reviewed: 2026-08-25
+last_reviewed: 2026-08-27
 -->
 
 # Contratos de mensajería — Enterprise Integration Platform (EiP)
@@ -20,6 +20,8 @@ que la propuesta EiP busca eliminar.
 | [eip-message-envelope.schema.json](../../contracts/eip-message-envelope.schema.json) | JSON Schema (draft 2020-12) del envelope estándar |
 | [eip-message-envelope.example.json](../../contracts/eip-message-envelope.example.json) | Ejemplo de un mensaje válido |
 | [dataverse-remote-execution-context.sample.json](../../contracts/dataverse-remote-execution-context.sample.json) | Muestra del formato **nativo** de Dataverse (interino — ver Estado actual) |
+| [lead-intake.schema.json](../../contracts/lead-intake.schema.json) | JSON Schema del `payload` de `lead-intake` (alta de leads desde satélites) |
+| [lead-intake.example.json](../../contracts/lead-intake.example.json) | Ejemplo completo de un mensaje de `lead-intake` |
 
 El envelope está tipado en código en `Axxon.Eip.Core/Messaging/EipMessage.cs`.
 
@@ -87,6 +89,7 @@ Constantes en `Axxon.Eip.Core/Messaging/EipConstants.cs` (`EipDeadLetterReason`)
 | Customers (localización PY → `LTMCustTable`) | dataverse | account / contact | Queue `customer-ltm-sync` (sessions por id de registro) | **Envelope EiP** — payload `CustomerSyncPayload` (el mismo: también es una referencia) |
 | CustomerGroups (F&O → Dataverse) | fo | customergroup | Timer (sin SB) | Pull batch, sin envelope |
 | Products (F&O → Dataverse) | fo | product / productgroup | Timer/HTTP (sin SB) | Pull batch, sin envelope |
+| Leads (satélites → Dataverse) | thinkchat, web, … | lead | Queue `lead-intake` (sin sessions, con detección de duplicados) | **Envelope EiP** — payload [`lead-intake.schema.json`](../../contracts/lead-intake.schema.json) |
 
 > Cada integración nueva debe agregar aquí su fila y, si define un payload propio,
 > un archivo `{source}-{entityType}.schema.json` en este directorio.
@@ -120,6 +123,12 @@ emitan el **envelope EiP** con el DTO de dominio en `payload`. Camino sugerido:
    `customer-ltm-sync` reusa ese mismo `CustomerSyncPayload` por la misma razón, y no
    define uno propio: lo que necesita el consumidor —el `CustomerAccount`— lo relee del
    registro, que es la fuente de verdad.
+
+   `lead-intake` cumple el envelope desde el día uno por el mismo motivo —nace limpia— pero
+   su payload **sí es un snapshot**, y no contradice lo anterior: el lead todavía no existe
+   en ningún lado, así que no hay registro que releer. El mensaje es la única fuente del
+   dato. La regla real no es "siempre referencia", es *releer la fuente de verdad cuando la
+   hay*.
 2. Unificar el lado Dataverse en **un** mecanismo: el plugin thin publica
    `EipMessage<ContactPayload>` (reusando el DTO limpio que ya existe) en lugar del
    Service Endpoint nativo.
