@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="AxxonContacts"
            constructor="RucValidatorControl"
-           version="1.0.1"
+           version="1.0.2"
            display-name-key="RucValidatorControl_DisplayName"
            description-key="RucValidatorControl_Desc"
            control-type="standard">
@@ -13,7 +13,9 @@
       <!-- ({app}.{region}-01.azurewebsites.net), que un solo nivel de wildcard  -->
       <!-- no cubre; por eso se declara el wildcard por region + el base como    -->
       <!-- fallback. Agregar la region correspondiente si se despliega en otra.  -->
-      <!-- (El control llama a la Azure Function via ApiBaseUrl, no a turuc.)     -->
+      <!-- (El control llama a la Azure Function via ApiBaseUrl: el endpoint es    -->
+      <!-- /api/set/consulta-ruc, y la Function pone el apiKey de la SET desde     -->
+      <!-- Key Vault. Ni la SET ni turuc se contactan directo desde el browser.)   -->
       <domain>*.eastus-01.azurewebsites.net</domain>
       <domain>*.azurewebsites.net</domain>
     </external-service-usage>
