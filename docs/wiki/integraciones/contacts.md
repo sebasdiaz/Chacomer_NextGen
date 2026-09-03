@@ -207,11 +207,17 @@ Ademas del nombre y del bloque de domicilio, se copian:
 
 > **`axx_dnitresponse` y `axx_fiscalstate` tienen dos escritores.** Ademas de
 > `SetRucValidationService`, el [`RucValidatorControl`](../webresources.md) los escribe
-> desde el formulario cuando alguien aprieta *Validar*. Desde la v1.0.2 los dos leen la
+> desde el formulario cuando alguien aprieta *Validar*. Desde la v1.0.3 los dos leen la
 > **misma** fuente —`GET /api/set/consulta-ruc`, la SET— y comparten el mapeo de estados,
 > asi que ya no pueden discrepar sobre un mismo RUC; antes el control consultaba TURUC.
 > Lo que sigue valiendo es que **gana el ultimo que escribe**: no hay merge ni orden
 > garantizado entre el formulario y el path de mensajeria.
+>
+> Las dos puntas resuelven el endpoint distinto, y conviene no confundirlas: esta Function
+> usa `SetApiService` del core con la key del Key Vault, mientras que el control sale por
+> HTTP contra [Fiscal](fiscal.md) con la URL de la environment variable
+> `axx_FISCAL_CONSULTA_RUC_URL` — ver [Web resources](../webresources.md). Si el control
+> deja de escribir, no es esta Function la que hay que mirar.
 
 ## Comportamiento end-to-end
 

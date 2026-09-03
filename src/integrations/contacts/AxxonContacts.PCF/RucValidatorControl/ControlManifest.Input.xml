@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="AxxonContacts"
            constructor="RucValidatorControl"
-           version="1.0.2"
+           version="1.1.0"
            display-name-key="RucValidatorControl_DisplayName"
            description-key="RucValidatorControl_Desc"
            control-type="standard">
@@ -28,13 +28,16 @@
               usage="bound"
               required="true" />
 
-    <!-- URL base de la Azure Function (ej: https://myfunc.azurewebsites.net) -->
+    <!-- URL base de la Azure Function (ej: https://myfunc.azurewebsites.net)      -->
+    <!-- FALLBACK: lo que manda es la environment variable                        -->
+    <!-- axx_FISCAL_CONSULTA_RUC_URL. Estos dos parametros quedan para los         -->
+    <!-- formularios que todavia no migraron y para el harness de pcf start.       -->
     <property name="ApiBaseUrl"
               display-name-key="ApiBaseUrl_DisplayName"
               description-key="ApiBaseUrl_Desc"
               of-type="SingleLine.URL"
               usage="input"
-              required="true" />
+              required="false" />
 
     <!-- Function key (?code=...) — dejar vacío si no aplica -->
     <property name="ApiKey"
@@ -48,5 +51,12 @@
       <code path="index.ts" order="1" />
       <css path="css/RucValidatorControl.css" order="1" />
     </resources>
+
+    <!-- Necesario para leer la environment variable axx_FISCAL_CONSULTA_RUC_URL -->
+    <!-- (query a environmentvariabledefinition). Sin esto context.webAPI no      -->
+    <!-- existe y el control se cae al fallback de los parametros.                -->
+    <feature-usage>
+      <uses-feature name="WebAPI" required="true" />
+    </feature-usage>
   </control>
 </manifest>
