@@ -1,39 +1,50 @@
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 
-// ── Tipos de la API de TURUC ─────────────────────────────────────────────────
+// ── Tipos de la respuesta de la SET ──────────────────────────────────────────
+// Fuente: GET /api/set/consulta-ruc de AxxonFiscal, que reenvia el JSON de la
+// SET sin re-serializar. La forma la define la DNIT, no nosotros: por eso todo
+// es opcional y el codigo no asume que un campo este presente.
 
-interface ContribuyenteDto {
-    doc: number;
-    razonSocial: string;
-    dv: number;
-    ruc: string;
-    estado: string;
-    esPersonaJuridica: boolean;
-    esEntidadPublica: boolean;
+interface SetContribuyente {
+    razonSocial?:       string;
+    estado?:            string;
+    ruc?:               string;
+    digitoVerificador?: string;
+    tipoContribuyente?: string;
+    [key: string]: string | undefined;
 }
 
-interface ContribuyenteResponse {
-    data: ContribuyenteDto | null;
-    message: string;
+interface SetRucResponse {
+    codigo?:        string;
+    mensaje?:       string;
+    /** Algunas respuestas traen el estado arriba y no dentro de contribuyente. */
+    estado?:        string;
+    contribuyente?: SetContribuyente;
 }
 
-// ── Mapeo estado API → valor OptionSet axx_fiscalstate ───────────────────────
+// ── Mapeo estado SET → valor OptionSet axx_fiscalstate ───────────────────────
 // Normalizado a MAYÚSCULAS para comparación case-insensitive
-// (la API puede devolver "ACTIVO", "Activo" o "activo")
+// (la API puede devolver "ACTIVO", "Activo" o "activo").
+//
+// Tiene que seguir espejando el EstadoMap de SetRucValidationService: los dos
+// escriben el mismo OptionSet sobre el mismo registro, uno desde el formulario
+// y otro desde el path de mensajeria. Si divergen, el valor depende de quien
+// escribio ultimo.
 
 const ESTADO_MAP: Record<string, number> = {
-    "ACTIVO":      1,
-    "SUSPENDIDO":  2,
-    "CANCELADO":   3,
-    "BLOQUEADO":   4,
-    "NO VIGENTE":  5,
+    "ACTIVO":              1,
+    "SUSPENDIDO":          2,
+    "CANCELADO":           3,
+    "BLOQUEADO":           4,
+    "NO VIGENTE":          5,
+    "SUSPENSION TEMPORAL": 6,
 };
 
 // ── Nombres de campos en Dataverse ───────────────────────────────────────────
 
 const FIELD_GOVERNMENT_ID  = "governmentid";
 const FIELD_FISCAL_STATE   = "axx_fiscalstate";
-const FIELD_DESCRIPTION    = "description";
+const FIELD_DNIT_RESPONSE  = "axx_dnitresponse";
 
 export class RucValidatorControl implements ComponentFramework.StandardControl<IInputs, IOutputs> {
 
@@ -153,26 +164,43 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
     // ── validacion ───────────────────────────────────────────────────────────
 
     private async _validate(): Promise<void> {
-        const ruc = this._input.value?.trim();
-        if (!ruc) {
+        const entered = this._input.value?.trim();
+        if (!entered) {
             this._showStatus("error", "Ingrese un RUC antes de validar.");
+            return;
+        }
+
+        // La SET pide el RUC y el digito verificador por separado; el campo del
+        // formulario los guarda juntos ("80012345-0"). Se parte aca y no en la
+        // Function porque es el mismo criterio que usa SetRucValidationService.
+        const partes = this._splitRuc(entered);
+        if (!partes) {
+            this._showStatus("error",
+                "Ingrese el RUC con dígito verificador, separado por guión (ej: 80012345-0).");
             return;
         }
 
         this._setLoading(true);
 
         try {
-            const contribuyente = await this._callApi(ruc);
+            const body = await this._callApi(partes.ruc, partes.dv);
+            const contribuyente = body.contribuyente;
 
-            if (!contribuyente) {
-                this._showStatus("error", "RUC no encontrado en la SET.");
+            if (!contribuyente?.razonSocial) {
+                // La SET contesta 200 aunque el RUC no exista: lo que lo distingue
+                // es que no venga contribuyente. El mensaje del organismo, si vino,
+                // dice mas que cualquier texto nuestro.
+                this._showStatus("error",
+                    body.mensaje?.trim() || "RUC no encontrado en la SET.");
                 return;
             }
 
-            // Actualizar campos del formulario via Xrm
-            const warnings = this._updateFormFields(contribuyente);
+            const estado = this._estadoDe(body);
 
-            const resumen = `${contribuyente.razonSocial} — ${contribuyente.estado}`;
+            // Actualizar campos del formulario via Xrm
+            const warnings = this._updateFormFields(contribuyente, body, estado);
+
+            const resumen = `${contribuyente.razonSocial} — ${estado ?? "sin estado"}`;
             if (warnings.length > 0) {
                 // Se encontro el RUC pero algun campo no se pudo actualizar:
                 // avisar en vez de mostrar exito enganoso.
@@ -182,7 +210,7 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             }
 
             // Persistir el valor formateado (ej: "80012345-0")
-            this._currentValue = contribuyente.ruc ?? ruc;
+            this._currentValue = this._rucFormateado(contribuyente) ?? entered;
             this._input.value  = this._currentValue;
             this._notifyOutputChanged();
 
@@ -194,45 +222,90 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
         }
     }
 
+    // ── parseo del RUC ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parte "80012345-0" en RUC y digito verificador. Devuelve null si no hay
+    /// guion: sin DV la SET no puede responder, asi que se corta antes de salir
+    /// a la red en vez de mandar una consulta que ya sabemos incompleta.
+    /// </summary>
+    private _splitRuc(value: string): { ruc: string; dv: string } | null {
+        const dashIdx = value.indexOf("-");
+        if (dashIdx <= 0) return null;
+
+        const ruc = value.substring(0, dashIdx).trim();
+        const dv  = value.substring(dashIdx + 1).trim();
+
+        return ruc && dv ? { ruc, dv } : null;
+    }
+
+    /// <summary>
+    /// Reconstruye "ruc-dv" para guardar en el formulario. La SET los devuelve
+    /// en campos separados, y algunas respuestas ya traen el guion incluido en
+    /// `ruc`: se contempla para no terminar con "80012345-0-0".
+    /// </summary>
+    private _rucFormateado(c: SetContribuyente): string | null {
+        const ruc = c.ruc?.trim();
+        if (!ruc) return null;
+
+        const dv = c.digitoVerificador?.trim();
+        if (!dv || ruc.includes("-")) return ruc;
+
+        return `${ruc}-${dv}`;
+    }
+
+    /// <summary>El estado vive dentro de contribuyente, y en algunas respuestas arriba.</summary>
+    private _estadoDe(body: SetRucResponse): string | undefined {
+        return body.contribuyente?.estado?.trim() || body.estado?.trim() || undefined;
+    }
+
     // ── llamada a la Azure Function ──────────────────────────────────────────
 
-    private async _callApi(ruc: string): Promise<ContribuyenteDto | null> {
+    /// <summary>
+    /// GET /api/set/consulta-ruc?ruc={ruc}&amp;dv={dv} — la consulta oficial de la
+    /// DNIT. La function key viaja como `code` en la query y no como header
+    /// `x-functions-key` a proposito: un header custom dispara preflight, y con
+    /// `code` el navegador manda el GET directo.
+    ///
+    /// El apiKey de la SET no se pasa desde aca: lo agrega la Function desde el
+    /// Key Vault. Este control nunca ve esa credencial.
+    /// </summary>
+    private async _callApi(ruc: string, dv: string): Promise<SetRucResponse> {
         const base   = (this._context.parameters.ApiBaseUrl.raw ?? "").replace(/\/$/, "");
         const apiKey = this._context.parameters.ApiKey.raw ?? "";
 
-        const qs  = apiKey ? `?code=${encodeURIComponent(apiKey)}` : "";
-        const url = `${base}/api/turuc/contribuyente/${encodeURIComponent(ruc)}${qs}`;
+        const qs = new URLSearchParams({ ruc, dv });
+        if (apiKey) qs.set("code", apiKey);
+
+        const url = `${base}/api/set/consulta-ruc?${qs.toString()}`;
 
         const response = await fetch(url, {
             method: "GET",
             headers: { "Accept": "application/json" },
         });
 
-        if (response.status === 404) {
-            return null;
-        }
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status} al consultar la API de TURUC.`);
-        }
-
         const rawText = await response.text();
 
-        let body: ContribuyenteResponse;
+        // El status se mira antes de parsear: la Function devuelve {"error":"..."}
+        // en los 400, pero un 401 de la plataforma (key vacia o de otro ambiente)
+        // viene con el body vacio. Parseando primero, ese caso —el mas comun de
+        // todos— se reportaba como "respuesta no es JSON valido" y escondia el 401.
+        if (!response.ok) {
+            let detalle = "";
+            try {
+                detalle = (JSON.parse(rawText) as { error?: string }).error?.trim() ?? "";
+            } catch { /* la Function no siempre contesta JSON en los errores */ }
+
+            throw new Error(detalle
+                ? `${detalle} (HTTP ${response.status})`
+                : `HTTP ${response.status} al consultar la API de la SET.`);
+        }
+
         try {
-            body = JSON.parse(rawText) as ContribuyenteResponse;
+            return JSON.parse(rawText) as SetRucResponse;
         } catch {
             throw new Error(`Respuesta no es JSON válido: ${rawText.substring(0, 100)}`);
         }
-
-        // Acepta "OK" en cualquier casing y sin importar whitespace
-        const messageOk = body.message?.trim().toUpperCase() === "OK";
-
-        if (!body.data || !messageOk) {
-            return null;
-        }
-
-        return body.data;
     }
 
     // ── actualizar campos Dataverse via Xrm ─────────────────────────────────
@@ -246,7 +319,11 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
     /// tiene una API soportada para escribir columnas hermanas del formulario.
     /// Es el workaround aceptado; funciona en forms model-driven.
     /// </summary>
-    private _updateFormFields(c: ContribuyenteDto): string[] {
+    private _updateFormFields(
+        c: SetContribuyente,
+        body: SetRucResponse,
+        estado: string | undefined
+    ): string[] {
         const warnings: string[] = [];
 
         const xrm = (window as unknown as { Xrm?: typeof Xrm }).Xrm;
@@ -257,16 +334,20 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
         }
 
         // governmentid = ruc formateado (ej: "80012345-0")
-        this._setTextField(formContext, FIELD_GOVERNMENT_ID, c.ruc);
+        this._setTextField(formContext, FIELD_GOVERNMENT_ID, this._rucFormateado(c), warnings);
 
-        // description = respuesta completa JSON
-        this._setTextField(formContext, FIELD_DESCRIPTION, JSON.stringify(c, null, 2));
+        // axx_dnitresponse = la respuesta completa de la SET, tal como la deja
+        // SetRucValidationService desde el path de mensajeria. Es el campo que
+        // renderiza el DnitResponseViewer: guardar el JSON en otro lado lo
+        // dejaria invisible para ese control.
+        this._setTextField(
+            formContext, FIELD_DNIT_RESPONSE, JSON.stringify(body, null, 2), warnings);
 
         // axx_fiscalstate = MultiSelectPicklist — lookup case-insensitive
-        if (c.estado) {
-            const estadoVal = ESTADO_MAP[c.estado.toUpperCase()];
+        if (estado) {
+            const estadoVal = ESTADO_MAP[estado.toUpperCase()];
             if (estadoVal === undefined) {
-                warnings.push(`Estado "${c.estado}" no reconocido; ${FIELD_FISCAL_STATE} no se actualizo.`);
+                warnings.push(`Estado "${estado}" no reconocido; ${FIELD_FISCAL_STATE} no se actualizo.`);
             } else {
                 const attr = formContext.getAttribute(FIELD_FISCAL_STATE) as
                     Xrm.Attributes.MultiSelectOptionSetAttribute | null;
@@ -283,14 +364,50 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
         // Formato: "APELLIDO(S), NOMBRE SEGUNDO_NOMBRE"
         // Ejemplo: "MIRANDA RUIZ DIAZ, JORGE SEBASTIAN"
         //   → lastname="MIRANDA RUIZ DIAZ", firstname="JORGE", middlename="SEBASTIAN"
-        if (!c.esPersonaJuridica && !c.esEntidadPublica && c.razonSocial) {
-            const { lastname, firstname, middlename } = this._parseRazonSocial(c.razonSocial);
-            this._setTextField(formContext, "lastname",   lastname);
-            this._setTextField(formContext, "firstname",  firstname);
-            this._setTextField(formContext, "middlename", middlename);
+        if (c.razonSocial) {
+            const esFisica = this._esPersonaFisica(c.tipoContribuyente);
+
+            if (esFisica === null) {
+                // Partir una razon social de empresa en apellido y nombres deja
+                // el contacto con datos falsos y nadie lo nota: ante la duda no
+                // se toca nada y se avisa.
+                warnings.push(c.tipoContribuyente
+                    ? `Tipo de contribuyente "${c.tipoContribuyente}" no reconocido; no se actualizaron los nombres.`
+                    : "La SET no informo el tipo de contribuyente; no se actualizaron los nombres.");
+            } else if (esFisica) {
+                const { lastname, firstname, middlename } = this._parseRazonSocial(c.razonSocial);
+                this._setTextField(formContext, "lastname",   lastname,   warnings);
+                this._setTextField(formContext, "firstname",  firstname,  warnings);
+                this._setTextField(formContext, "middlename", middlename, warnings);
+            }
         }
 
         return warnings;
+    }
+
+    // ── tipo de contribuyente ────────────────────────────────────────────────
+
+    /// <summary>
+    /// true = persona fisica, false = juridica, null = no se pudo determinar.
+    ///
+    /// La SET no trae los flags `esPersonaJuridica`/`esEntidadPublica` que traia
+    /// TURUC: lo mas cercano es `tipoContribuyente`, un texto libre del que no
+    /// tenemos la lista cerrada de valores. Por eso el match es por substring y
+    /// tolerante a acentos, y todo lo que no cae en ninguno de los dos lados
+    /// devuelve null en vez de asumir.
+    /// </summary>
+    private _esPersonaFisica(tipoContribuyente: string | undefined): boolean | null {
+        if (!tipoContribuyente) return null;
+
+        const normalizado = tipoContribuyente
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")   // saca los acentos antes de comparar
+            .toUpperCase();
+
+        if (normalizado.includes("FISICA"))   return true;
+        if (normalizado.includes("JURIDICA")) return false;
+
+        return null;
     }
 
     // ── parser de razonSocial ────────────────────────────────────────────────
@@ -323,18 +440,27 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
         return { lastname, firstname, middlename };
     }
 
+    /// <summary>
+    /// Escribe un campo de texto y acumula un warning si no esta en el formulario.
+    /// Antes ese caso volvia en silencio: el control mostraba exito y el dato no
+    /// se guardaba en ningun lado. Importa mas ahora que la respuesta va a
+    /// axx_dnitresponse, que no todos los formularios tienen puesto.
+    /// </summary>
     private _setTextField(
         formContext: Xrm.FormContext,
         fieldName: string,
-        value: string | null | undefined
+        value: string | null | undefined,
+        warnings: string[]
     ): void {
         if (!value) return;
         const attr = formContext.getAttribute(fieldName) as
             Xrm.Attributes.StringAttribute | null;
-        if (attr) {
-            attr.setValue(value);
-            attr.fireOnChange();
+        if (!attr) {
+            warnings.push(`El campo ${fieldName} no esta en el formulario.`);
+            return;
         }
+        attr.setValue(value);
+        attr.fireOnChange();
     }
 
     // ── helpers UI ───────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ sources:
   - src/integrations/contacts/**
   - tests/AxxonContacts.Functions.Tests/**
   - pipelines/azure-pipelines-contacts.yml
-last_reviewed: 2026-08-27
+last_reviewed: 2026-09-03
 -->
 
 # Contacts — Master Contact / Golden Record
@@ -201,9 +201,17 @@ Ademas del nombre y del bloque de domicilio, se copian:
 
 > **Se copian al CREAR el master, y solo ahi.** Cuando el master ya existe, la Function
 > asocia el raw y no vuelve a tocar sus campos: un mail o una personeria que cambian
-> despues en el raw no llegan al cliente unico. La unica escritura posterior sobre el
-> master es la de `SetRucValidationService`, con el resultado de la validacion del RUC
-> contra la SET.
+> despues en el raw no llegan al cliente unico. La unica escritura posterior que hace
+> **esta Function** sobre el master es la de `SetRucValidationService`, con el resultado
+> de la validacion del RUC contra la SET.
+
+> **`axx_dnitresponse` y `axx_fiscalstate` tienen dos escritores.** Ademas de
+> `SetRucValidationService`, el [`RucValidatorControl`](../webresources.md) los escribe
+> desde el formulario cuando alguien aprieta *Validar*. Desde la v1.0.2 los dos leen la
+> **misma** fuente —`GET /api/set/consulta-ruc`, la SET— y comparten el mapeo de estados,
+> asi que ya no pueden discrepar sobre un mismo RUC; antes el control consultaba TURUC.
+> Lo que sigue valiendo es que **gana el ultimo que escribe**: no hay merge ni orden
+> garantizado entre el formulario y el path de mensajeria.
 
 ## Comportamiento end-to-end
 

@@ -164,10 +164,19 @@ Ver [Pipelines](../plataforma/pipelines.md) y [Ambientes](../plataforma/ambiente
 
 | Quién | Qué usa |
 |---|---|
-| [`RucValidatorControl`](../webresources.md) (PCF, formulario de contact) | `GET /api/turuc/contribuyente/{ruc}` — el base URL y la function key entran por los parámetros `ApiBaseUrl` y `ApiKey` del control |
+| [`RucValidatorControl`](../webresources.md) (PCF, formulario de contact) | `GET /api/set/consulta-ruc` — el base URL y la function key entran por los parámetros `ApiBaseUrl` y `ApiKey` del control. Usaba TURUC hasta la v1.0.1 |
 | [Contacts](contacts.md) (`SetRucValidationService`) | `SetApiService` directo desde el core, sin pasar por esta app: es el path de mensajería |
+
+Con el `RucValidatorControl` pasado a la SET, **los cinco endpoints de `/api/turuc/*` se
+quedaron sin ningún consumidor conocido**. Siguen desplegados y andando; no se borraron
+porque el control se puede volver atrás y porque TURUC responde cosas que la SET no (la
+búsqueda por texto, sobre todo). Antes de darlos de baja habría que confirmar que nadie los
+llame desde fuera de este repo.
 
 ## Pendiente de documentar
 
 - Quién consume `Dataverse_ConsultaRuc`. Se construyó a pedido, sin un caller identificado
   todavía.
+- Qué valores devuelve `contribuyente.tipoContribuyente` en la respuesta de la SET. El
+  `RucValidatorControl` lo matchea por substring (`FISICA` / `JURIDICA`) justamente porque
+  no tenemos la lista cerrada.

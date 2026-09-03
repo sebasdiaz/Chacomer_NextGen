@@ -5,7 +5,7 @@ sources:
 sources_new:
   - src/webresources/*/*/*.tsx
   - src/integrations/contacts/AxxonContacts.WebResources/**
-last_reviewed: 2026-08-21
+last_reviewed: 2026-09-03
 -->
 
 # Web resources y controles PCF
@@ -32,10 +32,28 @@ Lo que el manifest no dice — de dónde saca los datos cada control:
 ## Los que ya tienen contexto
 
 **`RucValidatorControl`** — bound al campo `DocumentNumber` del formulario de contact.
-Consulta `GET {ApiBaseUrl}/api/turuc/contribuyente/{ruc}` contra la app
+Consulta `GET {ApiBaseUrl}/api/set/consulta-ruc?ruc={ruc}&dv={dv}` contra la app
 [Fiscal](integraciones/fiscal.md) (base URL y function key entran como parámetros del
-control) y escribe el resultado en el formulario, mapeando el estado de la API al OptionSet
+control) y escribe el resultado en el formulario, mapeando el estado al OptionSet
 `axx_fiscalstate`.
+
+**Consultaba TURUC hasta la v1.0.1.** Se pasó a la SET porque es la fuente oficial: es la
+misma que usa el path de mensajería (`SetRucValidationService`), así que el formulario y el
+matching por Service Bus dejan de poder discrepar sobre el estado de un mismo RUC.
+
+Tres consecuencias del cambio que no se leen del diff:
+
+- **El RUC hay que escribirlo con dígito verificador.** La SET pide `ruc` y `dv` por
+  separado, así que el control parte el valor por el guion y corta con un error si no lo
+  encuentra. TURUC aceptaba el número solo.
+- **El JSON crudo ahora va a `axx_dnitresponse`**, no a `description`. Es el campo que
+  renderiza el `DnitResponseViewer` y el que escribe `SetRucValidationService`: dejarlo en
+  `description` hubiera guardado una respuesta de la SET donde nadie la parsea.
+- **Los nombres se parten sólo si la SET dice que es persona física.** TURUC traía
+  `esPersonaJuridica`/`esEntidadPublica`; la SET trae `tipoContribuyente`, texto libre del
+  que no tenemos la lista cerrada de valores. Si no dice "FISICA" ni "JURIDICA", el control
+  **no toca** `lastname`/`firstname`/`middlename` y avisa: partir la razón social de una
+  empresa en apellido y nombres deja el contacto con datos falsos que nadie nota.
 
 **`MasterContactAddressesGrid`** — muestra los domicilios (`customeraddress`) de los
 contactos hijo de un Master Contact. Es la contraparte visual del copiado de domicilio al
