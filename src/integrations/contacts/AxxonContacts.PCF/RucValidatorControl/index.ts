@@ -50,6 +50,34 @@ const FIELD_GOVERNMENT_ID  = "governmentid";
 const FIELD_FISCAL_STATE   = "axx_fiscalstate";
 const FIELD_DNIT_RESPONSE  = "axx_dnitresponse";
 
+/// <summary>
+/// Tipo de documento. Existe en el formulario de **lead**, donde
+/// `axx_numerodocumento` guarda CI o RUC segun este campo. En contact y account
+/// no esta: ahi el campo bindeado es `msdyn_identificationnumber`, que siempre
+/// es un RUC, y la validacion corre como siempre.
+/// </summary>
+const FIELD_DOCUMENT_TYPE  = "axx_tipodedocumento";
+
+// ── Endpoint ─────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Environment variable con la URL completa de la consulta, **key incluida**:
+///
+///   https://fa-axxonfiscal-inte.azurewebsites.net/api/set/consulta-ruc?code=…
+///
+/// El control le agrega `&ruc=..&dv=..`.
+///
+/// Mismo criterio que `axx_FUNCTION_URL` de
+/// [TicketAtencion](docs/wiki/integraciones/ticketatencion.md): la key va dentro
+/// de la URL y no en un header aparte, para tener **un solo lugar** que tocar
+/// cuando rota o cuando cambia el ambiente. Antes vivia en los parametros del
+/// control, replicada en 15 lugares —5 formularios x 3 form factors— y se perdia
+/// con cualquier import de solucion.
+///
+/// La key llega al browser igual: la variable no la esconde, solo la centraliza.
+/// </summary>
+const ENV_VAR_CONSULTA_RUC_URL = "axx_FISCAL_CONSULTA_RUC_URL";
+
 export class RucValidatorControl implements ComponentFramework.StandardControl<IInputs, IOutputs> {
 
     private _context:            ComponentFramework.Context<IInputs>;
@@ -66,6 +94,14 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
     // Estado interno
     private _currentValue = "";
     private _loading      = false;
+
+    /// <summary>
+    /// La environment variable se lee una vez por sesion del browser y no por
+    /// instancia: un formulario puede tener el control mas de una vez, y la URL
+    /// es la misma para todas. Es una promesa y no un string para que dos
+    /// instancias que arrancan a la par compartan la misma query.
+    /// </summary>
+    private static _urlCache: Promise<string | null> | null = null;
 
     constructor() { /* empty */ }
 
@@ -174,6 +210,17 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             return;
         }
 
+        // Si el formulario dice que el documento no es un RUC, no hay nada que
+        // consultar: la SET solo conoce RUCs. Mandarle una cedula devolveria
+        // "no registrado", que se lee como un dato malo cuando en realidad la
+        // consulta nunca correspondia.
+        const tipoDocumento = this._tipoDocumento();
+        if (tipoDocumento && !tipoDocumento.toUpperCase().includes("RUC")) {
+            this._showStatus("info",
+                `El documento es ${tipoDocumento}, no un RUC: no se valida contra la SET.`);
+            return;
+        }
+
         // La SET pide el RUC y el digito verificador por separado; el campo del
         // formulario los guarda juntos ("80012345-0"). Se parte aca y no en la
         // Function porque es el mismo criterio que usa SetRucValidationService.
@@ -224,6 +271,100 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
         } finally {
             this._setLoading(false);
         }
+    }
+
+    // ── resolucion del endpoint ──────────────────────────────────────────────
+
+    /// <summary>
+    /// URL de la consulta, sin los parametros `ruc`/`dv`.
+    ///
+    /// Gana la environment variable; si no esta, se cae a los parametros
+    /// `ApiBaseUrl` y `ApiKey` del control. El fallback no es decorativo: es lo
+    /// que hace que el control siga andando en los formularios que todavia no
+    /// migraron y en el harness de `pcf-scripts start`, donde no hay Dataverse.
+    /// </summary>
+    private async _endpoint(): Promise<string> {
+        const desdeVariable = await this._urlDeEnvironmentVariable();
+        if (desdeVariable) return desdeVariable;
+
+        const base   = (this._context.parameters.ApiBaseUrl.raw ?? "").replace(/\/$/, "");
+        const apiKey = this._context.parameters.ApiKey.raw ?? "";
+
+        if (!base) {
+            throw new Error(
+                `Falta configurar ${ENV_VAR_CONSULTA_RUC_URL} (o el parametro ApiBaseUrl del control).`);
+        }
+
+        const url = `${base}/api/set/consulta-ruc`;
+        return apiKey ? `${url}?code=${encodeURIComponent(apiKey)}` : url;
+    }
+
+    /// <summary>
+    /// Lee la environment variable una sola vez por sesion del browser.
+    ///
+    /// El valor del ambiente (`environmentvariablevalue`) pisa al `defaultvalue`
+    /// de la definicion; si no hay ninguno de los dos, devuelve null y decide el
+    /// fallback. Un error de la query tampoco se propaga: el control tiene que
+    /// poder seguir con los parametros, no quedarse mudo porque el usuario no
+    /// tenga lectura sobre la tabla de variables.
+    /// </summary>
+    private _urlDeEnvironmentVariable(): Promise<string | null> {
+        RucValidatorControl._urlCache ??= this._leerEnvironmentVariable();
+        return RucValidatorControl._urlCache;
+    }
+
+    private async _leerEnvironmentVariable(): Promise<string | null> {
+        const webApi = this._context.webAPI;
+        if (!webApi) return null;
+
+        try {
+            const query =
+                `?$select=defaultvalue` +
+                `&$filter=schemaname eq '${ENV_VAR_CONSULTA_RUC_URL}'` +
+                `&$expand=environmentvariabledefinition_environmentvariablevalue($select=value)`;
+
+            const res = await webApi.retrieveMultipleRecords(
+                "environmentvariabledefinition", query);
+
+            const def = res.entities?.[0] as {
+                defaultvalue?: string;
+                environmentvariabledefinition_environmentvariablevalue?: { value?: string }[];
+            } | undefined;
+            if (!def) return null;
+
+            const delAmbiente =
+                def.environmentvariabledefinition_environmentvariablevalue?.[0]?.value;
+
+            return (delAmbiente || def.defaultvalue || "").trim() || null;
+        } catch {
+            // Sin permiso sobre la tabla, o Dataverse caido: que decida el fallback.
+            return null;
+        }
+    }
+
+    // ── tipo de documento del formulario ─────────────────────────────────────
+
+    /// <summary>
+    /// Etiqueta del tipo de documento ("RUC", "CI"...), o null si no aplica.
+    ///
+    /// Devuelve null en dos casos que significan lo mismo para el caller —
+    /// "no hay motivo para saltear la validacion":
+    ///   - el campo no esta en el formulario (contact, account)
+    ///   - esta pero sin valor seleccionado
+    ///
+    /// Se compara por **etiqueta** y no por el valor del OptionSet porque los
+    /// numeros no son estables entre environments; el texto si.
+    /// </summary>
+    private _tipoDocumento(): string | null {
+        const xrm = (window as unknown as { Xrm?: typeof Xrm }).Xrm;
+        const formContext = xrm?.Page as Xrm.FormContext | undefined;
+        if (!formContext) return null;
+
+        const attr = formContext.getAttribute(FIELD_DOCUMENT_TYPE) as
+            Xrm.Attributes.OptionSetAttribute | null;
+        if (!attr) return null;
+
+        return attr.getText()?.trim() || null;
     }
 
     // ── parseo del RUC ───────────────────────────────────────────────────────
@@ -281,13 +422,12 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
     /// Key Vault. Este control nunca ve esa credencial.
     /// </summary>
     private async _callApi(ruc: string, dv: string): Promise<SetRucResponse> {
-        const base   = (this._context.parameters.ApiBaseUrl.raw ?? "").replace(/\/$/, "");
-        const apiKey = this._context.parameters.ApiKey.raw ?? "";
+        const endpoint = await this._endpoint();
 
-        const qs = new URLSearchParams({ ruc, dv });
-        if (apiKey) qs.set("code", apiKey);
-
-        const url = `${base}/api/set/consulta-ruc?${qs.toString()}`;
+        // El separador depende de si la URL ya trae `?code=`: la de la
+        // environment variable si, la armada con los parametros no.
+        const sep = endpoint.includes("?") ? "&" : "?";
+        const url = `${endpoint}${sep}${new URLSearchParams({ ruc, dv }).toString()}`;
 
         const response = await fetch(url, {
             method: "GET",
@@ -503,10 +643,14 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             : "&#128269; Validar";
     }
 
-    private _showStatus(type: "success" | "error" | "warning", message: string): void {
+    private _showStatus(
+        type: "success" | "error" | "warning" | "info",
+        message: string
+    ): void {
         this._statusRow.className  = `ruc-status ruc-status--${type}`;
         this._statusIcon.textContent = type === "success" ? "✅" :
-                                       type === "warning" ? "⚠️" : "❌";
+                                       type === "warning" ? "⚠️" :
+                                       type === "info"    ? "ℹ️" : "❌";
         this._statusText.textContent = message;
     }
 
