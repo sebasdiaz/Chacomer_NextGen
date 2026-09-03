@@ -97,6 +97,14 @@
     border: 1px solid #f8d04d;
 }
 
+/* Informativo: la validación no corresponde (ej. el documento es CI, no RUC).
+   No es un problema, así que no comparte el amarillo de warning. */
+.ruc-status--info {
+    background: #deecf9;
+    color: #005a9e;
+    border: 1px solid #71afe5;
+}
+
 .ruc-status-icon {
     font-size: 14px;
     line-height: 1;

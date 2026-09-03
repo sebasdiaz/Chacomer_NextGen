@@ -31,7 +31,55 @@ Lo que el manifest no dice — de dónde saca los datos cada control:
 
 ## Los que ya tienen contexto
 
-**`RucValidatorControl`** — bound al campo `DocumentNumber` del formulario de contact.
+**`RucValidatorControl`** — bound al campo `DocumentNumber`. Está puesto en cinco lugares:
+tres formularios de contact, uno de account y el **`Annata 365` de lead**.
+
+> **En lead el control corre en otro contexto y no todo aplica.** El campo bindeado es
+> `axx_numerodocumento`, que guarda **CI o RUC** según `axx_tipodedocumento`; en contact y
+> account es `msdyn_identificationnumber`, que siempre es un RUC.
+>
+> Desde la v1.0.4, **si el tipo de documento no dice "RUC" el control no consulta nada** y
+> lo informa. Mandarle una cédula a la SET devolvía "no registrado", que se lee como un dato
+> malo cuando la consulta nunca correspondía. La comparación es por la **etiqueta** del
+> OptionSet, no por su valor: los números no son estables entre environments. Si el campo no
+> está en el formulario —contact, account— no hay nada que saltear y la validación corre
+> como siempre.
+>
+> `governmentid` y `axx_fiscalstate` **no existen en lead**, así que ahí el control avisa que
+> no pudo escribirlos. `axx_dnitresponse` sí existe.
+
+**Desde la v1.1.0 la URL vive en una environment variable**, no en los parámetros del
+control:
+
+```
+axx_FISCAL_CONSULTA_RUC_URL
+https://fa-axxonfiscal-inte.azurewebsites.net/api/set/consulta-ruc?code=…
+```
+
+El control le agrega `&ruc=..&dv=..`. Mismo criterio que `axx_FUNCTION_URL` de
+[TicketAtencion](integraciones/ticketatencion.md): **la key va dentro de la URL**, no en un
+header aparte, para tener un solo lugar que tocar cuando rota o cuando cambia el ambiente.
+La key llega al browser igual — la variable no la esconde, sólo la centraliza.
+
+Que estuviera en los parámetros del control no era un detalle: **el mismo valor estaba
+repetido en 15 lugares** (5 placements × 3 form factors), y ahí se lo lleva puesto cualquier
+import de solución. Pasó de verdad: se corrigió el formulario de lead, se verificó, y más
+tarde había vuelto solo al valor viejo.
+
+`ApiBaseUrl` y `ApiKey` **siguen existiendo como fallback** y ya no son obligatorios: los usa
+un formulario que todavía no migró, y el harness de `pcf-scripts start`, donde no hay
+Dataverse. Si no hay ni variable ni parámetro, el control lo dice en vez de fallar callado.
+
+Leer la variable exige `<uses-feature name="WebAPI" required="true" />` en el manifest. Se
+lee **una vez por sesión del browser** (cache estático compartido entre instancias), y un
+error de esa query no rompe nada: cae al fallback, porque un usuario sin lectura sobre la
+tabla de variables tiene que poder seguir validando.
+
+> **El `ApiBaseUrl` apunta a [Fiscal](integraciones/fiscal.md), no a Contacts.** Es fácil
+> equivocarse porque el control vive en la solución de contacts: los cinco placements
+> apuntaban a `fa-axxoncontacts-inte`, que no tiene **ningún** endpoint HTTP desde que el
+> #50 movió las consultas RUC a `AxxonFiscal`. Daba `404` — con TURUC también, así que el
+> control estuvo roto desde entonces. Si deja de responder, esto es lo primero que mirar.
 Consulta `GET {ApiBaseUrl}/api/set/consulta-ruc?ruc={ruc}&dv={dv}` contra la app
 [Fiscal](integraciones/fiscal.md) (base URL y function key entran como parámetros del
 control) y escribe el resultado en el formulario, mapeando el estado al OptionSet
