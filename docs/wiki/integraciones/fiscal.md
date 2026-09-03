@@ -3,7 +3,7 @@ sources:
   - src/integrations/fiscal/**
   - src/core/Axxon.Eip.Core/Fiscal/**
   - pipelines/azure-pipelines-fiscal.yml
-last_reviewed: 2026-08-26
+last_reviewed: 2026-09-03
 -->
 
 # Fiscal — consultas por RUC (SET/DNIT, TURUC y Dataverse)
@@ -41,6 +41,26 @@ CORS.
 | `Turuc_GetEntidadPublica` | `GET /api/turuc/entidad-publica` | TURUC |
 | `Dataverse_ConsultaRuc` | `GET /api/dataverse/consulta-ruc?ruc=XX` | Dataverse |
 | `Dataverse_Options` | `OPTIONS /api/dataverse/{*any}` — preflight CORS, anónimo | — |
+
+### Probarlos
+
+Hay una **colección de Postman** versionada, con los 11 endpoints agrupados por origen y
+cuatro casos que esperan `400`:
+[`src/integrations/fiscal/AxxonFiscal.Functions/postman/`](../../../src/integrations/fiscal/AxxonFiscal.Functions/postman/readme.md).
+Trae environments para INTE, TEST y `func start`, aunque **la colección funciona sola**:
+las mismas variables están como defaults a nivel colección. La function key no viaja en
+ninguno de los archivos.
+
+Los tres orígenes no se prueban igual, y es a propósito. **SET y TURUC son proxies**: los
+tests sólo verifican que la Function llegó al origen y devolvió JSON, no la forma del
+payload — afirmarla sería atarse al contrato de un tercero, y un rojo ahí no diría nada
+sobre este código. `Dataverse_ConsultaRuc` sí tiene forma propia, así que ahí los tests
+afirman el sobre completo, el `tipoPersona` derivado de la tabla y el match por prefijo.
+
+**La colección todavía no se corrió contra ningún ambiente**: se escribió leyendo las
+Functions. Antes de leer un rojo como un bug, revisar los dos pasos manuales de
+[Estado del despliegue](#estado-del-despliegue) — sin los role assignments la app no
+arranca, y sin el Application User los endpoints de `/dataverse/*` devuelven `502`.
 
 ## Consulta de partes en Dataverse
 
