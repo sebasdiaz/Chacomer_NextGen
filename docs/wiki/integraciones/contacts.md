@@ -207,7 +207,7 @@ Ademas del nombre y del bloque de domicilio, se copian:
 
 > **`axx_dnitresponse` y `axx_fiscalstate` tienen dos escritores.** Ademas de
 > `SetRucValidationService`, el [`RucValidatorControl`](../webresources.md) los escribe
-> desde el formulario cuando alguien aprieta *Validar*. Desde la v1.0.2 los dos leen la
+> desde el formulario cuando alguien aprieta *Validar*. Desde la v1.0.3 los dos leen la
 > **misma** fuente —`GET /api/set/consulta-ruc`, la SET— y comparten el mapeo de estados,
 > asi que ya no pueden discrepar sobre un mismo RUC; antes el control consultaba TURUC.
 > Lo que sigue valiendo es que **gana el ultimo que escribe**: no hay merge ni orden

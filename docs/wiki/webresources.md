@@ -49,11 +49,17 @@ Tres consecuencias del cambio que no se leen del diff:
 - **El JSON crudo ahora va a `axx_dnitresponse`**, no a `description`. Es el campo que
   renderiza el `DnitResponseViewer` y el que escribe `SetRucValidationService`: dejarlo en
   `description` hubiera guardado una respuesta de la SET donde nadie la parsea.
-- **Los nombres se parten sólo si la SET dice que es persona física.** TURUC traía
-  `esPersonaJuridica`/`esEntidadPublica`; la SET trae `tipoContribuyente`, texto libre del
-  que no tenemos la lista cerrada de valores. Si no dice "FISICA" ni "JURIDICA", el control
-  **no toca** `lastname`/`firstname`/`middlename` y avisa: partir la razón social de una
-  empresa en apellido y nombres deja el contacto con datos falsos que nadie nota.
+- **El control ya no parte los nombres, y no es una decisión: es que no se puede.** TURUC
+  devolvía `"MIRANDA RUIZ DIAZ, JORGE SEBASTIAN"` — la coma marcaba dónde terminaban los
+  apellidos. La SET devuelve `"JORGE SEBASTIAN MIRANDA RUIZ DIAZ"`, sin separador y con los
+  nombres primero, así que no hay forma de saber si `JORGE SEBASTIAN MIRANDA` son dos
+  nombres y un apellido o un nombre y dos apellidos. El control avisa con el nombre completo
+  para que se cargue a mano. Sigue partiendo si algún día viene una coma.
+
+  El tipo de persona sale de **`contribuyente.tipoPersona`**, que vale `"FISICO"` o
+  `"JURIDICO"` — verificado contra INTE el 2026-09-03. Si no reconoce el valor, no toca
+  `lastname`/`firstname`/`middlename`: partir la razón social de una empresa en apellido y
+  nombres deja el contacto con datos falsos que nadie nota.
 
 **`MasterContactAddressesGrid`** — muestra los domicilios (`customeraddress`) de los
 contactos hijo de un Master Contact. Es la contraparte visual del copiado de domicilio al

@@ -62,6 +62,34 @@ Functions. Antes de leer un rojo como un bug, revisar los dos pasos manuales de
 [Estado del despliegue](#estado-del-despliegue) — sin los role assignments la app no
 arranca, y sin el Application User los endpoints de `/dataverse/*` devuelven `502`.
 
+### Qué devuelve la SET
+
+Verificado contra `fa-axxonfiscal-inte` el 2026-09-03. **Un RUC que no existe también da
+`200`**: lo que lo distingue es que no venga `contribuyente`.
+
+```json
+{ "codigo": "VALIDO", "mensaje": "STATUS_RESPONSE_OK", "estado": "VALIDO",
+  "contribuyente": { "razonSocial": "JORGE SEBASTIAN MIRANDA RUIZ DIAZ ", "estado": "CANCELADO",
+                     "categoria": "PEQUENO", "mesCierre": "12", "tipoPersona": "FISICO",
+                     "rucAnterior": "MIRJ772390W" } }
+
+{ "codigo": "INVALIDO", "mensaje": "1000000-0 no registrado en la Base de Datos de RUC",
+  "estado": "INVALIDO" }
+```
+
+Tres cosas que se prestan a confusión:
+
+- **Hay dos `estado` y significan cosas distintas.** El de arriba es `VALIDO`/`INVALIDO` y
+  dice si la consulta encontró el RUC; el de adentro es el estado fiscal
+  (`ACTIVO`, `CANCELADO`, …) y es el único que va a `axx_fiscalstate`.
+- **La respuesta no trae el RUC.** No hay `ruc` ni `digitoVerificador`: quien lo necesite
+  formateado tiene que reconstruirlo desde lo que consultó.
+- **`razonSocial` viene sin separar y con los nombres primero**, y a veces con espacios al
+  final. No se puede partir en apellido y nombres — ver
+  [Web resources](../webresources.md).
+
+`tipoPersona` vale `FISICO` o `JURIDICO`. Las personas jurídicas suman `tipoSociedad`.
+
 ## Consulta de partes en Dataverse
 
 `Dataverse_ConsultaRuc` busca **contacts y accounts** por RUC y devuelve, de cada uno,
@@ -177,6 +205,5 @@ llame desde fuera de este repo.
 
 - Quién consume `Dataverse_ConsultaRuc`. Se construyó a pedido, sin un caller identificado
   todavía.
-- Qué valores devuelve `contribuyente.tipoContribuyente` en la respuesta de la SET. El
-  `RucValidatorControl` lo matchea por substring (`FISICA` / `JURIDICA`) justamente porque
-  no tenemos la lista cerrada.
+- Si `contribuyente.tipoPersona` tiene más valores que `FISICO` y `JURIDICO`. Los dos están
+  verificados; la lista completa no.

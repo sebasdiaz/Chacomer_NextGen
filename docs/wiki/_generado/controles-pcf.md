@@ -18,4 +18,4 @@ vive en [Web resources](../webresources.md).
 | `MasterContactAccountGrid` | `AxxonContacts` | `0.0.1` | `masterContactId (bound, SingleLine.Text)` | `src/webresources/MasterContactAccountGrid` |
 | `MasterContactAddressesGrid` | `AxxonContacts` | `0.0.2` | `masterContactId (bound, SingleLine.Text)` | `src/webresources/MasterContactAddressesGrid` |
 | `MasterContactChildrenGrid` | `AxxonContacts` | `0.0.1` | `masterContactId (bound, SingleLine.Text)` | `src/webresources/MasterContactChildrenGrid` |
-| `RucValidatorControl` | `AxxonContacts` | `1.0.2` | `DocumentNumber (bound, SingleLine.Text)`, `ApiBaseUrl (input, SingleLine.URL)`, `ApiKey (input, SingleLine.Text)` | `src/integrations/contacts/AxxonContacts.PCF` |
+| `RucValidatorControl` | `AxxonContacts` | `1.0.3` | `DocumentNumber (bound, SingleLine.Text)`, `ApiBaseUrl (input, SingleLine.URL)`, `ApiKey (input, SingleLine.Text)` | `src/integrations/contacts/AxxonContacts.PCF` |
