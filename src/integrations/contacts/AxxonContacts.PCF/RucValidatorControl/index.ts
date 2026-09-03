@@ -6,18 +6,22 @@ import { IInputs, IOutputs } from "./generated/ManifestTypes";
 // es opcional y el codigo no asume que un campo este presente.
 
 interface SetContribuyente {
-    razonSocial?:       string;
-    estado?:            string;
-    ruc?:               string;
-    digitoVerificador?: string;
-    tipoContribuyente?: string;
+    razonSocial?:  string;
+    /** Estado del contribuyente: "ACTIVO", "CANCELADO", "SUSPENDIDO"... */
+    estado?:       string;
+    /** "FISICO" o "JURIDICO". Verificado contra INTE el 2026-09-03. */
+    tipoPersona?:  string;
+    categoria?:    string;
+    tipoSociedad?: string;
+    rucAnterior?:  string;
     [key: string]: string | undefined;
 }
 
 interface SetRucResponse {
+    /** "VALIDO" / "INVALIDO": si la consulta encontro el RUC, no el estado del contribuyente. */
     codigo?:        string;
     mensaje?:       string;
-    /** Algunas respuestas traen el estado arriba y no dentro de contribuyente. */
+    /** Idem codigo. NO es el estado fiscal — ese vive en contribuyente.estado. */
     estado?:        string;
     contribuyente?: SetContribuyente;
 }
@@ -198,9 +202,9 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             const estado = this._estadoDe(body);
 
             // Actualizar campos del formulario via Xrm
-            const warnings = this._updateFormFields(contribuyente, body, estado);
+            const warnings = this._updateFormFields(contribuyente, body, estado, partes);
 
-            const resumen = `${contribuyente.razonSocial} — ${estado ?? "sin estado"}`;
+            const resumen = `${contribuyente.razonSocial.trim()} — ${estado ?? "sin estado"}`;
             if (warnings.length > 0) {
                 // Se encontro el RUC pero algun campo no se pudo actualizar:
                 // avisar en vez de mostrar exito enganoso.
@@ -210,7 +214,7 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             }
 
             // Persistir el valor formateado (ej: "80012345-0")
-            this._currentValue = this._rucFormateado(contribuyente) ?? entered;
+            this._currentValue = this._rucFormateado(partes);
             this._input.value  = this._currentValue;
             this._notifyOutputChanged();
 
@@ -240,23 +244,29 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
     }
 
     /// <summary>
-    /// Reconstruye "ruc-dv" para guardar en el formulario. La SET los devuelve
-    /// en campos separados, y algunas respuestas ya traen el guion incluido en
-    /// `ruc`: se contempla para no terminar con "80012345-0-0".
+    /// El RUC formateado que se guarda en el formulario.
+    ///
+    /// La SET **no devuelve el RUC** en la respuesta —verificado contra INTE el
+    /// 2026-09-03: `contribuyente` trae razonSocial, estado, tipoPersona,
+    /// categoria y poco mas—, asi que el unico valor disponible es el que se
+    /// consulto. Se reconstruye desde ahi. Devolver null dejaria `governmentid`
+    /// sin escribir, que es lo que hacia TURUC cuando si mandaba el campo.
     /// </summary>
-    private _rucFormateado(c: SetContribuyente): string | null {
-        const ruc = c.ruc?.trim();
-        if (!ruc) return null;
-
-        const dv = c.digitoVerificador?.trim();
-        if (!dv || ruc.includes("-")) return ruc;
-
-        return `${ruc}-${dv}`;
+    private _rucFormateado(partes: { ruc: string; dv: string }): string {
+        return `${partes.ruc}-${partes.dv}`;
     }
 
-    /// <summary>El estado vive dentro de contribuyente, y en algunas respuestas arriba.</summary>
+    /// <summary>
+    /// El estado fiscal, que vive **solo** dentro de contribuyente.
+    ///
+    /// No hay fallback al `estado` de arriba a proposito: ese vale "VALIDO" o
+    /// "INVALIDO" y dice si la consulta encontro el RUC, no como esta el
+    /// contribuyente. Mezclarlos mandaria "VALIDO" al mapeo de axx_fiscalstate,
+    /// que no lo tiene, y el warning haria pensar que la SET devolvio un estado
+    /// desconocido cuando en realidad nunca devolvio ninguno.
+    /// </summary>
     private _estadoDe(body: SetRucResponse): string | undefined {
-        return body.contribuyente?.estado?.trim() || body.estado?.trim() || undefined;
+        return body.contribuyente?.estado?.trim() || undefined;
     }
 
     // ── llamada a la Azure Function ──────────────────────────────────────────
@@ -322,7 +332,8 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
     private _updateFormFields(
         c: SetContribuyente,
         body: SetRucResponse,
-        estado: string | undefined
+        estado: string | undefined,
+        partes: { ruc: string; dv: string }
     ): string[] {
         const warnings: string[] = [];
 
@@ -334,7 +345,7 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
         }
 
         // governmentid = ruc formateado (ej: "80012345-0")
-        this._setTextField(formContext, FIELD_GOVERNMENT_ID, this._rucFormateado(c), warnings);
+        this._setTextField(formContext, FIELD_GOVERNMENT_ID, this._rucFormateado(partes), warnings);
 
         // axx_dnitresponse = la respuesta completa de la SET, tal como la deja
         // SetRucValidationService desde el path de mensajeria. Es el campo que
@@ -360,25 +371,40 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             }
         }
 
-        // Persona física: descomponer razonSocial en lastname, firstname, middlename
-        // Formato: "APELLIDO(S), NOMBRE SEGUNDO_NOMBRE"
-        // Ejemplo: "MIRANDA RUIZ DIAZ, JORGE SEBASTIAN"
-        //   → lastname="MIRANDA RUIZ DIAZ", firstname="JORGE", middlename="SEBASTIAN"
-        if (c.razonSocial) {
-            const esFisica = this._esPersonaFisica(c.tipoContribuyente);
+        // ── Nombres de persona fisica ────────────────────────────────────────
+        //
+        // Solo se tocan si la SET dice que el RUC es de una persona fisica: partir
+        // la razon social de una empresa en apellido y nombres deja el contacto con
+        // datos falsos que nadie nota.
+        //
+        // Pero saber que es fisica no alcanza para partirla. La SET devuelve el
+        // nombre **sin separador y con los nombres primero**:
+        //
+        //   SET:   "JORGE SEBASTIAN MIRANDA RUIZ DIAZ"
+        //   TURUC: "MIRANDA RUIZ DIAZ, JORGE SEBASTIAN"   (la coma marcaba el corte)
+        //
+        // Sin la coma no hay forma de saber donde terminan los nombres y empiezan
+        // los apellidos: "JORGE SEBASTIAN MIRANDA" podria ser dos nombres y un
+        // apellido, o un nombre y dos apellidos. Por eso se parte solo si viene la
+        // coma, y si no, no se escribe nada y se avisa con el nombre completo para
+        // que se cargue a mano.
+        const razonSocial = c.razonSocial?.trim();
+        if (razonSocial) {
+            const esFisica = this._esPersonaFisica(c.tipoPersona);
 
             if (esFisica === null) {
-                // Partir una razon social de empresa en apellido y nombres deja
-                // el contacto con datos falsos y nadie lo nota: ante la duda no
-                // se toca nada y se avisa.
-                warnings.push(c.tipoContribuyente
-                    ? `Tipo de contribuyente "${c.tipoContribuyente}" no reconocido; no se actualizaron los nombres.`
-                    : "La SET no informo el tipo de contribuyente; no se actualizaron los nombres.");
-            } else if (esFisica) {
-                const { lastname, firstname, middlename } = this._parseRazonSocial(c.razonSocial);
+                warnings.push(c.tipoPersona
+                    ? `Tipo de persona "${c.tipoPersona}" no reconocido; no se actualizaron los nombres.`
+                    : "La SET no informo el tipo de persona; no se actualizaron los nombres.");
+            } else if (esFisica && razonSocial.includes(",")) {
+                const { lastname, firstname, middlename } = this._parseRazonSocial(razonSocial);
                 this._setTextField(formContext, "lastname",   lastname,   warnings);
                 this._setTextField(formContext, "firstname",  firstname,  warnings);
                 this._setTextField(formContext, "middlename", middlename, warnings);
+            } else if (esFisica) {
+                warnings.push(
+                    `La SET devolvio el nombre sin separar apellidos: "${razonSocial}". ` +
+                    "Cargar nombre y apellido a mano.");
             }
         }
 
@@ -391,21 +417,24 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
     /// true = persona fisica, false = juridica, null = no se pudo determinar.
     ///
     /// La SET no trae los flags `esPersonaJuridica`/`esEntidadPublica` que traia
-    /// TURUC: lo mas cercano es `tipoContribuyente`, un texto libre del que no
-    /// tenemos la lista cerrada de valores. Por eso el match es por substring y
-    /// tolerante a acentos, y todo lo que no cae en ninguno de los dos lados
-    /// devuelve null en vez de asumir.
+    /// TURUC: el equivalente es `tipoPersona`, que vale **"FISICO"** o
+    /// **"JURIDICO"** (verificado contra INTE el 2026-09-03).
+    ///
+    /// El match es por la raiz FISIC/JURIDIC y no por el valor completo para no
+    /// romperse con la terminacion: la SET usa el masculino ("JURIDICO") aunque
+    /// el termino de negocio sea "persona juridica". Lo que no cae en ninguno de
+    /// los dos lados devuelve null en vez de asumir.
     /// </summary>
-    private _esPersonaFisica(tipoContribuyente: string | undefined): boolean | null {
-        if (!tipoContribuyente) return null;
+    private _esPersonaFisica(tipoPersona: string | undefined): boolean | null {
+        if (!tipoPersona) return null;
 
-        const normalizado = tipoContribuyente
+        const normalizado = tipoPersona
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")   // saca los acentos antes de comparar
             .toUpperCase();
 
-        if (normalizado.includes("FISICA"))   return true;
-        if (normalizado.includes("JURIDICA")) return false;
+        if (normalizado.includes("JURIDIC")) return false;
+        if (normalizado.includes("FISIC"))   return true;
 
         return null;
     }
