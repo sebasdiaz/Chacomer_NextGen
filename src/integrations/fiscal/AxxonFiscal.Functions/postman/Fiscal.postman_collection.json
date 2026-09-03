@@ -1,0 +1,858 @@
+{
+  "info": {
+    "_postman_id": "d4f7a1c8-6b02-4e93-9a17-5f2c8b0d3e64",
+    "name": "EiP - Fiscal (consultas por RUC)",
+    "description": "Consultas por RUC expuestas por AxxonFiscal.Functions: SET/DNIT, TURUC y Dataverse.\n\nSeleccionar primero un environment: **INTE**, **TEST** o **Local**. La function key va en la variable `functionKey` del environment, nunca en esta coleccion.\n\nLos tres origenes se comportan distinto y eso define que se puede afirmar en los tests:\n\n- **SET** y **TURUC** son proxies: la Function reenvia el JSON crudo tal cual. Sus tests verifican que la Function llego al origen y devolvio JSON, no la forma del payload — esa la manda un tercero y puede cambiar sin avisar.\n- **Dataverse** si tiene forma propia (`{ruc, cantidad, resultados}`), y ahi los tests si la afirman.\n\nDoc completa: `docs/wiki/integraciones/fiscal.md`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "x-functions-key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{functionKey}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Chequeos comunes a toda la coleccion.",
+          "// El preflight OPTIONS contesta sin body, asi que queda fuera del chequeo de JSON.",
+          "if (pm.request.method !== 'OPTIONS') {",
+          "    pm.test('Content-Type es JSON', function () {",
+          "        pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json');",
+          "    });",
+          "}",
+          "",
+          "// Un 401 aca casi siempre es la function key vacia o pegada de otro ambiente.",
+          "if (pm.response.code === 401) {",
+          "    console.warn('401: revisar la variable functionKey del environment seleccionado.');",
+          "}",
+          "",
+          "// El 502 significa cosas distintas segun el origen, y conviene no confundirlas.",
+          "if (pm.response.code === 502) {",
+          "    if (pm.request.url.getPath().indexOf('/dataverse/') !== -1) {",
+          "        console.warn('502 en /dataverse: la MI de la app no esta dada de alta como Application User, o Dataverse no responde. Detalle en App Insights.');",
+          "    } else {",
+          "        console.warn('502: la Function no pudo llegar a la API externa (SET o TURUC). Detalle en App Insights.');",
+          "    }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://fa-axxonfiscal-inte.azurewebsites.net/api",
+      "type": "string"
+    },
+    {
+      "key": "functionKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ruc",
+      "value": "80054203-7",
+      "type": "string"
+    },
+    {
+      "key": "rucSinDv",
+      "value": "80054203",
+      "type": "string"
+    },
+    {
+      "key": "setRuc",
+      "value": "80054203",
+      "type": "string"
+    },
+    {
+      "key": "setDv",
+      "value": "7",
+      "type": "string"
+    },
+    {
+      "key": "numeroTimbrado",
+      "value": "12345678",
+      "type": "string"
+    },
+    {
+      "key": "tipoDocumento",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "numeroDocumento",
+      "value": "001-001-0000001",
+      "type": "string"
+    },
+    {
+      "key": "fechaExpedicion",
+      "value": "15/05/2024",
+      "type": "string"
+    },
+    {
+      "key": "medioGeneracion",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "search",
+      "value": "chacomer",
+      "type": "string"
+    },
+    {
+      "key": "page",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "draw",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "start",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "length",
+      "value": "10",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "SET / DNIT",
+      "description": "Proxy hacia `https://servicios.set.gov.py/EsetApiWS/ApiWS/`.\n\nLa Function agrega el `apiKey` desde el secret **`SetApiKey`** del Key Vault: no viaja en el request. Si la MI no tiene *Key Vault Secrets User*, la key sale vacia y el error vuelve como respuesta de la SET, no como un 401 de la Function.\n\n**El RUC va sin digito verificador y el DV aparte.** Es la unica parte de la coleccion donde se parte en dos: TURUC y Dataverse lo toman entero.",
+      "item": [
+        {
+          "name": "Consulta RUC",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('la Function llego a la SET (no 502/504)', function () {",
+                  "    pm.expect([502, 504]).to.not.include(pm.response.code);",
+                  "});",
+                  "",
+                  "// La forma del payload la define la SET, no nosotros: se loguea, no se afirma.",
+                  "try {",
+                  "    console.log('respuesta SET:', JSON.stringify(pm.response.json()));",
+                  "} catch (e) {",
+                  "    console.warn('la SET no devolvio JSON parseable:', pm.response.text().slice(0, 200));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/set/consulta-ruc?ruc={{setRuc}}&dv={{setDv}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "set",
+                "consulta-ruc"
+              ],
+              "query": [
+                {
+                  "key": "ruc",
+                  "value": "{{setRuc}}",
+                  "description": "Sin digito verificador."
+                },
+                {
+                  "key": "dv",
+                  "value": "{{setDv}}",
+                  "description": "Solo el digito verificador."
+                }
+              ]
+            },
+            "description": "Consulta oficial de RUC de la SET. Devuelve el JSON de la SET sin re-serializar."
+          }
+        },
+        {
+          "name": "Validez documento timbrado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('la Function llego a la SET (no 502/504)', function () {",
+                  "    pm.expect([502, 504]).to.not.include(pm.response.code);",
+                  "});",
+                  "",
+                  "// INVALIDO es una respuesta legitima: los datos de ejemplo no son un timbrado real.",
+                  "try {",
+                  "    const b = pm.response.json();",
+                  "    if (b.estado) console.log('estado:', b.estado, '| mensaje:', b.mensaje);",
+                  "    if (b.estado === 'INVALIDO') {",
+                  "        console.warn('INVALIDO no es una falla del endpoint: los valores por defecto son de ejemplo. Poner un timbrado real en las variables para ver un VALIDO.');",
+                  "    }",
+                  "} catch (e) { /* la SET no devolvio JSON */ }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/set/validez-documento-timbrado?ruc={{setRuc}}&dv={{setDv}}&numero_timbrado={{numeroTimbrado}}&tipo_documento={{tipoDocumento}}&numero_documento={{numeroDocumento}}&fecha_expedicion={{fechaExpedicion}}&medio_generacion={{medioGeneracion}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "set",
+                "validez-documento-timbrado"
+              ],
+              "query": [
+                {
+                  "key": "ruc",
+                  "value": "{{setRuc}}",
+                  "description": "RUC del emisor, sin DV."
+                },
+                {
+                  "key": "dv",
+                  "value": "{{setDv}}"
+                },
+                {
+                  "key": "numero_timbrado",
+                  "value": "{{numeroTimbrado}}",
+                  "description": "Numero de timbrado asignado por la DNIT."
+                },
+                {
+                  "key": "tipo_documento",
+                  "value": "{{tipoDocumento}}",
+                  "description": "1=FACTURA, 2=BOLETA DE VENTA, 60=FACTURA ELECTRONICA. Tabla completa en la spec DNIT 2.3."
+                },
+                {
+                  "key": "numero_documento",
+                  "value": "{{numeroDocumento}}",
+                  "description": "Formato nnn-nnn-nnnnnnn."
+                },
+                {
+                  "key": "fecha_expedicion",
+                  "value": "{{fechaExpedicion}}",
+                  "description": "DD/MM/AAAA."
+                },
+                {
+                  "key": "medio_generacion",
+                  "value": "{{medioGeneracion}}",
+                  "description": "1=AUTOIMPRESORES, 3=PREIMPRESOS, 6=COMPROBANTES VIRTUALES, 7=DOCUMENTOS ELECTRONICOS."
+                }
+              ]
+            },
+            "description": "Spec DNIT 2.3. Los **siete** parametros son obligatorios: si falta alguno, la Function corta con `400` antes de llamar a la SET y dice cuales faltan.\n\nLos valores por defecto son de ejemplo, no un timbrado real: esperar `INVALIDO`."
+          }
+        },
+        {
+          "name": "Validez documento maquina registradora",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('la Function llego a la SET (no 502/504)', function () {",
+                  "    pm.expect([502, 504]).to.not.include(pm.response.code);",
+                  "});",
+                  "",
+                  "try {",
+                  "    const b = pm.response.json();",
+                  "    if (b.estado) console.log('estado:', b.estado, '| mensaje:', b.mensaje);",
+                  "} catch (e) { /* la SET no devolvio JSON */ }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/set/validez-documento-maquina-registradora?ruc={{setRuc}}&dv={{setDv}}&numero_timbrado={{numeroTimbrado}}&fecha_expedicion={{fechaExpedicion}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "set",
+                "validez-documento-maquina-registradora"
+              ],
+              "query": [
+                {
+                  "key": "ruc",
+                  "value": "{{setRuc}}"
+                },
+                {
+                  "key": "dv",
+                  "value": "{{setDv}}"
+                },
+                {
+                  "key": "numero_timbrado",
+                  "value": "{{numeroTimbrado}}"
+                },
+                {
+                  "key": "fecha_expedicion",
+                  "value": "{{fechaExpedicion}}",
+                  "description": "DD/MM/AAAA."
+                },
+                {
+                  "key": "medio_generacion",
+                  "value": "2",
+                  "description": "Segun la spec 2.4 el unico valido es 2. La Function lo pone sola si no viene, por eso arranca desactivado.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Spec DNIT 2.4. A diferencia del timbrado generico, **no** lleva `tipo_documento` ni `numero_documento`, y `medio_generacion` es opcional: la Function asume `2` (maquinas registradoras) si no viene."
+          }
+        },
+        {
+          "name": "CORS preflight (anonimo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 sin function key', () => pm.response.to.have.status(200));",
+                  "pm.test('deja pasar cualquier origen', function () {",
+                  "    pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.eql('*');",
+                  "});",
+                  "pm.test('permite GET', function () {",
+                  "    pm.expect(pm.response.headers.get('Access-Control-Allow-Methods') || '').to.include('GET');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "OPTIONS",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/set/consulta-ruc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "set",
+                "consulta-ruc"
+              ]
+            },
+            "description": "`Set_Options` atiende `OPTIONS /api/set/{*any}` con `AuthorizationLevel.Anonymous`. Va **sin auth a proposito**: si necesitara la key, ningun navegador podria completar el preflight."
+          }
+        }
+      ]
+    },
+    {
+      "name": "TURUC",
+      "description": "Proxy hacia `https://turuc.com.py/api/contribuyente/`. API publica: no lleva credenciales hacia el origen, solo la function key para entrar a la Function.\n\nEste grupo es el que consume el `RucValidatorControl` (PCF) desde el formulario de contact.\n\n**No hay `OPTIONS` propio para `/api/turuc/*`** — a diferencia de `/set/*` y `/dataverse/*`. Server-to-server da igual; desde un navegador el preflight depende del CORS configurado en la Function App.",
+      "item": [
+        {
+          "name": "Contribuyente por RUC",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('la Function llego a TURUC (no 502/504)', function () {",
+                  "    pm.expect([502, 504]).to.not.include(pm.response.code);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 404) {",
+                  "    console.warn('404: TURUC no conoce ese RUC. Es la respuesta del origen, no un endpoint roto.');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/turuc/contribuyente/{{ruc}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "turuc",
+                "contribuyente",
+                "{{ruc}}"
+              ]
+            },
+            "description": "El RUC va en la ruta, no en query. Es el endpoint que usa el `RucValidatorControl`."
+          }
+        },
+        {
+          "name": "Buscar contribuyentes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('la Function llego a TURUC (no 502/504)', function () {",
+                  "    pm.expect([502, 504]).to.not.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/turuc/contribuyente/search?search={{search}}&page={{page}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "turuc",
+                "contribuyente",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "{{search}}",
+                  "description": "Minimo 3 caracteres, si no la Function corta con 400."
+                },
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "Base 0. Un valor no numerico o negativo se normaliza a 0."
+                }
+              ]
+            },
+            "description": "`search` gana sobre la ruta `{ruc}` porque Functions prioriza los segmentos literales sobre los de parametro. Por eso un contribuyente con RUC literal `search` seria inalcanzable — no pasa en la practica, pero es la razon de que estas dos rutas convivan."
+          }
+        },
+        {
+          "name": "Tabla (paginado datatables)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('la Function llego a TURUC (no 502/504)', function () {",
+                  "    pm.expect([502, 504]).to.not.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/turuc/contribuyente/table?draw={{draw}}&start={{start}}&length={{length}}&search={{search}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "turuc",
+                "contribuyente",
+                "table"
+              ],
+              "query": [
+                {
+                  "key": "draw",
+                  "value": "{{draw}}",
+                  "description": "Contador de datatables: vuelve tal cual en la respuesta."
+                },
+                {
+                  "key": "start",
+                  "value": "{{start}}",
+                  "description": "Offset."
+                },
+                {
+                  "key": "length",
+                  "value": "{{length}}",
+                  "description": "Tope 20. Cualquier valor mayor, o <= 0, se recorta a 20."
+                },
+                {
+                  "key": "search",
+                  "value": "{{search}}",
+                  "description": "Minimo 3 caracteres."
+                }
+              ]
+            },
+            "description": "Formato datatables. **`length` se recorta a 20 en silencio**: pedir 100 devuelve 20 sin avisar, asi que no sirve para bajar el padron."
+          }
+        },
+        {
+          "name": "Persona juridica",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/turuc/persona-juridica?ruc={{ruc}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "turuc",
+                "persona-juridica"
+              ],
+              "query": [
+                {
+                  "key": "ruc",
+                  "value": "{{ruc}}"
+                }
+              ]
+            },
+            "description": "Aca el RUC va en query, no en la ruta."
+          }
+        },
+        {
+          "name": "Entidad publica",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/turuc/entidad-publica?ruc={{ruc}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "turuc",
+                "entidad-publica"
+              ],
+              "query": [
+                {
+                  "key": "ruc",
+                  "value": "{{ruc}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dataverse",
+      "description": "Busca contacts y accounts por `msdyn_identificationnumber`. Es el unico grupo cuyo origen no es una API externa, y el unico con forma de respuesta propia.\n\n**Solo lectura**: no crea, no actualiza y no publica mensajes.",
+      "item": [
+        {
+          "name": "Consulta RUC (con DV)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "",
+                  "pm.test('trae el sobre {ruc, cantidad, resultados}', function () {",
+                  "    pm.expect(b.ruc).to.eql(pm.variables.get('ruc'));",
+                  "    pm.expect(b.resultados).to.be.an('array');",
+                  "    pm.expect(b.cantidad).to.eql(b.resultados.length);",
+                  "});",
+                  "",
+                  "pm.test('el tipo de persona se corresponde con la tabla', function () {",
+                  "    b.resultados.forEach(function (r) {",
+                  "        pm.expect(r.tipoPersona).to.eql(r.entidad === 'account' ? 'Juridica' : 'Fisica');",
+                  "    });",
+                  "});",
+                  "",
+                  "// Un RUC devuelve el master mas los raws que cuelgan de el, uno por legal entity:",
+                  "// varias filas es lo normal, una sola no significa que falte nada.",
+                  "if (b.cantidad === 0) {",
+                  "    console.warn('0 resultados: ese RUC no existe en el Dataverse del ambiente. No es un error del endpoint.');",
+                  "} else {",
+                  "    console.log('masters:', b.resultados.filter(r => r.esMaster).length, '| raws:', b.resultados.filter(r => !r.esMaster).length);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dataverse/consulta-ruc?ruc={{ruc}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dataverse",
+                "consulta-ruc"
+              ],
+              "query": [
+                {
+                  "key": "ruc",
+                  "value": "{{ruc}}",
+                  "description": "Con digito verificador: matchea por igualdad exacta."
+                }
+              ]
+            },
+            "description": "Vienen los accounts primero y, dentro de cada tabla, el master antes que los raws. Tope de 50 por tabla."
+          }
+        },
+        {
+          "name": "Consulta RUC (sin DV, por prefijo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "",
+                  "pm.test('todo lo que vuelve arranca con el RUC pedido', function () {",
+                  "    const prefijo = pm.variables.get('rucSinDv') + '-';",
+                  "    b.resultados.forEach(function (r) {",
+                  "        pm.expect(r.identificationNumber || '').to.satisfy(n => n.indexOf(prefijo) === 0);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dataverse/consulta-ruc?ruc={{rucSinDv}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dataverse",
+                "consulta-ruc"
+              ],
+              "query": [
+                {
+                  "key": "ruc",
+                  "value": "{{rucSinDv}}",
+                  "description": "Sin DV: matchea por prefijo '80054203-'."
+                }
+              ]
+            },
+            "description": "Sin DV busca por prefijo **con el guion incluido**. El guion es lo que evita que `8005420` arrastre registros ajenos, y por eso el test afirma el prefijo entero y no solo los digitos."
+          }
+        },
+        {
+          "name": "CORS preflight (anonimo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 sin function key', () => pm.response.to.have.status(200));",
+                  "pm.test('deja pasar cualquier origen', function () {",
+                  "    pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.eql('*');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "OPTIONS",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dataverse/consulta-ruc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dataverse",
+                "consulta-ruc"
+              ]
+            },
+            "description": "`Dataverse_Options` atiende `OPTIONS /api/dataverse/{*any}` sin key, mismo criterio que el de `/set/*`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validaciones (esperan 400)",
+      "description": "Que estos corten con `400` **antes** de salir a la red es lo que separa un parametro faltante de un origen caido: sin ellos, un `ruc` vacio llegaria a la SET y volveria como error del tercero, que es mucho mas caro de diagnosticar.",
+      "item": [
+        {
+          "name": "set/consulta-ruc sin dv -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 y nombra el parametro que falta', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error).to.include('dv');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/set/consulta-ruc?ruc={{setRuc}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "set",
+                "consulta-ruc"
+              ],
+              "query": [
+                {
+                  "key": "ruc",
+                  "value": "{{setRuc}}"
+                }
+              ]
+            },
+            "description": "La SET necesita RUC y DV por separado. Sin `dv` no hay consulta posible, asi que la Function no la intenta."
+          }
+        },
+        {
+          "name": "validez-documento-timbrado incompleto -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 y lista todos los faltantes de una', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    const err = pm.response.json().error;",
+                  "    ['dv', 'numero_timbrado', 'tipo_documento', 'numero_documento', 'fecha_expedicion', 'medio_generacion']",
+                  "        .forEach(p => pm.expect(err).to.include(p));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/set/validez-documento-timbrado?ruc={{setRuc}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "set",
+                "validez-documento-timbrado"
+              ],
+              "query": [
+                {
+                  "key": "ruc",
+                  "value": "{{setRuc}}"
+                }
+              ]
+            },
+            "description": "Los seis faltantes vuelven **en un solo error**, no de a uno por reintento. Es la diferencia entre una correccion y seis viajes."
+          }
+        },
+        {
+          "name": "turuc search con 2 caracteres -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 por el minimo de 3 caracteres', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error).to.include('3 caracteres');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/turuc/contribuyente/search?search=ab",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "turuc",
+                "contribuyente",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "ab"
+                }
+              ]
+            },
+            "description": "El minimo lo pone la Function, no TURUC: una busqueda de 1 o 2 caracteres contra el padron entero no tiene un uso legitimo."
+          }
+        },
+        {
+          "name": "dataverse/consulta-ruc sin ruc -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 y no devuelve la tabla entera', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error).to.include('ruc');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dataverse/consulta-ruc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dataverse",
+                "consulta-ruc"
+              ]
+            },
+            "description": "Un `ruc` vacio no puede significar \"traeme todo\": seria volcar contacts y accounts del ambiente por un parametro que no se mando."
+          }
+        }
+      ]
+    }
+  ]
+}
