@@ -8,9 +8,10 @@ using Microsoft.Xrm.Sdk;
 namespace AxxonCustomers.Functions.Tests
 {
     /// <summary>
-    /// La guarda del <c>AccountNum</c>, que es lo que hace que el orden del alta funcione:
-    /// la fila de LTMCustTable se clavea con el CustomerAccount, que recien existe cuando
-    /// CustomerSyncService creo el customer en F&amp;O e hizo el write-back.
+    /// Las dos guardas que hacen que el flujo no llene el DLQ de cosas que nunca iban a andar:
+    /// la del <c>AccountNum</c> —la fila de LTMCustTable se clavea con el CustomerAccount, que
+    /// recien existe cuando CustomerSyncService creo el customer en F&amp;O e hizo el
+    /// write-back— y la de alcance, para las legal entities sin localizacion PY.
     /// </summary>
     public class LtmCustSyncServiceTests
     {
@@ -20,6 +21,20 @@ namespace AxxonCustomers.Functions.Tests
             // Es el orden natural del alta, no un dato roto: el mensaje se completa sin
             // procesar y el write-back vuelve a encolar el registro.
             var (service, recordId, ltm) = Given(accountNum: null);
+
+            var synced = await service.ProcessAsync("contact", recordId);
+
+            Assert.False(synced);
+            Assert.Empty(ltm.Created);
+        }
+
+        [Fact]
+        public async Task Fuera_del_alcance_de_la_localizacion_no_se_sincroniza_y_no_es_un_error()
+        {
+            // A la cola llegan todos los clientes que se crean en F&O, y buena parte del
+            // environment vive en legal entities que no llevan LTMCustTable. Mandarlas al DLQ
+            // lo llenaria de registros que nunca iban a andar.
+            var (service, recordId, ltm) = Given(accountNum: "CAUT-000012", withLocalization: false);
 
             var synced = await service.ProcessAsync("contact", recordId);
 
@@ -52,7 +67,8 @@ namespace AxxonCustomers.Functions.Tests
         // ── Armado ────────────────────────────────────────────────────
 
         private static (LtmCustSyncService Service, Guid RecordId, FakeLtmCustService Ltm) Given(
-            string? accountNum)
+            string? accountNum,
+            bool withLocalization = true)
         {
             var org       = new FakeOrganizationService();
             var contactId = Guid.NewGuid();
@@ -60,26 +76,34 @@ namespace AxxonCustomers.Functions.Tests
             var company = org.Add("cdm_company", Guid.NewGuid(),
                 (LtmCustMapping.CompanyCodeAttribute, "caut"));
 
-            var docType = org.Add(
-                LtmCustMapping.VirtualDocTypeEntity, Guid.NewGuid(),
-                (LtmCustMapping.VirtualDocTypeId, "RUC"),
-                (LtmCustMapping.VirtualTaxPayerTypeId, "PJ"));
+            if (withLocalization)
+            {
+                org.Add(
+                    LtmCustMapping.VirtualDocTypeEntity, Guid.NewGuid(),
+                    (LtmCustMapping.VirtualDocTypeCompany, "caut"),
+                    (LtmCustMapping.VirtualDocTypeId, LtmCustMapping.CountryDocTypeRuc),
+                    (LtmCustMapping.VirtualTaxPayerTypeId, "PN"));
 
-            org.Add(
-                LtmCustMapping.VirtualAccountTypeGroupEntity, Guid.NewGuid(),
-                (LtmCustMapping.VirtualAccountTypeGroupId, "Cliente Local"),
-                (LtmCustMapping.VirtualAccountTypeGroupCompany, "caut"),
-                (LtmCustMapping.VirtualAccountTypeGroupCustVend, LtmCustMapping.CustVendEntityCustomer));
+                org.Add(
+                    LtmCustMapping.VirtualAccountTypeGroupEntity, Guid.NewGuid(),
+                    (LtmCustMapping.VirtualAccountTypeGroupId, "Cliente Local"),
+                    (LtmCustMapping.VirtualAccountTypeGroupCompany, "caut"),
+                    (LtmCustMapping.VirtualAccountTypeGroupCustVend,
+                        new OptionSetValue(LtmCustMapping.CustVendEntityCustomer)));
+            }
 
             org.Add("contact", contactId,
                 (LtmCustMapping.CompanyAttribute, company),
                 (LtmCustMapping.IdentificationNumberAttribute, "80098873-6"),
-                (LtmCustMapping.DocTypeAttribute, docType),
                 (LtmCustSource.Contact.AccountNumberAttribute, accountNum));
 
             var builder = new LtmCustPayloadBuilder(
                 org,
-                new LtmCatalogResolver(org, new LtmCatalogCache(), NullLogger<LtmCatalogResolver>.Instance),
+                new LtmCatalogResolver(
+                    org,
+                    new FakeFoODataClient("DPTO_11"),
+                    new LtmCatalogCache(),
+                    NullLogger<LtmCatalogResolver>.Instance),
                 new FakeFoSchemaProvider(
                     LtmCustMapping.DataAreaId,
                     LtmCustMapping.AccountNum,

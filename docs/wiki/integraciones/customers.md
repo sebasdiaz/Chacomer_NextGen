@@ -3,7 +3,7 @@ sources:
   - src/integrations/customers/AxxonCustomers.Functions/**
   - tests/AxxonCustomers.Functions.Tests/**
   - pipelines/azure-pipelines-customers.yml
-last_reviewed: 2026-08-25
+last_reviewed: 2026-09-03
 -->
 
 # Customers — Dataverse → F&O (CustomersV3)
@@ -186,11 +186,15 @@ Va por **cola propia** (`customer-ltm-sync`, con sessions por registro), para qu
 de localización inválido no re-martille el alta del customer. El detalle está en
 [ADR-001](../arquitectura/decisiones/001-ltmcusttable.md).
 
-### La v1 escribe el alta y nada más
+### El alcance: alta, documento RUC y Paraguay
 
 `CustomerSyncService` encola **solo cuando creó el customer**, después del write-back. La
 Function arma el JSON y hace un `POST`: no consulta si la fila existe ni la actualiza. Si
 F&O rechaza, el mensaje va al DLQ como `BusinessRuleFailed` y no se procesa.
+
+El mapeo asume **documento RUC y país Paraguay**, que es el alcance funcional definido hoy.
+Los dos son constantes en el payload; el porqué y qué hace falta para ampliarlo están en
+[el ADR](../arquitectura/decisiones/001-ltmcusttable.md#el-alcance-de-la-v1-documento-ruc-y-paraguay).
 
 **Un cambio de RUC, de tipo de documento o de dirección no llega a `LTMCustTable`.** La
 modificación está fuera de alcance a propósito: sin PATCH, encolarla produciría un POST
@@ -226,33 +230,51 @@ mitad si falla.
 > trigger y no un timer — un timer "que después deshabilitamos" repite el maestro de
 > clientes entero el día que nadie se acuerde de apagarlo.
 
-### La guarda del `AccountNum`
+### Las dos guardas
 
-**Sin `CustomerAccount` en el registro, no se sincroniza** y el mensaje se completa sin
-procesar — no va a DLQ. No es un error: es el orden natural del alta, y el consumidor relee
-Dataverse (el payload es una referencia, no un snapshot), así que puede encontrarse con el
-registro todavía sin write-back.
+Las dos completan el mensaje **sin procesar** — no van a DLQ, porque ninguna de las dos es
+un error:
+
+**Sin `CustomerAccount` en el registro, no se sincroniza.** Es el orden natural del alta, y
+el consumidor relee Dataverse (el payload es una referencia, no un snapshot), así que puede
+encontrarse con el registro todavía sin write-back.
+
+**Si la legal entity no tiene la localización PY configurada, tampoco.** La guarda se deriva
+del ERP: si la company no tiene filas en `mserp_ltmtaxpayerdoctypeentity`, no hay nada que
+escribir. No es un caso de borde — en INTE la localización está sólo en `chac`, `caut` y
+`bimo`, y más de la mitad de los clientes sellable viven en legal entities que no la tienen
+(las de USA y Alemania). Sin la guarda todas irían al DLQ.
 
 ### El mapeo va en C#, no en JSON
 
 A diferencia de `CustomersV3`, este mapeo vive en `LtmCustPayloadBuilder`. No entra en las
-cinco primitivas del motor declarativo: hace una consulta con filtro, sale a una relación
-1:N, y tiene atributos que alimentan dos campos de F&O cada uno. El detalle está en el ADR.
+cinco primitivas del motor declarativo: hace consultas con filtro, sale a una relación 1:N,
+valida un valor contra un catálogo del ERP, y tiene un atributo que alimenta dos campos de
+F&O. El detalle está en el ADR.
 
 | Campo de LTMCustTable | De dónde sale |
 |---|---|
 | `dataAreaId` | `msdyn_company` → `cdm_companycode` (igual que CustomersV3) |
 | `AccountNum` | `msdyn_contactpersonid` (contact) / `accountnumber` (account) |
 | `CountryDocNum`, `StateDocNum` | `msdyn_identificationnumber` — el mismo RUC en los dos |
-| `CountryDocTypeId`, `TaxPayerTypeId` | lookup `axx_tipodocumento` → los dos campos de la misma fila de `mserp_ltmtaxpayerdoctypeentity` |
-| `AccountTypeGroupId` | `mserp_ltmaccounttypegroupentity` filtrando por company y `CustVendEntity` |
-| `CountryRegionId` | dirección primaria → `axx_pais` → `axx_countryregion` |
-| `StateId` | dirección primaria → `axx_region` → `axx_name` |
+| `CountryDocTypeId` | constante `RUC` — es el alcance funcional |
+| `CountryRegionId` | constante `PRY` — el código de F&O, no el `PY` de Dataverse |
+| `TaxPayerTypeId` | del tipo de registro: `PN` en contact, `PJ` en account. Se confirma contra `mserp_ltmtaxpayerdoctypeentity` de la company |
+| `AccountTypeGroupId` | `mserp_ltmaccounttypegroupentity` filtrando por company y `CustVendEntity = Customer` |
+| `StateId` | `customeraddress.stateorprovince` de la primera dirección que lo tenga, validado contra `AddressStates` de F&O |
 | `Concept1-3`, `Note1-3`, `StateDocTypeId` | no se mapean (vienen vacíos) |
 
-Los nombres físicos viven todos en `LtmCustMapping`, en un solo lugar: los campos de las
-virtual entities los publica el proveedor de F&O por environment y hay que confirmarlos
-contra la metadata del ambiente.
+Los nombres físicos viven todos en `LtmCustMapping`, en un solo lugar. **Están verificados
+contra la metadata de INTE y de TEST** (2026-09-03): la versión anterior los nombraba por
+convención y cuatro no existían — el mapeo no podía escribir ninguna fila. La tabla de lo que
+se encontró está en
+[el ADR](../arquitectura/decisiones/001-ltmcusttable.md#lo-que-dijo-la-metadata).
+
+> **Dos cosas que el mapeo omite a propósito, con un warning en el log.** Si la company tiene
+> más de un grupo de cliente —`caut` tiene dos— no se adivina cuál va. Y si el
+> `stateorprovince` no existe en el catálogo de F&O, tampoco viaja: el campo es texto libre y
+> está sucio, y un valor que el ERP no conoce se rechaza con un 400 que tira abajo la fila
+> entera.
 
 > **Las virtual entities se activan una por una y por ambiente.** Si `mserp_ltm*` no está
 > activada —o el application user no la puede leer— el lookup falla en runtime, no al
@@ -268,6 +290,7 @@ contra la metadata del ambiente.
 | QualifyLead sin contact (customer = account o nulo)  | Complete sin procesar                   |
 | QualifyLead sobre una legal entity fuera de Dual Write | Complete sin procesar (lo toma fo-sync) |
 | El registro no cumple `syncWhen`                     | Complete sin procesar                   |
+| LTM: sin `CustomerAccount`, o legal entity sin localizacion PY | Complete sin procesar (ver las dos guardas) |
 | Registro inexistente / sin `msdyn_company`           | DLQ (`DataError` / `ContractViolation`) |
 | Campo del mapeo inexistente en F&O                   | DLQ (`DataError` / `ContractViolation`) |
 | El customer ya existe en F&O                         | PATCH (antes: se omitia el insert)      |

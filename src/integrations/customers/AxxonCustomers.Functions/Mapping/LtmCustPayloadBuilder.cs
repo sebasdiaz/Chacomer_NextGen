@@ -21,16 +21,15 @@ namespace AxxonCustomers.Functions.Mapping
     ///
     /// <b>Por que esto es C# y no un overlay JSON como CustomersV3.</b> El motor de mapeo
     /// declarativo tiene cinco primitivas cerradas a proposito (ver <see cref="FieldKind"/>),
-    /// y este mapeo no entra en ellas: hace una <b>consulta con filtro</b> para el grupo de
-    /// cliente, sale a una relacion <b>1:N</b> (<c>customeraddress</c>) de la que hay que
-    /// elegir una fila, y tiene <b>un atributo que alimenta dos campos</b> de F&amp;O
-    /// (<c>axx_tipodocumento</c> da <c>CountryDocTypeId</c> y <c>TaxPayerTypeId</c>, y el
-    /// motor indexa los mapeos por atributo de CRM). Agregar esas primitivas al JSON lo
-    /// convertiria en un mini-lenguaje de queries al servicio de un solo consumidor.
-    /// Ver ADR-001.
+    /// y este mapeo no entra en ellas: hace <b>consultas con filtro</b> sobre los catalogos de
+    /// la localizacion, sale a una relacion <b>1:N</b> (<c>customeraddress</c>) de la que hay
+    /// que elegir una fila, valida un valor contra un catalogo de F&amp;O, y tiene <b>un
+    /// atributo que alimenta dos campos</b> del ERP (el RUC da <c>CountryDocNum</c> y
+    /// <c>StateDocNum</c>, y el motor indexa los mapeos por atributo de CRM). Ver ADR-001.
     ///
-    /// Las cadenas son las mismas para contact y para account; lo unico que cambia es de
-    /// donde sale el <c>AccountNum</c> (ver <see cref="LtmCustSource"/>).
+    /// <b>El alcance de la v1 es RUC y Paraguay</b>, asi que el tipo de documento y el pais
+    /// son constantes y el tipo de contribuyente sale del tipo de registro. Eso deja al mapeo
+    /// leyendo del cliente una sola cosa —el RUC— mas la company y la direccion.
     /// </summary>
     public sealed class LtmCustPayloadBuilder
     {
@@ -54,7 +53,13 @@ namespace AxxonCustomers.Functions.Mapping
         /// <summary>Columnas del registro principal que hay que traer de Dataverse.</summary>
         public static ColumnSet ColumnsFor(LtmCustSource source) => new(source.Columns);
 
-        public async Task<LtmCustPayload> BuildAsync(
+        /// <summary>
+        /// Arma el payload, o devuelve <c>null</c> si la legal entity del cliente no tiene la
+        /// localizacion PY configurada — o sea, si el cliente esta fuera del alcance funcional.
+        /// No es un error: hay legal entities en el environment (las de USA y Alemania, entre
+        /// otras) que no llevan <c>LTMCustTable</c> y que a la cola llegan igual.
+        /// </summary>
+        public async Task<LtmCustPayload?> BuildAsync(
             Entity record,
             LtmCustSource source,
             string accountNum,
@@ -62,10 +67,30 @@ namespace AxxonCustomers.Functions.Mapping
         {
             var dataAreaId = ResolveDataAreaId(record, source);
 
+            // Guarda de alcance: la localizacion PY solo aplica donde el ERP la tiene
+            // configurada. Se deriva del ERP y no de una lista de companies en el repo, que
+            // habria que acordarse de tocar cada vez que el ERP cambie.
+            var localization = await _catalogs.ResolveCompanyAsync(dataAreaId, cancellationToken);
+
+            if (!localization.IsConfigured)
+            {
+                _logger.LogInformation(
+                    "[LtmCustPayloadBuilder] La legal entity {DataAreaId} del {Entity} {RecordId} no " +
+                    "tiene la localizacion PY configurada: el cliente esta fuera del alcance y no se " +
+                    "sincroniza LTMCustTable.",
+                    dataAreaId, source.EntityLogicalName, record.Id);
+
+                return null;
+            }
+
             var values = new Dictionary<string, object?>(StringComparer.Ordinal)
             {
                 [LtmCustMapping.DataAreaId] = dataAreaId,
-                [LtmCustMapping.AccountNum] = accountNum
+                [LtmCustMapping.AccountNum] = accountNum,
+
+                // Constantes del alcance: RUC y Paraguay.
+                [LtmCustMapping.CountryDocTypeId] = LtmCustMapping.CountryDocTypeRuc,
+                [LtmCustMapping.CountryRegionId]  = LtmCustMapping.CountryRegionParaguay
             };
 
             // El RUC alimenta los dos campos de documento: el del pais y el del estado.
@@ -75,21 +100,9 @@ namespace AxxonCustomers.Functions.Mapping
             values[LtmCustMapping.CountryDocNum] = identificationNumber;
             values[LtmCustMapping.StateDocNum]   = identificationNumber;
 
-            // Los dos codigos salen de la misma fila de la virtual entity de tipos de documento.
-            var docType = await ResolveDocTypeAsync(record, source, cancellationToken);
-            values[LtmCustMapping.CountryDocTypeId] = docType?.DocTypeId;
-            values[LtmCustMapping.TaxPayerTypeId]   = docType?.TaxPayerTypeId;
-
-            // Depende solo de la legal entity, no del cliente.
-            values[LtmCustMapping.AccountTypeGroupId] =
-                await _catalogs.ResolveAccountTypeGroupAsync(dataAreaId, cancellationToken);
-
-            // Pais y region salen de la direccion primaria, no del registro principal.
-            var address = ResolvePrimaryAddress(record, source);
-            values[LtmCustMapping.CountryRegionId] = ResolveThroughLookup(
-                address, LtmCustMapping.AddressCountryLookup, LtmCustMapping.CountryCodeAttribute);
-            values[LtmCustMapping.StateId] = ResolveThroughLookup(
-                address, LtmCustMapping.AddressStateLookup, LtmCustMapping.StateNameAttribute);
+            values[LtmCustMapping.TaxPayerTypeId]     = ResolveTaxPayerType(record, source, localization);
+            values[LtmCustMapping.AccountTypeGroupId] = localization.AccountTypeGroupId;
+            values[LtmCustMapping.StateId]            = await ResolveStateAsync(record, source, cancellationToken);
 
             return await MaterializeAsync(values, dataAreaId, accountNum, cancellationToken);
         }
@@ -132,43 +145,59 @@ namespace AxxonCustomers.Functions.Mapping
             return dataAreaId;
         }
 
-        // ── Tipo de documento ─────────────────────────────────────────
+        // ── Tipo de contribuyente ─────────────────────────────────────
 
-        private async Task<LtmDocType?> ResolveDocTypeAsync(
+        /// <summary>
+        /// Con el documento fijo en RUC, el tipo de contribuyente es lo unico que queda para
+        /// identificar la fila del catalogo, y sale del tipo de registro: <c>PN</c> para
+        /// contacts, <c>PJ</c> para accounts (ver <see cref="LtmCustSource"/>).
+        ///
+        /// Se confirma contra el catalogo de la company antes de mandarlo: la combinacion
+        /// existe en las legal entities que miramos, pero es configuracion del ERP y puede no
+        /// estar. Si falta, se omite el campo con un warning en vez de mandar un codigo que
+        /// F&amp;O va a rechazar con un 400.
+        /// </summary>
+        private string? ResolveTaxPayerType(
+            Entity record,
+            LtmCustSource source,
+            LtmCompanyLocalization localization)
+        {
+            if (localization.RucTaxPayerTypes.Contains(source.TaxPayerTypeId, StringComparer.OrdinalIgnoreCase))
+                return source.TaxPayerTypeId;
+
+            _logger.LogWarning(
+                "[LtmCustPayloadBuilder] El {Entity} {RecordId} deberia ser {TaxPayerType}, pero esa " +
+                "combinacion con {DocType} no existe en {Entity2} para su legal entity " +
+                "(hay [{Disponibles}]). Se omite {Target}.",
+                source.EntityLogicalName, record.Id, source.TaxPayerTypeId,
+                LtmCustMapping.CountryDocTypeRuc, LtmCustMapping.VirtualDocTypeEntity,
+                string.Join(", ", localization.RucTaxPayerTypes), LtmCustMapping.TaxPayerTypeId);
+
+            return null;
+        }
+
+        // ── Estado, desde la direccion (relacion 1:N) ─────────────────
+
+        /// <summary>
+        /// El estado sale de la direccion del cliente, y se valida contra el catalogo de
+        /// F&amp;O antes de viajar (ver <see cref="LtmCatalogResolver.ResolveStateAsync"/>).
+        ///
+        /// <b>Cual direccion.</b> La primera —por numero— que tenga el campo cargado, no la
+        /// <c>addressnumber = 1</c>: Dataverse crea automaticamente las direcciones 1 y 2 de
+        /// cada cliente y casi nunca se completan, asi que filtrar por la 1 daba vacio en la
+        /// mayoria de los clientes. Un cliente sin direccion con estado no es un error: se
+        /// omite el campo y el resto del payload viaja igual.
+        /// </summary>
+        private async Task<string?> ResolveStateAsync(
             Entity record,
             LtmCustSource source,
             CancellationToken cancellationToken)
         {
-            var docTypeRef = record.GetAttributeValue<EntityReference>(LtmCustMapping.DocTypeAttribute);
-
-            if (docTypeRef is null)
-            {
-                _logger.LogWarning(
-                    "[LtmCustPayloadBuilder] El {Entity} {RecordId} no tiene {Attribute}: " +
-                    "se omiten {DocType} y {TaxPayer}.",
-                    source.EntityLogicalName, record.Id, LtmCustMapping.DocTypeAttribute,
-                    LtmCustMapping.CountryDocTypeId, LtmCustMapping.TaxPayerTypeId);
-                return null;
-            }
-
-            // El lookup apunta directo a la virtual entity (cacheada; va contra F&O).
-            return await _catalogs.ResolveDocTypeAsync(docTypeRef.Id, cancellationToken);
-        }
-
-        // ── Direccion primaria (relacion 1:N) ─────────────────────────
-
-        /// <summary>
-        /// De las direcciones del cliente se usa la primaria (<c>addressnumber = 1</c>), que es
-        /// la que el formulario muestra como Address 1. Un cliente sin direccion no es un error:
-        /// se omiten pais y region y el resto del payload viaja igual.
-        /// </summary>
-        private Entity? ResolvePrimaryAddress(Entity record, LtmCustSource source)
-        {
             var query = new QueryExpression(LtmCustMapping.AddressEntity)
             {
                 ColumnSet = new ColumnSet(
-                    LtmCustMapping.AddressCountryLookup,
-                    LtmCustMapping.AddressStateLookup),
+                    LtmCustMapping.AddressStateAttribute,
+                    LtmCustMapping.AddressNumberAttribute),
                 TopCount = 1,
                 Criteria =
                 {
@@ -177,43 +206,42 @@ namespace AxxonCustomers.Functions.Mapping
                         new ConditionExpression(
                             LtmCustMapping.AddressParentAttribute, ConditionOperator.Equal, record.Id),
                         new ConditionExpression(
-                            LtmCustMapping.AddressNumberAttribute,
-                            ConditionOperator.Equal,
-                            LtmCustMapping.PrimaryAddressNumber)
+                            LtmCustMapping.AddressStateAttribute, ConditionOperator.NotNull)
                     }
-                }
+                },
+                Orders = { new OrderExpression(LtmCustMapping.AddressNumberAttribute, OrderType.Ascending) }
             };
 
             var result = _orgService.RetrieveMultiple(query);
 
             if (result.Entities.Count == 0)
             {
-                _logger.LogWarning(
-                    "[LtmCustPayloadBuilder] El {Entity} {RecordId} no tiene direccion primaria " +
-                    "({AddressEntity} con {NumberAttribute}={Number}): se omiten {Country} y {State}.",
-                    source.EntityLogicalName, record.Id, LtmCustMapping.AddressEntity,
-                    LtmCustMapping.AddressNumberAttribute, LtmCustMapping.PrimaryAddressNumber,
-                    LtmCustMapping.CountryRegionId, LtmCustMapping.StateId);
+                _logger.LogInformation(
+                    "[LtmCustPayloadBuilder] El {Entity} {RecordId} no tiene ninguna direccion con " +
+                    "{Attribute}: se omite {Target}.",
+                    source.EntityLogicalName, record.Id, LtmCustMapping.AddressStateAttribute,
+                    LtmCustMapping.StateId);
+
                 return null;
             }
 
-            return result.Entities[0];
-        }
+            var candidate = result.Entities[0].GetAttributeValue<string>(LtmCustMapping.AddressStateAttribute);
 
-        /// <summary>Navega un lookup de la direccion y devuelve el campo pedido de la fila destino.</summary>
-        private string? ResolveThroughLookup(Entity? address, string lookupAttribute, string targetAttribute)
-        {
-            var reference = address?.GetAttributeValue<EntityReference>(lookupAttribute);
-
-            if (reference is null)
+            if (string.IsNullOrWhiteSpace(candidate))
                 return null;
 
-            var related = _orgService.Retrieve(
-                reference.LogicalName,
-                reference.Id,
-                new ColumnSet(targetAttribute));
+            var state = await _catalogs.ResolveStateAsync(
+                LtmCustMapping.CountryRegionParaguay, candidate, cancellationToken);
 
-            return related.GetAttributeValue<string>(targetAttribute);
+            if (state is null)
+                _logger.LogWarning(
+                    "[LtmCustPayloadBuilder] El {Entity} {RecordId} tiene {Attribute}='{Candidate}', " +
+                    "que no existe en el catalogo de estados de {Country}. Se omite {Target} en vez de " +
+                    "mandarlo y que F&O rechace la fila entera.",
+                    source.EntityLogicalName, record.Id, LtmCustMapping.AddressStateAttribute, candidate,
+                    LtmCustMapping.CountryRegionParaguay, LtmCustMapping.StateId);
+
+            return state;
         }
 
         // ── Materializacion ───────────────────────────────────────────

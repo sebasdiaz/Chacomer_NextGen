@@ -1,17 +1,14 @@
 namespace AxxonCustomers.Functions.Mapping
 {
     /// <summary>
-    /// Nombres fisicos de todo lo que participa del mapeo hacia <c>LTMCustTable</c>.
+    /// Nombres fisicos de todo lo que participa del mapeo hacia <c>LTMCustTable</c>, y las
+    /// dos constantes que fija el alcance funcional de la v1 (RUC y Paraguay).
     ///
     /// Estan juntos aca, y no dispersos por el builder, porque son la parte del mapeo que
-    /// <b>no se puede verificar leyendo el repo</b>: los campos de las virtual entities
-    /// (<c>mserp_*</c>) los publica el proveedor de F&amp;O en cada environment, y tanto el
-    /// prefijo como el casing hay que confirmarlos contra la metadata del ambiente. Cuando
-    /// alguno no coincida, se corrige aca y en ningun otro lado.
-    ///
-    /// Los nombres de los campos de F&amp;O salen del registro real de LTMCustTable que
-    /// paso el funcional, asi que el casing ya viene del ERP; igual pasan por
-    /// <see cref="IFoSchemaProvider"/>, que los confirma contra el entity set.
+    /// no se puede verificar leyendo el repo. <b>Todos se verificaron contra la metadata de
+    /// INTE, y los de Dataverse tambien contra TEST (2026-09-03).</b> La version anterior los
+    /// nombraba siguiendo la convencion del proveedor y cuatro no existian: el lookup de tipo
+    /// de documento, su equivalente en account, y los dos de la direccion. Ver ADR-001.
     /// </summary>
     public static class LtmCustMapping
     {
@@ -19,6 +16,10 @@ namespace AxxonCustomers.Functions.Mapping
         public const string EntitySet = "LTMCustTables";
 
         // ── Campos de LTMCustTable (destino) ──────────────────────────
+        //
+        // Los nueve existen en el $metadata de F&O con este casing exacto, y la clave de la
+        // tabla es (dataAreaId, AccountNum). Igual pasan por IFoSchemaProvider, que los
+        // confirma contra el entity set del ambiente antes de mandarlos.
 
         public const string DataAreaId         = "dataAreaId";
         public const string AccountNum         = "AccountNum";
@@ -29,6 +30,30 @@ namespace AxxonCustomers.Functions.Mapping
         public const string AccountTypeGroupId = "AccountTypeGroupId";
         public const string CountryRegionId    = "CountryRegionId";
         public const string StateId            = "StateId";
+
+        // ── El alcance funcional de la v1: RUC y Paraguay ─────────────
+
+        /// <summary>
+        /// Tipo de documento del cliente. Es una constante a proposito: el alcance funcional
+        /// definido hoy es RUC.
+        ///
+        /// <b>Esto es lo que reemplaza al lookup del analisis funcional.</b> Aquel asumia que
+        /// el cliente apuntaba con un lookup a <c>mserp_ltmtaxpayerdoctypeentity</c>; en la
+        /// realidad esa virtual entity no tiene ninguna relacion 1:N, y lo que hay en el
+        /// cliente es un OptionSet local (CI / RUC / Passport) que ademas se llama distinto
+        /// en contact (<c>axx_tipodocumento</c>) que en account (<c>axx_tipodedocumento</c>).
+        /// Cuando se amplie el alcance a CI y pasaporte hay que volver a leer ese OptionSet y
+        /// traducirlo a los codigos del ERP (CI -> CedID, Passport -> PSP).
+        /// </summary>
+        public const string CountryDocTypeRuc = "RUC";
+
+        /// <summary>
+        /// Pais del cliente, constante por el mismo motivo: el alcance es Paraguay.
+        /// <c>PRY</c> es el codigo de F&amp;O, no el <c>PY</c> que guarda Dataverse en
+        /// <c>customeraddress.country</c> — copiar el campo de CRM tal cual escribiria un
+        /// codigo que el ERP no conoce.
+        /// </summary>
+        public const string CountryRegionParaguay = "PRY";
 
         // ── Dataverse: registro principal (contact / account) ─────────
 
@@ -41,18 +66,16 @@ namespace AxxonCustomers.Functions.Mapping
         /// <summary>RUC del cliente. Alimenta <c>CountryDocNum</c> y <c>StateDocNum</c>.</summary>
         public const string IdentificationNumberAttribute = "msdyn_identificationnumber";
 
-        /// <summary>
-        /// Lookup del registro principal <b>directo</b> a la virtual entity de tipos de
-        /// documento. De esa unica fila salen los dos codigos: <c>CountryDocTypeId</c> y
-        /// <c>TaxPayerTypeId</c>.
-        /// </summary>
-        public const string DocTypeAttribute = "axx_tipodocumento";
-
         // ── Dataverse: mserp_ltmtaxpayerdoctypeentity (virtual) ───────
+        //
+        // Ya no se navega desde el cliente: se consulta por company para saber si la legal
+        // entity tiene la localizacion PY configurada, y para confirmar que el tipo de
+        // contribuyente que le corresponde al registro existe en el ERP.
 
-        public const string VirtualDocTypeEntity   = "mserp_ltmtaxpayerdoctypeentity";
-        public const string VirtualDocTypeId       = "mserp_doctypeid";
-        public const string VirtualTaxPayerTypeId  = "mserp_taxpayertypeid";
+        public const string VirtualDocTypeEntity  = "mserp_ltmtaxpayerdoctypeentity";
+        public const string VirtualDocTypeId      = "mserp_doctypeid";
+        public const string VirtualTaxPayerTypeId = "mserp_taxpayertypeid";
+        public const string VirtualDocTypeCompany = "mserp_dataareaid";
 
         // ── Dataverse: mserp_ltmaccounttypegroupentity (virtual) ──────
 
@@ -62,11 +85,15 @@ namespace AxxonCustomers.Functions.Mapping
         public const string VirtualAccountTypeGroupCustVend = "mserp_custvendentity";
 
         /// <summary>
-        /// Filtro fijo de la busqueda del grupo: el mapeo funcional pide la fila de
-        /// <c>CustVendEntity = "Customer"</c> de la legal entity. Es lo unico del mapeo que
-        /// no se navega sino que se consulta.
+        /// Valor <c>Customer</c> del OptionSet <c>mserp_custvendentity</c> (los otros son
+        /// 200000001 Vendor y 200000002 None).
+        ///
+        /// <b>Es un Picklist, no un string.</b> Filtrarlo con la etiqueta —como hacia la
+        /// version anterior— no devuelve vacio: la query tira
+        /// <c>System.FormatException ... Expected type of attribute value: System.Int32</c>,
+        /// asi que el mensaje terminaba en el DLQ sin llegar nunca a F&amp;O.
         /// </summary>
-        public const string CustVendEntityCustomer = "Customer";
+        public const int CustVendEntityCustomer = 200000000;
 
         // ── Dataverse: customeraddress ────────────────────────────────
 
@@ -76,38 +103,62 @@ namespace AxxonCustomers.Functions.Mapping
         public const string AddressParentAttribute = "parentid";
 
         /// <summary>
-        /// Numero de direccion. La primaria es la 1: es la que el formulario muestra como
-        /// "Address 1" y la que el funcional definio como fuente de pais y region.
+        /// Numero de direccion. Ya no se filtra por el 1: se usa para ordenar y quedarse con
+        /// la mas vieja de las que tienen dato. Dataverse crea automaticamente las direcciones
+        /// 1 y 2 de cada cliente y en este environment casi nunca se completan —las cargadas
+        /// a mano arrancan en la 3—, asi que filtrar por <c>addressnumber = 1</c> apuntaba
+        /// justo a la fila vacia.
         /// </summary>
         public const string AddressNumberAttribute = "addressnumber";
-        public const int    PrimaryAddressNumber   = 1;
 
-        /// <summary>Lookup de la direccion a la tabla custom de paises.</summary>
-        public const string AddressCountryLookup = "axx_pais";
+        /// <summary>
+        /// Estado/departamento de la direccion. Es el campo OOB: <c>customeraddress</c> no
+        /// tiene ningun lookup custom, asi que las cadenas <c>axx_pais</c> / <c>axx_region</c>
+        /// del analisis funcional no existen. Las tablas <c>axx_pais</c> y <c>axx_region</c>
+        /// si existen, pero cuelgan de otro arbol (pais &lt;- region &lt;- localidad &lt;- barrio)
+        /// y nada las conecta con la direccion del cliente.
+        /// </summary>
+        public const string AddressStateAttribute = "stateorprovince";
 
-        /// <summary>Codigo de pais dentro de <c>axx_pais</c>. Alimenta <c>CountryRegionId</c>.</summary>
-        public const string CountryCodeAttribute = "axx_countryregion";
+        // ── F&O: catalogo de estados ──────────────────────────────────
 
-        /// <summary>Lookup de la direccion a la tabla custom de regiones.</summary>
-        public const string AddressStateLookup = "axx_region";
+        /// <summary>Entity set de F&amp;O con los estados/departamentos por pais.</summary>
+        public const string FoStateEntitySet = "AddressStates";
 
-        /// <summary>Nombre de la region dentro de <c>axx_region</c>. Alimenta <c>StateId</c>.</summary>
-        public const string StateNameAttribute = "axx_name";
+        /// <summary>Filtro por pais dentro de <see cref="FoStateEntitySet"/>.</summary>
+        public const string FoStateCountryRegionField = "CountryRegionId";
+
+        /// <summary>
+        /// Codigo del estado dentro de <see cref="FoStateEntitySet"/>. Se llama <c>State</c>,
+        /// no <c>StateId</c> — que es como se llama el campo destino en <c>LTMCustTable</c>.
+        /// </summary>
+        public const string FoStateField = "State";
     }
 
     /// <summary>
-    /// Lo unico que difiere entre <c>contact</c> y <c>account</c>: el logical name y el
-    /// atributo donde <see cref="Services.CustomerSyncService"/> deja el
-    /// <c>CustomerAccount</c> que genero F&amp;O. Las cadenas de navegacion del mapeo son
-    /// las mismas para los dos.
+    /// Lo que difiere entre <c>contact</c> y <c>account</c>: el logical name, el atributo
+    /// donde <see cref="Services.CustomerSyncService"/> deja el <c>CustomerAccount</c> que
+    /// genero F&amp;O, y el tipo de contribuyente que le corresponde.
     /// </summary>
-    public sealed record LtmCustSource(string EntityLogicalName, string AccountNumberAttribute)
+    public sealed record LtmCustSource(
+        string EntityLogicalName,
+        string AccountNumberAttribute,
+        string TaxPayerTypeId)
     {
-        /// <summary>contact: el write-back va a <c>msdyn_contactpersonid</c>.</summary>
-        public static readonly LtmCustSource Contact = new("contact", "msdyn_contactpersonid");
+        /// <summary>
+        /// contact: write-back en <c>msdyn_contactpersonid</c>, y persona fisica (<c>PN</c>).
+        ///
+        /// El tipo de contribuyente sale del tipo de registro y no de
+        /// <c>axx_tipopersoneriajuridica</c>, que seria la fuente mas fiel al dato pero esta
+        /// vacia en la mayoria de los clientes (43 de 142 contacts y 3 de 142 accounts en
+        /// INTE). Es la misma decision que ya tomaron los overlays de CustomersV3, que sellan
+        /// <c>PartyType</c> constante e inmutable: Person para contact, Organization para
+        /// account.
+        /// </summary>
+        public static readonly LtmCustSource Contact = new("contact", "msdyn_contactpersonid", "PN");
 
-        /// <summary>account: el write-back va al <c>accountnumber</c> OOB.</summary>
-        public static readonly LtmCustSource Account = new("account", "accountnumber");
+        /// <summary>account: write-back en el <c>accountnumber</c> OOB, y persona juridica (<c>PJ</c>).</summary>
+        public static readonly LtmCustSource Account = new("account", "accountnumber", "PJ");
 
         /// <summary>Resuelve la fuente por logical name, o null si no es una de las dos.</summary>
         public static LtmCustSource? For(string? entityLogicalName) => entityLogicalName?.ToLowerInvariant() switch
@@ -117,12 +168,15 @@ namespace AxxonCustomers.Functions.Mapping
             _         => null
         };
 
-        /// <summary>Columnas del registro principal que necesita el mapeo.</summary>
+        /// <summary>
+        /// Columnas del registro principal que necesita el mapeo. Son las mismas para las dos
+        /// entidades: con el tipo de documento constante, el unico atributo que se llamaba
+        /// distinto en cada una salio del mapeo.
+        /// </summary>
         public string[] Columns =>
         [
             LtmCustMapping.CompanyAttribute,
             LtmCustMapping.IdentificationNumberAttribute,
-            LtmCustMapping.DocTypeAttribute,
             AccountNumberAttribute
         ];
     }

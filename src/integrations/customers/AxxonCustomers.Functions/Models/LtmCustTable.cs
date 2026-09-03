@@ -16,4 +16,17 @@ namespace AxxonCustomers.Functions.Models
         [JsonPropertyName("dataAreaId")]
         public string? DataAreaId { get; set; }
     }
+
+    /// <summary>
+    /// Fila del catalogo de estados de F&amp;O (<c>AddressStates</c>), contra el que se valida
+    /// el <c>stateorprovince</c> que trae la direccion de Dataverse.
+    ///
+    /// El codigo se llama <c>State</c>, no <c>StateId</c>: <c>StateId</c> es el nombre del
+    /// campo destino en <c>LTMCustTable</c>, y usarlo aca devuelve un 400 de OData.
+    /// </summary>
+    public class FoAddressState
+    {
+        [JsonPropertyName("State")]
+        public string? State { get; set; }
+    }
 }

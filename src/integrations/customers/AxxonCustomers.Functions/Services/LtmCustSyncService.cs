@@ -10,8 +10,9 @@ namespace AxxonCustomers.Functions.Services
     {
         /// <summary>
         /// Sincroniza la contraparte de localizacion del cliente hacia F&amp;O.
-        /// Devuelve <c>false</c> si el registro todavia no se puede sincronizar (ver la
-        /// guarda del <c>AccountNum</c>), sin que eso sea un error.
+        /// Devuelve <c>false</c> si el registro no se sincroniza sin que eso sea un error:
+        /// porque todavia no tiene <c>AccountNum</c>, o porque su legal entity esta fuera del
+        /// alcance de la localizacion PY.
         /// </summary>
         Task<bool> ProcessAsync(
             string entityLogicalName,
@@ -24,7 +25,8 @@ namespace AxxonCustomers.Functions.Services
     /// <c>LTMCustTable</c>:
     ///   1. Recupera el registro con las columnas que pide el mapeo.
     ///   2. Evalua la guarda del <c>AccountNum</c>.
-    ///   3. Arma el payload con <see cref="LtmCustPayloadBuilder"/>.
+    ///   3. Arma el payload con <see cref="LtmCustPayloadBuilder"/>, que evalua ademas la
+    ///      guarda de alcance (la legal entity tiene que tener la localizacion PY configurada).
     ///   4. Hace el POST contra F&amp;O.
     ///
     /// Igual que <see cref="CustomerSyncService"/>, relee Dataverse en vez de mapear desde
@@ -85,6 +87,21 @@ namespace AxxonCustomers.Functions.Services
             }
 
             var payload = await _payloadBuilder.BuildAsync(record, source, accountNum, cancellationToken);
+
+            // Guarda de alcance: la legal entity no tiene la localizacion PY configurada.
+            //
+            // Tampoco es un error. A la cola llegan todos los clientes que se crean en F&O, y
+            // buena parte del environment vive en legal entities que no llevan LTMCustTable
+            // (las de USA y Alemania, entre otras). Mandarlas al DLQ lo llenaria de registros
+            // que nunca iban a andar, y el DLQ dejaria de servir como senial.
+            if (payload is null)
+            {
+                _logger.LogInformation(
+                    "[LtmCustSyncService] El {Entity} {RecordId} esta fuera del alcance de la " +
+                    "localizacion PY. No se sincroniza LTMCustTable.",
+                    source.EntityLogicalName, recordId);
+                return false;
+            }
 
             _logger.LogInformation(
                 "[LtmCustSyncService] Payload {EntitySet} armado para {Entity} {RecordId}: {Payload}",
