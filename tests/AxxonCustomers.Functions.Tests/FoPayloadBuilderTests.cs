@@ -1,3 +1,4 @@
+using Axxon.Eip.Core.Dataverse;
 using AxxonCustomers.Functions.Mapping;
 using AxxonCustomers.Functions.Models;
 using AxxonCustomers.Functions.Tests.Fakes;
@@ -278,16 +279,8 @@ namespace AxxonCustomers.Functions.Tests
 
         // ── Guarda de sincronizacion ──────────────────────────────────
 
-        [Fact]
-        public void Sin_condiciones_sincroniza_siempre()
-        {
-            var record = new Entity("account", RecordId);
-
-            Assert.True(Builder().ShouldSync(record, MapWith(), out _));
-        }
-
-        [Fact]
-        public void No_sincroniza_cuando_el_registro_no_cumple_la_condicion()
+        /// <summary>Mapeo con una condicion de syncWhen que el registro puede cumplir o no.</summary>
+        private static EntityMap MapConGuarda()
         {
             var overlay = Given.Overlay();
             overlay.SyncWhen.Add(new OverlayCondition
@@ -296,27 +289,66 @@ namespace AxxonCustomers.Functions.Tests
                 ExpectedValue = Given.Json("3")
             });
 
-            var map    = Given.Compile(Given.ExportWith(), overlay);
+            return Given.Compile(Given.ExportWith(), overlay);
+        }
+
+        [Fact]
+        public void Sin_condiciones_sincroniza_siempre()
+        {
+            var record = new Entity("account", RecordId);
+
+            Assert.True(Builder().ShouldSync(record, MapWith(), CompanySyncHandling.DualWrite, out _));
+        }
+
+        [Fact]
+        public void No_sincroniza_cuando_el_registro_no_cumple_la_condicion()
+        {
             var record = new Entity("account", RecordId) { ["customertypecode"] = new OptionSetValue(1) };
 
-            Assert.False(Builder().ShouldSync(record, map, out var reason));
+            Assert.False(Builder().ShouldSync(
+                record, MapConGuarda(), CompanySyncHandling.DualWrite, out var reason));
             Assert.Contains("customertypecode", reason);
         }
 
         [Fact]
         public void Sincroniza_cuando_cumple_la_condicion()
         {
-            var overlay = Given.Overlay();
-            overlay.SyncWhen.Add(new OverlayCondition
-            {
-                Attribute     = "customertypecode",
-                ExpectedValue = Given.Json("3")
-            });
-
-            var map    = Given.Compile(Given.ExportWith(), overlay);
             var record = new Entity("account", RecordId) { ["customertypecode"] = new OptionSetValue(3) };
 
-            Assert.True(Builder().ShouldSync(record, map, out _));
+            Assert.True(Builder().ShouldSync(
+                record, MapConGuarda(), CompanySyncHandling.DualWrite, out _));
+        }
+
+        /// <summary>
+        /// El caso que motivo la excepcion: fuera de Dual Write esta Function es el unico
+        /// camino al ERP, asi que sincroniza aunque el registro no cumpla el syncWhen. Un
+        /// contact creado a mano en una de esas legal entities nace con msdyn_sellable en
+        /// false —solo QualifyLead lo sella— y antes no llegaba nunca a F&amp;O, sin que
+        /// fallara nada.
+        /// </summary>
+        [Fact]
+        public void Fuera_de_Dual_Write_sincroniza_aunque_no_cumpla_la_guarda()
+        {
+            var record = new Entity("account", RecordId) { ["customertypecode"] = new OptionSetValue(1) };
+
+            Assert.True(Builder().ShouldSync(
+                record, MapConGuarda(), CompanySyncHandling.Api, out var reason));
+            Assert.Null(reason);
+        }
+
+        /// <summary>
+        /// Indeterminada NO es lo mismo que fuera de Dual Write: ante la duda no escribimos
+        /// en el ERP, asi que la guarda se sigue evaluando (mismo criterio que
+        /// DualWriteCompanyResolver).
+        /// </summary>
+        [Fact]
+        public void Con_la_legal_entity_indeterminada_la_guarda_se_sigue_evaluando()
+        {
+            var record = new Entity("account", RecordId) { ["customertypecode"] = new OptionSetValue(1) };
+
+            Assert.False(Builder().ShouldSync(
+                record, MapConGuarda(), CompanySyncHandling.Unknown, out var reason));
+            Assert.Contains("customertypecode", reason);
         }
     }
 }

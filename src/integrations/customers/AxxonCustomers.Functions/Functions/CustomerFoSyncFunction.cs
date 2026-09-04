@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Axxon.Eip.Core.Dataverse;
 using Axxon.Eip.Core.FinOps;
 using Axxon.Eip.Core.Messaging;
 using AxxonCustomers.Functions.Models;
@@ -100,7 +101,12 @@ namespace AxxonCustomers.Functions.Functions
                     mapName, payload!.RecordId, envelope!.Operation,
                     payload.DataAreaId ?? "sin resolver", envelope.CorrelationId);
 
-                await _syncService.ProcessAsync(mapName!, payload.RecordId, cancellationToken);
+                // Todo lo que llega a esta cola es de una legal entity FUERA de Dual Write:
+                // FoSyncDispatcher solo publica cuando el handling es Api. Por eso se pasa
+                // fijo, sin volver a resolver la company — y por eso aca no aplica la guarda
+                // syncWhen del overlay (ver FoPayloadBuilder.ShouldSync).
+                await _syncService.ProcessAsync(
+                    mapName!, payload.RecordId, CompanySyncHandling.Api, cancellationToken);
 
                 await messageActions.CompleteMessageAsync(message);
 

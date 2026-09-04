@@ -1,3 +1,4 @@
+using Axxon.Eip.Core.Dataverse;
 using AxxonCustomers.Functions.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
@@ -49,9 +50,29 @@ namespace AxxonCustomers.Functions.Mapping
         /// <summary>
         /// Evalua las condiciones de <c>syncWhen</c>. Devuelve false y el motivo cuando el
         /// registro no corresponde sincronizarlo (se completa el mensaje sin procesar).
+        ///
+        /// <b>Fuera de Dual Write la guarda no aplica.</b> En esas legal entities nosotros
+        /// somos el unico camino al ERP, asi que sincroniza todo lo que el master matching
+        /// enruto aca. El <c>syncWhen</c> existe para las companias que SI estan en Dual
+        /// Write, donde <c>msdyn_sellable</c> y <c>customertypecode</c> son la senal de que
+        /// alguien decidio que el registro es un cliente — el primero lo pone QualifyLead al
+        /// calificar. Sin esta excepcion, un contact creado a mano en una legal entity fuera
+        /// de Dual Write no llegaba nunca a F&amp;O y no fallaba nada: nadie le escribia
+        /// <c>msdyn_sellable</c>, porque fo-sync no sella.
+        ///
+        /// Es seguro para el ERP: <c>msdyn_sellable</c> esta en <c>ignore</c> y
+        /// <c>A365Sellable</c> viaja como constante <c>"Yes"</c>, asi que saltear la guarda
+        /// no puede crear el party como prospect.
         /// </summary>
-        public bool ShouldSync(Entity record, EntityMap map, out string? reason)
+        public bool ShouldSync(
+            Entity record, EntityMap map, CompanySyncHandling handling, out string? reason)
         {
+            if (handling == CompanySyncHandling.Api)
+            {
+                reason = null;
+                return true;
+            }
+
             foreach (var condition in map.SyncWhen)
             {
                 record.Attributes.TryGetValue(condition.Attribute, out var raw);

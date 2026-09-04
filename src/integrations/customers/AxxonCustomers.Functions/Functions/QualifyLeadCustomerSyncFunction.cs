@@ -170,7 +170,8 @@ namespace AxxonCustomers.Functions.Functions
                     context.ContactId, context.LeadId, context.MessageName,
                     company.DataAreaId ?? "sin codigo", company.Handling);
 
-                await _syncService.ProcessAsync(MapName, context.ContactId.Value, cancellationToken);
+                await _syncService.ProcessAsync(
+                    MapName, context.ContactId.Value, company.Handling, cancellationToken);
 
                 await messageActions.CompleteMessageAsync(message);
 

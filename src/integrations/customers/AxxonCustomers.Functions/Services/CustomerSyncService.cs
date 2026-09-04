@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Axxon.Eip.Core.Dataverse;
 using AxxonCustomers.Functions.Mapping;
 using AxxonCustomers.Functions.Models;
 using Microsoft.Extensions.Logging;
@@ -52,6 +53,7 @@ namespace AxxonCustomers.Functions.Services
         public async Task ProcessAsync(
             string mapName,
             Guid recordId,
+            CompanySyncHandling handling,
             CancellationToken cancellationToken = default)
         {
             var map = _maps.Get(mapName);
@@ -67,12 +69,13 @@ namespace AxxonCustomers.Functions.Services
                 "Atributos con valor: [{Attributes}]",
                 map.SourceEntity, recordId, string.Join(", ", record.Attributes.Keys));
 
-            if (!_payloadBuilder.ShouldSync(record, map, out var reason))
+            if (!_payloadBuilder.ShouldSync(record, map, handling, out var reason))
             {
                 _logger.LogInformation(
                     "[CustomerSyncService] {Entity} {RecordId} no cumple la guarda de " +
-                    "sincronizacion ({Reason}). No se sincroniza.",
-                    map.SourceEntity, recordId, reason);
+                    "sincronizacion ({Reason}). No se sincroniza. (Legal entity={Handling}: " +
+                    "fuera de Dual Write la guarda no se evalua.)",
+                    map.SourceEntity, recordId, reason, handling);
                 return;
             }
 

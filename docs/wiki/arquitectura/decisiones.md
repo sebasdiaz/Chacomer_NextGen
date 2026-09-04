@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources_new:
   - docs/wiki/arquitectura/decisiones/*.md
-last_reviewed: 2026-08-25
+last_reviewed: 2026-09-04
 -->
 
 # Decisiones
@@ -30,6 +30,7 @@ sólo el link.
 | 14 | `LTMCustTable` va por cola propia con payload de referencia; se descartan el satélite, el JSON en plugin y la tabla espejo | [ADR-001](decisiones/001-ltmcusttable.md) |
 | 15 | Una API de lectura que pega a F&O va con un techo de instancias propio (`foReadApiMaxInstanceCount`), ni el de los syncs ni el de las apps que no tocan el ERP | [Customer Credit › El techo de instancias](../integraciones/customercredit.md#el-techo-de-instancias) |
 | 16 | Los endpoints de crédito publican los nombres de campo de F&O sin traducir; un filtro no soportado es `400`, no se ignora | [Customer Credit › Qué devuelve](../integraciones/customercredit.md#qué-devuelve) |
+| 17 | La guarda `syncWhen` sólo aplica dentro de Dual Write: fuera, se sincroniza todo. Se descartaron sellar desde fo-sync y sacar la guarda de los dos flujos | [Customers › La guarda solo aplica dentro de Dual Write](../integraciones/customers.md#la-guarda-solo-aplica-dentro-de-dual-write) |
 
 ## Cuándo escribir un ADR aparte
 
