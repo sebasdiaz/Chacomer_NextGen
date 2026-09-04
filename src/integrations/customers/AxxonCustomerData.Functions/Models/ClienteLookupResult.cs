@@ -85,9 +85,10 @@ namespace AxxonCustomerData.Functions.Models
         public LegalEntityInfo? LegalEntity { get; init; }
 
         /// <summary>
-        /// Etiqueta de <c>axx_tipopersoneriajuridica</c> (OptionSet). Es el tipo de
-        /// personeria del maestro de Chacomer, no la derivacion contact/account de
-        /// <see cref="TipoPersona"/>.
+        /// Etiqueta de <c>axx_tipopersoneriajuridica</c> (Lookup a <c>axx_personeriajuridia</c>).
+        /// Se lee del FormattedValue, que resuelve el nombre primario de la fila referenciada.
+        /// Es el tipo de personeria del maestro de Chacomer, no la derivacion contact/account
+        /// de <see cref="TipoPersona"/>.
         /// </summary>
         [JsonPropertyName("tipoPersoneriaJuridica")]
         public string? TipoPersoneriaJuridica { get; init; }

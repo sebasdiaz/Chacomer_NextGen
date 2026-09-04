@@ -3,7 +3,7 @@ sources:
   - src/integrations/contacts/**
   - tests/AxxonContacts.Functions.Tests/**
   - pipelines/azure-pipelines-contacts.yml
-last_reviewed: 2026-09-03
+last_reviewed: 2026-09-04
 -->
 
 # Contacts — Master Contact / Golden Record
@@ -165,7 +165,7 @@ emailaddress1, msdyn_customergroupid, msdyn_partycountry, msdyn_salestaxgroup
 | Campo | Tipo | Default |
 |---|---|---|
 | `axx_ismaster` | Boolean | false |
-| `axx_tipopersoneriajuridica` | OptionSet | — |
+| `axx_tipopersoneriajuridica` | Lookup a `axx_personeriajuridia` | — |
 
 ### Campos OOB que deben estar presentes
 
@@ -189,7 +189,7 @@ Ademas del nombre y del bloque de domicilio, se copian:
 |---|---|---|
 | `emailaddress1` | Texto | En contact tambien viaja `emailaddress2` |
 | `axx_lugarcomercial` | Lookup | Solo el Id |
-| `axx_tipopersoneriajuridica` | OptionSet | Se copia el valor, no la etiqueta |
+| `axx_tipopersoneriajuridica` | Lookup | Solo el Id. Apunta a `axx_personeriajuridia` — ojo con el typo del schema name |
 
 > **Estos tres no participan del matching, asi que el PreImage del Step no tiene por que
 > traerlos.** En un evento Update solo viajan si cambiaron en esa misma operacion; si no,
@@ -211,6 +211,12 @@ Ademas del nombre y del bloque de domicilio, se copian:
 > cola, asi que ganaba el ultimo en escribir. Desde la **v1.2.0 el control no lo toca** —
 > tampoco `governmentid`, que en `lead` ni siquiera existe. El mapeo de estados quedo en un
 > solo lugar, aca.
+>
+> **Es un `Picklist` (single-select) en las dos entidades**, confirmado contra la metadata.
+> Durante un tiempo el contact se escribio como `OptionSetValueCollection` asumiendo que ahi
+> era multi-select: Dataverse lo rechazaba con *"Incorrect attribute value type"*, el `catch`
+> del servicio lo degradaba a warning y el estado fiscal del master no se actualizaba nunca,
+> sin que fallara nada visible. Lo fija `SetRucValidationServiceTests`.
 >
 > **`axx_dnitresponse` si sigue teniendo dos escritores**, y ahi la regla del ultimo vale.
 >

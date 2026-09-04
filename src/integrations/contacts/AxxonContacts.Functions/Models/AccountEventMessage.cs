@@ -46,10 +46,10 @@ namespace AxxonContacts.Functions.Models
         public Guid? AxxLugarComercial { get; set; }
 
         /// <summary>
-        /// axx_tipopersoneriajuridica. OptionSet: viaja el valor numerico, no la etiqueta.
+        /// axx_tipopersoneriajuridica. Lookup a la tabla axx_personeriajuridia: solo viaja el Id.
         /// </summary>
         [JsonPropertyName("axxTipoPersoneriaJuridica")]
-        public int? AxxTipoPersoneriaJuridica { get; set; }
+        public Guid? AxxTipoPersoneriaJuridica { get; set; }
 
         // ── Domicilio (bloque address1_*) ────────────────────────────
         // Se copia tal cual del raw al master. Los nombres siguen el logical name

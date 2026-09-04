@@ -274,7 +274,7 @@ namespace AxxonContacts.Functions.Services
                 if (!message.AxxLugarComercial.HasValue)
                     message.AxxLugarComercial = record.GetAttributeValue<EntityReference>(LugarComercial)?.Id;
                 if (!message.AxxTipoPersoneriaJuridica.HasValue)
-                    message.AxxTipoPersoneriaJuridica = record.GetAttributeValue<OptionSetValue>(TipoPersoneria)?.Value;
+                    message.AxxTipoPersoneriaJuridica = record.GetAttributeValue<EntityReference>(TipoPersoneria)?.Id;
             }
             catch (Exception ex)
             {
@@ -465,9 +465,8 @@ namespace AxxonContacts.Functions.Services
             // Lugar comercial: lookup a axx_lugarcomercial, se copia tal cual del raw.
             SetRef(e, LugarComercial, "axx_lugarcomercial", m.AxxLugarComercial);
 
-            // Tipo de personeria juridica: OptionSet, se copia el valor tal cual del raw.
-            if (m.AxxTipoPersoneriaJuridica.HasValue)
-                e[TipoPersoneria] = new OptionSetValue(m.AxxTipoPersoneriaJuridica.Value);
+            // Tipo de personeria juridica: lookup a axx_personeriajuridia, se copia tal cual del raw.
+            SetRef(e, TipoPersoneria, "axx_personeriajuridia", m.AxxTipoPersoneriaJuridica);
 
             // msdyn_paymentday: Lookup o OptionSet segun el environment
             if (!string.IsNullOrEmpty(m.MsdynPaymentDay) && Guid.TryParse(m.MsdynPaymentDay, out var payDayGuid))
