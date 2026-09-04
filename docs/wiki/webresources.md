@@ -45,8 +45,22 @@ tres formularios de contact, uno de account y el **`Annata 365` de lead**.
 > está en el formulario —contact, account— no hay nada que saltear y la validación corre
 > como siempre.
 >
-> `governmentid` y `axx_fiscalstate` **no existen en lead**, así que ahí el control avisa que
-> no pudo escribirlos. `axx_dnitresponse` sí existe.
+**Desde la v1.2.0 el control escribe un solo campo: `axx_dnitresponse`.** Ya no toca
+`governmentid` ni `axx_fiscalstate`.
+
+`governmentid` y `axx_fiscalstate` **no existen en lead**, así que ahí cada validación
+terminaba en un warning por campos que en esa entidad no van a existir. Crearlos igual que
+en contact no era opción: **`governmentid` es un campo de Microsoft**, no custom, así que
+en lead sólo podría existir como `axx_governmentid` — otro nombre y una columna más con el
+RUC, que en lead ya vive en `axx_numerodocumento`.
+
+Que dejara de escribir `axx_fiscalstate` no se perdió nada: lo mantiene
+`SetRucValidationService` desde [Contacts](integraciones/contacts.md), que ahora es su
+**único** escritor. Los dos leían la misma SET, pero no hay orden garantizado entre el
+formulario y la cola, así que tener dos sólo definía quién escribía último. De paso, el
+mapeo de estados dejó de estar duplicado.
+
+El RUC formateado no se pierde: vuelve por el campo al que el control está bindeado.
 
 **Desde la v1.1.0 la URL vive en una environment variable**, no en los parámetros del
 control:

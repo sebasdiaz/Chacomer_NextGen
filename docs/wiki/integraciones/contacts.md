@@ -205,13 +205,14 @@ Ademas del nombre y del bloque de domicilio, se copian:
 > **esta Function** sobre el master es la de `SetRucValidationService`, con el resultado
 > de la validacion del RUC contra la SET.
 
-> **`axx_dnitresponse` y `axx_fiscalstate` tienen dos escritores.** Ademas de
-> `SetRucValidationService`, el [`RucValidatorControl`](../webresources.md) los escribe
-> desde el formulario cuando alguien aprieta *Validar*. Desde la v1.0.3 los dos leen la
-> **misma** fuente —`GET /api/set/consulta-ruc`, la SET— y comparten el mapeo de estados,
-> asi que ya no pueden discrepar sobre un mismo RUC; antes el control consultaba TURUC.
-> Lo que sigue valiendo es que **gana el ultimo que escribe**: no hay merge ni orden
-> garantizado entre el formulario y el path de mensajeria.
+> **`axx_fiscalstate` lo escribe solo esta Function.** Hasta la v1.1.0 tambien lo escribia
+> el [`RucValidatorControl`](../webresources.md) desde el formulario, y no sumaba nada: los
+> dos leen la misma SET, pero no hay merge ni orden garantizado entre el formulario y la
+> cola, asi que ganaba el ultimo en escribir. Desde la **v1.2.0 el control no lo toca** —
+> tampoco `governmentid`, que en `lead` ni siquiera existe. El mapeo de estados quedo en un
+> solo lugar, aca.
+>
+> **`axx_dnitresponse` si sigue teniendo dos escritores**, y ahi la regla del ultimo vale.
 >
 > Las dos puntas resuelven el endpoint distinto, y conviene no confundirlas: esta Function
 > usa `SetApiService` del core con la key del Key Vault, mientras que el control sale por

@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="AxxonContacts"
            constructor="RucValidatorControl"
-           version="1.1.0"
+           version="1.2.0"
            display-name-key="RucValidatorControl_DisplayName"
            description-key="RucValidatorControl_Desc"
            control-type="standard">
