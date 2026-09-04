@@ -53,10 +53,14 @@ namespace AxxonContacts.Functions.Services
             "emailaddress1", LugarComercial, TipoPersoneria
         ];
 
-        private readonly IOrganizationService _service;
-        private readonly ILogger              _logger;
+        private readonly IOrganizationService    _service;
+        private readonly MasterOwnerTeamResolver _ownerTeamResolver;
+        private readonly ILogger                 _logger;
 
-        public AccountMasterMatchingService(IOrganizationService service, ILogger logger)
+        public AccountMasterMatchingService(
+            IOrganizationService service,
+            MasterOwnerTeamResolver ownerTeamResolver,
+            ILogger logger)
         {
             _service           = service           ?? throw new ArgumentNullException(nameof(service));
             _ownerTeamResolver = ownerTeamResolver ?? throw new ArgumentNullException(nameof(ownerTeamResolver));
