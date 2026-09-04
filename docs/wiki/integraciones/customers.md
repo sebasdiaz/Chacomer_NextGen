@@ -3,7 +3,7 @@ sources:
   - src/integrations/customers/AxxonCustomers.Functions/**
   - tests/AxxonCustomers.Functions.Tests/**
   - pipelines/azure-pipelines-customers.yml
-last_reviewed: 2026-09-03
+last_reviewed: 2026-09-04
 -->
 
 # Customers — Dataverse → F&O (CustomersV3)
@@ -102,7 +102,7 @@ es lo que permite que un re-export sea un diff limpio en el PR.
 | `target` | Entity set de F&O y logical name de Dataverse |
 | `company` | `dataAreaId` — Dual Write lo resuelve por particion, no por field mapping |
 | `key` | Campo de write-back, campos con los que se busca el registro existente, y los que no viajan en el PATCH |
-| `syncWhen` | Guarda: condiciones que el registro debe cumplir para sincronizarse. Hoy: contact `msdyn_sellable eq true`, account `customertypecode eq 3` |
+| `syncWhen` | Guarda: condiciones que el registro debe cumplir para sincronizarse. Hoy: contact `msdyn_sellable eq true`, account `customertypecode eq 3`. **Solo aplica dentro de Dual Write** — ver abajo |
 | `ignore` | Filas del export que no aplican en nuestra direccion |
 | `constants` | Valores fijos (ej. `PartyType`), ganan sobre el export |
 | `fields` | Corrige o agrega mapeos |
@@ -115,6 +115,30 @@ Precedencia: export -> `ignore` -> `fields` -> `constants`.
 > Si se saca el setting, nadie escribe el campo y solo sincronizan los contacts que ya
 > venian sellables — que era la conducta anterior, y el motivo por el que un prospecto
 > recien calificado podia saltearse en silencio.
+
+### La guarda solo aplica dentro de Dual Write
+
+`syncWhen` **no se evalua cuando la legal entity esta fuera de Dual Write**: ahi estas
+Functions son el unico camino al ERP, asi que se sincroniza todo lo que el master matching
+enruto a `customer-fo-sync`. `CustomerFoSyncFunction` pasa `CompanySyncHandling.Api` fijo —
+por construccion de la cola— y `QualifyLeadCustomerSyncFunction` pasa lo que resolvio.
+
+**Por que hizo falta.** La guarda del contact pide `msdyn_sellable = true` y el unico que lo
+escribe es QualifyLead. Un contact **creado a mano** en una legal entity fuera de Dual Write
+nace en `false`, nadie lo sella, y no llegaba nunca a F&O sin que fallara nada: el mensaje se
+completaba con un log y listo. Verificado en INTE el 2026-09-04 con dos contacts de `ALAS`.
+
+**Es seguro para el ERP.** `msdyn_sellable` esta en `ignore` y `A365Sellable` viaja como
+constante `"Yes"`, asi que saltear la guarda no manda un party como prospect — que es el
+riesgo que motivo la guarda en primer lugar.
+
+> **`Unknown` no es lo mismo que fuera de Dual Write.** Con la company indeterminada la
+> guarda **si** se evalua: mismo criterio que `DualWriteCompanyResolver`, ante la duda no
+> escribimos en el ERP.
+>
+> El costo de la decision, para tenerlo escrito: en esas legal entities **todo** account o
+> contact no-master con company termina como cliente en F&O, sin importar su
+> `customertypecode` ni su `msdyn_sellable`. Se eligio a proposito el 2026-09-04.
 
 ### Los cinco `kind`
 
@@ -289,7 +313,7 @@ se encontró está en
 | Envelope sin `entityType` o sin `recordId`           | DLQ (`ContractViolation`)               |
 | QualifyLead sin contact (customer = account o nulo)  | Complete sin procesar                   |
 | QualifyLead sobre una legal entity fuera de Dual Write | Complete sin procesar (lo toma fo-sync) |
-| El registro no cumple `syncWhen`                     | Complete sin procesar                   |
+| El registro no cumple `syncWhen` (solo dentro de Dual Write) | Complete sin procesar            |
 | LTM: sin `CustomerAccount`, o legal entity sin localizacion PY | Complete sin procesar (ver las dos guardas) |
 | Registro inexistente / sin `msdyn_company`           | DLQ (`DataError` / `ContractViolation`) |
 | Campo del mapeo inexistente en F&O                   | DLQ (`DataError` / `ContractViolation`) |

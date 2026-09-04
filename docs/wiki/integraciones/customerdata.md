@@ -2,7 +2,7 @@
 sources:
   - src/integrations/customers/AxxonCustomerData.Functions/**
   - pipelines/azure-pipelines-customerdata.yml
-last_reviewed: 2026-09-01
+last_reviewed: 2026-09-04
 -->
 
 # Customer Data — consulta de clientes por RUC
@@ -92,7 +92,7 @@ raws. Tope de 50 por tabla.
 | `esMaster`, `masterId` | `axx_ismaster` y `axx_mastercontactid` / `axx_masteraccountid` |
 | `customerAccount` | El write-back de [Customers](customers.md): `msdyn_contactpersonid` / `accountnumber` |
 | `legalEntity` | Lookup `msdyn_company`: id y nombre de la EntityReference, `codigo` de `cdm_companycode` |
-| `tipoPersoneriaJuridica` | Etiqueta de `axx_tipopersoneriajuridica` (OptionSet) |
+| `tipoPersoneriaJuridica` | Etiqueta de `axx_tipopersoneriajuridica` (Lookup a `axx_personeriajuridia`) |
 | `tipoDocumento` | Etiqueta del OptionSet: `axx_tipodocumento` en contact, **`axx_tipodedocumento`** en account |
 | `email`, `telefono` | `emailaddress1`, `telephone1` |
 | `activo` | `statecode = 0` |

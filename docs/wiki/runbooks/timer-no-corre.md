@@ -1,7 +1,7 @@
 <!-- wiki-meta
 sources:
   - src/integrations/**/Functions/*SyncFunction.cs
-last_reviewed: 2026-08-25
+last_reviewed: 2026-09-04
 -->
 
 # Runbook — el timer no corre

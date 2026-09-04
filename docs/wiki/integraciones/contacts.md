@@ -3,7 +3,7 @@ sources:
   - src/integrations/contacts/**
   - tests/AxxonContacts.Functions.Tests/**
   - pipelines/azure-pipelines-contacts.yml
-last_reviewed: 2026-09-03
+last_reviewed: 2026-09-04
 -->
 
 # Contacts — Master Contact / Golden Record
@@ -165,7 +165,7 @@ emailaddress1, msdyn_customergroupid, msdyn_partycountry, msdyn_salestaxgroup
 | Campo | Tipo | Default |
 |---|---|---|
 | `axx_ismaster` | Boolean | false |
-| `axx_tipopersoneriajuridica` | OptionSet | — |
+| `axx_tipopersoneriajuridica` | Lookup a `axx_personeriajuridia` | — |
 
 ### Campos OOB que deben estar presentes
 
@@ -189,7 +189,7 @@ Ademas del nombre y del bloque de domicilio, se copian:
 |---|---|---|
 | `emailaddress1` | Texto | En contact tambien viaja `emailaddress2` |
 | `axx_lugarcomercial` | Lookup | Solo el Id |
-| `axx_tipopersoneriajuridica` | OptionSet | Se copia el valor, no la etiqueta |
+| `axx_tipopersoneriajuridica` | Lookup | Solo el Id. Apunta a `axx_personeriajuridia` — ojo con el typo del schema name |
 
 > **Estos tres no participan del matching, asi que el PreImage del Step no tiene por que
 > traerlos.** En un evento Update solo viajan si cambiaron en esa misma operacion; si no,
@@ -212,6 +212,12 @@ Ademas del nombre y del bloque de domicilio, se copian:
 > tampoco `governmentid`, que en `lead` ni siquiera existe. El mapeo de estados quedo en un
 > solo lugar, aca.
 >
+> **Es un `Picklist` (single-select) en las dos entidades**, confirmado contra la metadata.
+> Durante un tiempo el contact se escribio como `OptionSetValueCollection` asumiendo que ahi
+> era multi-select: Dataverse lo rechazaba con *"Incorrect attribute value type"*, el `catch`
+> del servicio lo degradaba a warning y el estado fiscal del master no se actualizaba nunca,
+> sin que fallara nada visible. Lo fija `SetRucValidationServiceTests`.
+>
 > **`axx_dnitresponse` si sigue teniendo dos escritores**, y ahi la regla del ultimo vale.
 >
 > Las dos puntas resuelven el endpoint distinto, y conviene no confundirlas: esta Function
@@ -219,6 +225,42 @@ Ademas del nombre y del bloque de domicilio, se copian:
 > HTTP contra [Fiscal](fiscal.md) con la URL de la environment variable
 > `axx_FISCAL_CONSULTA_RUC_URL` — ver [Web resources](../webresources.md). Si el control
 > deja de escribir, no es esta Function la que hay que mirar.
+
+## Owner del master: la business unit CLIENTE UNICO
+
+Los masters —el "cliente único"— se crean asignados al **owner team** que nombra el app
+setting `MasterOwnerTeamName`. La business unit de un registro es la del equipo que lo
+posee, así que alcanza con el equipo para que todos los masters queden en la misma BU y
+la visibilidad se gobierne desde ahí, sin tocar el código cuando cambien los roles.
+
+**Va el nombre del equipo, no su id**, porque el GUID es distinto en cada environment y el
+nombre es el mismo. El *default team* de una business unit se llama igual que la BU, así
+que `CLIENTE UNICO` resuelve el equipo de esa BU sin tener que crear uno aparte:
+
+| Ambiente | Business unit | Default team (owner) |
+|---|---|---|
+| INTE | `fe7fa970-48a5-f111-b8de-7c1e525b9d22` | `ff7fa970-48a5-f111-b8de-7c1e525b9d22` |
+| TEST | `6d07f3e2-49a5-f111-b8de-3833c5e62ee5` | `6e07f3e2-49a5-f111-b8de-3833c5e62ee5` |
+
+El equipo se resuelve **una vez por instancia** (`MasterOwnerTeamCache`, sin TTL: cambiar
+el app setting recicla la app) y sólo pesa al crear un master, no en cada mensaje. Aplica a
+las dos entidades: contact master y account master.
+
+**Sin el setting no se asigna owner** y el master queda del usuario con el que corre la app
+— el comportamiento anterior. Es lo que pasa en un ambiente donde la BU todavía no existe.
+
+**Con el setting puesto y el equipo ausente, el master no se crea**: se lanza, el mensaje
+reintenta y cae al DLQ. Es a propósito. Un master creado en la business unit equivocada no
+falla en ningún lado, queda visible para quien no corresponde, y hay que reasignarlo a mano
+después; el DLQ, en cambio, se ve. El renombrar o borrar el equipo tiene esa consecuencia.
+
+> Sólo aplica a los masters **nuevos**. Los que ya existían quedan con su owner original:
+> moverlos es una reasignación masiva aparte, que este cambio no hace.
+
+En el Bicep es el parámetro `masterOwnerTeamName` (vacío por default), que sólo emite el
+app setting si tiene valor. En INTE el template todavía no administra
+`fa-axxoncontacts-inte` (`deployFunctionApps = false`), así que ahí el setting va **a mano**
+en el portal hasta el cutover — ver [Ambientes](../plataforma/ambientes.md#cutover-de-inte).
 
 ## Comportamiento end-to-end
 
@@ -228,7 +270,7 @@ Ademas del nombre y del bloque de domicilio, se copian:
 | Contact es Master (`axx_ismaster = true`) | Plugin early exit — no publica nada |
 | `msdyn_identificationnumber` vacío | Plugin early exit — no publica nada |
 | Dos Raws del mismo cliente al mismo tiempo | Van a la misma Session — se procesan uno a la vez |
-| No existe Master | Function crea Master + BulkAssociate de todos los Raws con misma identification |
+| No existe Master | Function crea Master (owner = equipo de `MasterOwnerTeamName`) + BulkAssociate de todos los Raws con misma identification |
 | Existe Master | Function asocia el Raw. **No propaga campos**: el master conserva los datos con los que se creo |
 | Function falla | Service Bus reintenta x3 → DLQ |
 | Mensaje no deserializable | Dead Letter inmediato (no reintenta) |

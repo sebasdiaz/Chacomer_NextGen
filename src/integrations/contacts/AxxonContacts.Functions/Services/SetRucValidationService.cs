@@ -112,12 +112,11 @@ namespace AxxonContacts.Functions.Services
                     {
                         if (EstadoMap.TryGetValue(estado, out var estadoValue))
                         {
-                            // contact: axx_fiscalstate es multi-select (OptionSetValueCollection)
-                            // account: axx_fiscalstate es single-select (OptionSetValue)
-                            if (entityLogicalName == "contact")
-                                upd["axx_fiscalstate"] = new OptionSetValueCollection(new List<OptionSetValue> { new OptionSetValue(estadoValue) });
-                            else
-                                upd["axx_fiscalstate"] = new OptionSetValue(estadoValue);
+                            // axx_fiscalstate es un Picklist (single-select) en las DOS entidades.
+                            // Antes contact se escribia como OptionSetValueCollection: Dataverse lo
+                            // rechazaba con "Incorrect attribute value type", el catch de abajo lo
+                            // degradaba a warning y el estado fiscal del master nunca se actualizaba.
+                            upd["axx_fiscalstate"] = new OptionSetValue(estadoValue);
 
                             _logger.LogInformation(
                                 "[SetRucValidationService] Master {MasterId} | Estado={Estado} → axx_fiscalstate={Value}",
