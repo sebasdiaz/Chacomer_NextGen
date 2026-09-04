@@ -26,28 +26,27 @@ interface SetRucResponse {
     contribuyente?: SetContribuyente;
 }
 
-// ── Mapeo estado SET → valor OptionSet axx_fiscalstate ───────────────────────
-// Normalizado a MAYÚSCULAS para comparación case-insensitive
-// (la API puede devolver "ACTIVO", "Activo" o "activo").
-//
-// Tiene que seguir espejando el EstadoMap de SetRucValidationService: los dos
-// escriben el mismo OptionSet sobre el mismo registro, uno desde el formulario
-// y otro desde el path de mensajeria. Si divergen, el valor depende de quien
-// escribio ultimo.
-
-const ESTADO_MAP: Record<string, number> = {
-    "ACTIVO":              1,
-    "SUSPENDIDO":          2,
-    "CANCELADO":           3,
-    "BLOQUEADO":           4,
-    "NO VIGENTE":          5,
-    "SUSPENSION TEMPORAL": 6,
-};
-
 // ── Nombres de campos en Dataverse ───────────────────────────────────────────
+//
+// Lo unico que el control escribe fuera del campo al que esta bindeado.
+//
+// Desde la v1.2.0 **no escribe `governmentid` ni `axx_fiscalstate`**, ni lo
+// intenta. Los dos existen en contact y account pero **no en lead**, donde el
+// control tambien esta puesto: ahi cada validacion terminaba en un warning por
+// campos que en esa entidad no van a existir. `governmentid` ademas es un campo
+// de Microsoft, asi que en lead no se puede crear con el mismo nombre.
+//
+// `axx_fiscalstate` queda con **un solo escritor**, `SetRucValidationService`,
+// que corre por el path de mensajeria y ya lo mantiene sobre el master. Que lo
+// escribieran los dos no sumaba nada: no hay merge ni orden garantizado entre
+// el formulario y la cola, asi que ganaba el ultimo. Por eso el mapeo de estados
+// tampoco vive mas aca — era una copia que habia que mantener sincronizada con
+// la del servicio, y ahora hay una sola.
+//
+// El RUC formateado no se pierde: vuelve por el campo al que el control esta
+// bindeado (`getOutputs`) — `msdyn_identificationnumber` en contact y account,
+// `axx_numerodocumento` en lead.
 
-const FIELD_GOVERNMENT_ID  = "governmentid";
-const FIELD_FISCAL_STATE   = "axx_fiscalstate";
 const FIELD_DNIT_RESPONSE  = "axx_dnitresponse";
 
 /// <summary>
@@ -249,7 +248,7 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             const estado = this._estadoDe(body);
 
             // Actualizar campos del formulario via Xrm
-            const warnings = this._updateFormFields(contribuyente, body, estado, partes);
+            const warnings = this._updateFormFields(contribuyente, body);
 
             const resumen = `${contribuyente.razonSocial.trim()} — ${estado ?? "sin estado"}`;
             if (warnings.length > 0) {
@@ -271,6 +270,37 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
         } finally {
             this._setLoading(false);
         }
+    }
+
+    // ── armado de la URL ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Arma la URL de la consulta **pisando** `ruc` y `dv` en vez de agregarlos.
+    ///
+    /// La diferencia no es cosmetica. La environment variable la escribe una
+    /// persona, y es facil que quede pegada una URL de prueba con `ruc` y `dv`
+    /// adentro; concatenando, la request viaja con el parametro repetido y la
+    /// SET los recibe unidos por coma:
+    ///
+    ///   ruc=3384261,6599526  ->  "3384261,6599526-2,0 no registrado"
+    ///
+    /// Ese mensaje parece un RUC inexistente y manda a buscar el problema al
+    /// lado equivocado. `searchParams.set` reemplaza todas las apariciones, asi
+    /// que la URL configurada puede traer parametros de mas sin romper nada.
+    /// </summary>
+    private _urlConsulta(endpoint: string, ruc: string, dv: string): string {
+        let url: URL;
+        try {
+            url = new URL(endpoint);
+        } catch {
+            throw new Error(
+                `La URL configurada no es valida: "${endpoint}". ` +
+                `Revisar ${ENV_VAR_CONSULTA_RUC_URL} o el parametro ApiBaseUrl del control.`);
+        }
+
+        url.searchParams.set("ruc", ruc);
+        url.searchParams.set("dv", dv);
+        return url.toString();
     }
 
     // ── resolucion del endpoint ──────────────────────────────────────────────
@@ -422,12 +452,7 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
     /// Key Vault. Este control nunca ve esa credencial.
     /// </summary>
     private async _callApi(ruc: string, dv: string): Promise<SetRucResponse> {
-        const endpoint = await this._endpoint();
-
-        // El separador depende de si la URL ya trae `?code=`: la de la
-        // environment variable si, la armada con los parametros no.
-        const sep = endpoint.includes("?") ? "&" : "?";
-        const url = `${endpoint}${sep}${new URLSearchParams({ ruc, dv }).toString()}`;
+        const url = this._urlConsulta(await this._endpoint(), ruc, dv);
 
         const response = await fetch(url, {
             method: "GET",
@@ -469,12 +494,7 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
     /// tiene una API soportada para escribir columnas hermanas del formulario.
     /// Es el workaround aceptado; funciona en forms model-driven.
     /// </summary>
-    private _updateFormFields(
-        c: SetContribuyente,
-        body: SetRucResponse,
-        estado: string | undefined,
-        partes: { ruc: string; dv: string }
-    ): string[] {
+    private _updateFormFields(c: SetContribuyente, body: SetRucResponse): string[] {
         const warnings: string[] = [];
 
         const xrm = (window as unknown as { Xrm?: typeof Xrm }).Xrm;
@@ -484,32 +504,15 @@ export class RucValidatorControl implements ComponentFramework.StandardControl<I
             return warnings;
         }
 
-        // governmentid = ruc formateado (ej: "80012345-0")
-        this._setTextField(formContext, FIELD_GOVERNMENT_ID, this._rucFormateado(partes), warnings);
-
         // axx_dnitresponse = la respuesta completa de la SET, tal como la deja
         // SetRucValidationService desde el path de mensajeria. Es el campo que
         // renderiza el DnitResponseViewer: guardar el JSON en otro lado lo
         // dejaria invisible para ese control.
+        //
+        // Es lo unico que el control escribe fuera del campo al que esta bindeado.
+        // No toca `governmentid` ni `axx_fiscalstate`: ver la nota de la clase.
         this._setTextField(
             formContext, FIELD_DNIT_RESPONSE, JSON.stringify(body, null, 2), warnings);
-
-        // axx_fiscalstate = MultiSelectPicklist — lookup case-insensitive
-        if (estado) {
-            const estadoVal = ESTADO_MAP[estado.toUpperCase()];
-            if (estadoVal === undefined) {
-                warnings.push(`Estado "${estado}" no reconocido; ${FIELD_FISCAL_STATE} no se actualizo.`);
-            } else {
-                const attr = formContext.getAttribute(FIELD_FISCAL_STATE) as
-                    Xrm.Attributes.MultiSelectOptionSetAttribute | null;
-                if (attr) {
-                    attr.setValue([estadoVal]);
-                    attr.fireOnChange();
-                } else {
-                    warnings.push(`El campo ${FIELD_FISCAL_STATE} no esta en el formulario.`);
-                }
-            }
-        }
 
         // ── Nombres de persona fisica ────────────────────────────────────────
         //
